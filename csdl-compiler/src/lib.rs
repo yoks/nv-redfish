@@ -74,4 +74,16 @@ mod test {
         let _edmx: Edmx = quick_xml::de::from_str(&xml).map_err(Error::XmlDeserialize)?;
         Ok(())
     }
+
+    #[ignore]
+    #[test]
+    fn test_read_redfish() -> Result<(), Error> {
+        let xml = fs::read_to_string(crate_root().join("test-data/redfish-schema/CoolantConnector_v1.xml"))
+            .map_err(Error::FileRead)?;
+        let edmx: Edmx = quick_xml::de::from_str(&xml).map_err(Error::XmlDeserialize)?;
+        assert_eq!(edmx.data_services.schemas.len(), 6);
+        assert_eq!(edmx.data_services.schemas.get(1).unwrap().items.len(), 7);
+
+        Ok(())
+    }
 }

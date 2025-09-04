@@ -95,12 +95,16 @@ pub struct EntityType {
     pub has_stream: Option<bool>,
     #[serde(rename = "Key")]
     pub key: Option<Key>,
-    #[serde(rename = "Property", default)]
-    pub properties: Vec<Property>,
-    #[serde(rename = "NavigationProperty", default)]
-    pub navigation_properties: Vec<NavigationProperty>,
+    #[serde(rename = "$value", default)]
+    pub items: Vec<EntityTypeItem>,
     #[serde(rename = "Annotation", default)]
     pub annotations: Vec<Annotation>,
+}
+
+#[derive(Debug, Deserialize)]
+pub enum EntityTypeItem {
+    Property(Property),
+    NavigationProperty(NavigationProperty),
 }
 
 #[derive(Debug, Deserialize)]
