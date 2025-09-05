@@ -23,12 +23,10 @@ use super::{
     ReferencedType, ResourceItem, ResourceReference, Version, VersionedField,
 };
 use crate::edmx::{
-    property::PropertyAttrs,
-    schema::{Schema, Type},
-    Edmx,
+    property::PropertyAttrs, schema::{Schema, Type}, Annotation, Edmx
 };
 use std::collections::HashMap;
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 #[derive(Debug)]
 pub struct RedfishTypeRegistry {
@@ -74,7 +72,7 @@ impl RedfishTypeRegistry {
         }
 
         // Check for fully qualified name matches in versioned types
-        for (_, rc_type) in &self.versioned_lookup {
+        for rc_type in self.versioned_lookup.values() {
             let matches = match &rc_type.field {
                 ReferencedType::ComplexType(complex_type) => {
                     type_name.ends_with(&format!(".{}", complex_type.metadata.name))
@@ -89,7 +87,7 @@ impl RedfishTypeRegistry {
         }
 
         // Check for fully qualified name matches in base types
-        for (_, rc_type) in &self.base_lookup {
+        for rc_type in self.base_lookup.values() {
             let matches = match &**rc_type {
                 ReferencedType::ComplexType(complex_type) => {
                     type_name.ends_with(&format!(".{}", complex_type.metadata.name))
@@ -126,7 +124,7 @@ impl RedfishResource {
                     .unwrap_or(&schema.namespace)
                     .to_string();
 
-                for (_name, schema_type) in &schema.types {
+                for schema_type in schema.types.values() {
                     if let Type::EntityType(entity_type) = schema_type {
                         if entity_type.name == resource_name {
                             let description = entity_type
@@ -134,7 +132,7 @@ impl RedfishResource {
                                 .iter()
                                 .find(|a| a.term == "OData.Description")
                                 .and_then(|a| a.string.clone())
-                                .unwrap_or_else(|| format!("Resource {}", resource_name));
+                                .unwrap_or_else(|| format!("Resource {resource_name}"));
 
                             let long_description = entity_type
                                 .annotations
@@ -165,7 +163,7 @@ impl RedfishResource {
             }
         }
 
-        let mut resource_map: HashMap<String, RedfishResource> = HashMap::new();
+        let mut resource_map: HashMap<String, Self> = HashMap::new();
 
         for schema in &edmx.data_services.schemas {
             if let Some(version) = Self::parse_version_from_namespace(&schema.namespace)? {
@@ -179,10 +177,10 @@ impl RedfishResource {
                 let resource = resource_map
                     .entry(resource_name.clone())
                     .or_insert_with(|| {
-                        let mut new_resource = RedfishResource {
+                        let mut new_resource = Self {
                             metadata: ItemMetadata {
                                 name: resource_name.clone(),
-                                description: format!("Resource {}", resource_name),
+                                description: format!("Resource {resource_name}"),
                                 long_description: None,
                             },
                             uris: Vec::new(),
@@ -197,10 +195,10 @@ impl RedfishResource {
                         if let Some((description, long_description, uris, capabilities)) =
                             base_metadata.get(&resource_name)
                         {
-                            new_resource.metadata.description = description.clone();
-                            new_resource.metadata.long_description = long_description.clone();
-                            new_resource.uris = uris.clone();
-                            new_resource.capabilities = capabilities.clone();
+                            new_resource.metadata.description.clone_from(description);
+                            new_resource.metadata.long_description.clone_from(long_description);
+                            new_resource.uris.clone_from(uris);
+                            new_resource.capabilities.clone_from(capabilities);
                         }
 
                         new_resource
@@ -224,9 +222,9 @@ impl RedfishResource {
     }
 
     fn resolve_type_references(
-        resources: Vec<RedfishResource>,
+        resources: Vec<Self>,
         type_registry: &RedfishTypeRegistry,
-    ) -> Result<Vec<RedfishResource>, String> {
+    ) -> Result<Vec<Self>, String> {
         let mut resolved_resources = Vec::new();
 
         for resource in resources {
@@ -246,7 +244,7 @@ impl RedfishResource {
                 })
                 .collect::<Result<Vec<_>, String>>()?;
 
-            resolved_resources.push(RedfishResource {
+            resolved_resources.push(Self {
                 metadata: resource.metadata,
                 uris: resource.uris,
                 items: resolved_items,
@@ -355,7 +353,7 @@ impl RedfishResource {
         let mut resource_items = Vec::new();
         let mut referenced_types = Vec::new();
 
-        for (_, schema_type) in &schema.types {
+        for schema_type in schema.types.values() {
             match schema_type {
                 Type::EntityType(entity_type) => {
                     for property in &entity_type.properties {
@@ -602,8 +600,8 @@ impl RedfishResource {
         let version_part = namespace.split('.').nth(1);
 
         if let Some(version_str) = version_part {
-            if version_str.starts_with('v') {
-                let version_numbers: Vec<&str> = version_str[1..].split('_').collect();
+            if let Some(version_str) = version_str.strip_prefix('v'){
+                let version_numbers: Vec<&str> = version_str.split('_').collect();
                 if version_numbers.len() >= 3 {
                     let major = version_numbers[0]
                         .parse()
@@ -648,7 +646,7 @@ impl RedfishResource {
         }
     }
 
-    fn convert_permissions(annotations: &[crate::edmx::Annotation]) -> Permission {
+    fn convert_permissions(annotations: &[Annotation]) -> Permission {
         for annotation in annotations {
             if annotation.term == "OData.Permissions" {
                 if let Some(enum_member) = &annotation.enum_member {
@@ -656,7 +654,7 @@ impl RedfishResource {
                         "OData.Permission/Read" => Permission::Read,
                         "OData.Permission/Write" => Permission::Write,
                         "OData.Permission/ReadWrite" => Permission::ReadWrite,
-                        _ => Permission::Read,
+                        _ => Permission::None,
                     };
                 }
             }
@@ -664,7 +662,7 @@ impl RedfishResource {
         Permission::None
     }
 
-    fn extract_constraints(annotations: &[crate::edmx::Annotation]) -> Option<Constraints> {
+    fn extract_constraints(annotations: &[Annotation]) -> Option<Constraints> {
         let mut minimum = None;
         let mut maximum = None;
         let mut pattern = None;
@@ -682,7 +680,7 @@ impl RedfishResource {
                     }
                 }
                 "Validation.Pattern" => {
-                    pattern = annotation.string.clone();
+                    pattern.clone_from(&annotation.string);
                 }
                 _ => {}
             }
@@ -699,7 +697,7 @@ impl RedfishResource {
         }
     }
 
-    fn extract_capabilities(annotations: &[crate::edmx::Annotation]) -> Capabilities {
+    fn extract_capabilities(annotations: &[Annotation]) -> Capabilities {
         let mut insertable = None;
         let mut updatable = None;
         let mut deletable = None;

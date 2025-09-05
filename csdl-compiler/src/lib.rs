@@ -46,6 +46,8 @@ pub mod generator;
 use edmx::ValidateError;
 use std::io::Error as IoError;
 
+extern crate alloc;
+
 /// Errors defined by the CSDL compiler.
 #[derive(Debug)]
 pub enum Error {

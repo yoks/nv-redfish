@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::rc::Rc;
+use alloc::rc::Rc;
 
 pub mod converter;
 
@@ -142,7 +142,7 @@ pub enum ResourceReference {
     TypeName(String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Permission {
     Read,
     Write,
