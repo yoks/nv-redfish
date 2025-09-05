@@ -19,8 +19,8 @@
 
 use super::{
     Capabilities, ComplexTypeData, EnumData, EnumMember, ItemMetadata, NavigationPropertyData,
-    Permission, PropertyData, PropertyType, RedfishResource, ResourceReference, SchemaItem,
-    Version, VersionedField,
+    Permission, PropertyData, PropertyType, RedfishResource, ResourceReference, ResourceItem,
+    ReferencedType, Version, VersionedField,
 };
 use crate::edmx::{
     property::PropertyAttrs,
@@ -28,10 +28,88 @@ use crate::edmx::{
     Edmx,
 };
 use std::collections::HashMap;
+use std::rc::Rc;
+
+#[derive(Debug)]
+pub struct RedfishTypeRegistry {
+    pub versioned_types: Vec<Rc<VersionedField<ReferencedType>>>,
+    pub base_types: Vec<Rc<ReferencedType>>,
+    versioned_lookup: HashMap<String, Rc<VersionedField<ReferencedType>>>,
+    base_lookup: HashMap<String, Rc<ReferencedType>>,
+}
+
+impl RedfishTypeRegistry {
+    fn new() -> Self {
+        Self {
+            versioned_types: Vec::new(),
+            base_types: Vec::new(),
+            versioned_lookup: HashMap::new(),
+            base_lookup: HashMap::new(),
+        }
+    }
+
+    fn add_versioned_type(&mut self, versioned_type: VersionedField<ReferencedType>) {
+        let rc_type = Rc::new(versioned_type);
+        
+        // Add to lookup by type name
+        let type_name = match &rc_type.field {
+            ReferencedType::ComplexType(complex_type) => &complex_type.metadata.name,
+            ReferencedType::Enum(enum_type) => &enum_type.metadata.name,
+        };
+        self.versioned_lookup.insert(type_name.clone(), Rc::clone(&rc_type));
+        
+        self.versioned_types.push(rc_type);
+    }
+
+    fn find_type(&self, type_name: &str) -> Option<ResourceReference> {
+        // Check versioned types first (direct name match)
+        if let Some(found) = self.versioned_lookup.get(type_name) {
+            return Some(ResourceReference::LocalVersionedType(Rc::clone(found)));
+        }
+
+        // Check base types (direct name match)
+        if let Some(found) = self.base_lookup.get(type_name) {
+            return Some(ResourceReference::LocalType(Rc::clone(found)));
+        }
+
+        // Check for fully qualified name matches in versioned types
+        for (_, rc_type) in &self.versioned_lookup {
+            let matches = match &rc_type.field {
+                ReferencedType::ComplexType(complex_type) => {
+                    type_name.ends_with(&format!(".{}", complex_type.metadata.name))
+                }
+                ReferencedType::Enum(enum_type) => {
+                    type_name.ends_with(&format!(".{}", enum_type.metadata.name))
+                }
+            };
+            if matches {
+                return Some(ResourceReference::LocalVersionedType(Rc::clone(rc_type)));
+            }
+        }
+
+        // Check for fully qualified name matches in base types
+        for (_, rc_type) in &self.base_lookup {
+            let matches = match &**rc_type {
+                ReferencedType::ComplexType(complex_type) => {
+                    type_name.ends_with(&format!(".{}", complex_type.metadata.name))
+                }
+                ReferencedType::Enum(enum_type) => {
+                    type_name.ends_with(&format!(".{}", enum_type.metadata.name))
+                }
+            };
+            if matches {
+                return Some(ResourceReference::LocalType(Rc::clone(rc_type)));
+            }
+        }
+
+        None
+    }
+}
 
 impl RedfishResource {
-    pub fn from_edmx(edmx: &Edmx) -> Result<Vec<Self>, String> {
+    pub fn from_edmx(edmx: &Edmx) -> Result<(Vec<Self>, RedfishTypeRegistry), String> {
         let mut resources = Vec::new();
+        let mut type_registry = RedfishTypeRegistry::new();
 
         let mut base_metadata: HashMap<String, (String, Option<String>, Vec<String>)> =
             HashMap::new();
@@ -96,7 +174,7 @@ impl RedfishResource {
                 let resource = resource_map
                     .entry(resource_name.clone())
                     .or_insert_with(|| {
-                        let mut new_resource = RedfishResource {
+                        let mut                         new_resource = RedfishResource {
                             metadata: ItemMetadata {
                                 name: resource_name.clone(),
                                 description: format!("Resource {}", resource_name),
@@ -122,21 +200,130 @@ impl RedfishResource {
                         new_resource
                     });
 
-                let version_items = Self::extract_items_from_schema(schema, &version)?;
-                resource.items.extend(version_items);
+                                            let (resource_items, referenced_types) = Self::extract_items_from_schema(schema, &version)?;
+                            resource.items.extend(resource_items);
+                            for ref_type in referenced_types {
+                                type_registry.add_versioned_type(ref_type);
+                            }
             }
         }
 
         resources.extend(resource_map.into_values());
 
-        Ok(resources)
+        // Resolve type references
+        let resolved_resources = Self::resolve_type_references(resources, &type_registry)?;
+
+        Ok((resolved_resources, type_registry))
+    }
+
+    fn resolve_type_references(
+        resources: Vec<RedfishResource>,
+        type_registry: &RedfishTypeRegistry,
+    ) -> Result<Vec<RedfishResource>, String> {
+        let mut resolved_resources = Vec::new();
+        
+        for resource in resources {
+            let resolved_items = resource.items
+                .into_iter()
+                .map(|versioned_item| {
+                    let resolved_field = Self::resolve_resource_item_references(versioned_item.field, type_registry)?;
+                    Ok(VersionedField {
+                        field: resolved_field,
+                        introduced_in: versioned_item.introduced_in,
+                        deprecated_in: versioned_item.deprecated_in,
+                    })
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            
+            resolved_resources.push(RedfishResource {
+                metadata: resource.metadata,
+                uris: resource.uris,
+                items: resolved_items,
+                capabilities: resource.capabilities,
+            });
+        }
+        
+        Ok(resolved_resources)
+    }
+
+    fn resolve_resource_item_references(
+        item: ResourceItem,
+        type_registry: &RedfishTypeRegistry,
+    ) -> Result<ResourceItem, String> {
+        match item {
+            ResourceItem::Property(mut property_data) => {
+                property_data.property_type = Self::resolve_property_type_references(property_data.property_type, type_registry)?;
+                Ok(ResourceItem::Property(property_data))
+            }
+            ResourceItem::NavigationProperty(mut nav_data) => {
+                nav_data.target_type = Self::resolve_type_reference(&nav_data.target_type, type_registry)?;
+                Ok(ResourceItem::NavigationProperty(nav_data))
+            }
+            ResourceItem::Action(action_data) => {
+                // TODO: Resolve action parameter types when actions are fully implemented
+                Ok(ResourceItem::Action(action_data))
+            }
+        }
+    }
+
+    fn resolve_property_type_references(
+        property_type: PropertyType,
+        type_registry: &RedfishTypeRegistry,
+    ) -> Result<PropertyType, String> {
+        match property_type {
+            PropertyType::Collection(inner_type) => {
+                let resolved_inner = Self::resolve_property_type_references((*inner_type).clone(), type_registry)?;
+                Ok(PropertyType::Collection(Rc::new(resolved_inner)))
+            }
+            PropertyType::Reference(type_ref) => {
+                let resolved_ref = Self::resolve_type_reference(&type_ref, type_registry)?;
+                Ok(PropertyType::Reference(resolved_ref))
+            }
+            other => {
+                // Primitive types don't need resolution
+                Ok(other)
+            }
+        }
+    }
+
+    fn resolve_type_reference(
+        type_ref: &ResourceReference,
+        type_registry: &RedfishTypeRegistry,
+    ) -> Result<ResourceReference, String> {
+        match type_ref {
+            ResourceReference::TypeName(type_name) => {
+                // Handle collection syntax
+                if type_name.starts_with("Collection(") {
+                    let inner_type = &type_name[11..type_name.len() - 1];
+                    let resolved_inner = Self::resolve_type_reference(
+                        &ResourceReference::TypeName(inner_type.to_string()),
+                        type_registry,
+                    )?;
+                    return Ok(resolved_inner);
+                }
+
+                // Look for the type in our registry
+                if let Some(found_ref) = type_registry.find_type(type_name) {
+                    return Ok(found_ref);
+                }
+
+                // If not found, keep as TypeName (might be external type)
+                Ok(ResourceReference::TypeName(type_name.to_string()))
+            }
+            // Other reference types are already resolved - Rc::clone is cheap (just reference counting)
+            ResourceReference::LocalVersionedType(rc_type) => Ok(ResourceReference::LocalVersionedType(Rc::clone(rc_type))),
+            ResourceReference::LocalType(rc_type) => Ok(ResourceReference::LocalType(Rc::clone(rc_type))),
+            ResourceReference::External(rc_resource) => Ok(ResourceReference::External(Rc::clone(rc_resource))),
+            ResourceReference::VersionedExternal(rc_versioned) => Ok(ResourceReference::VersionedExternal(Rc::clone(rc_versioned))),
+        }
     }
 
     fn extract_items_from_schema(
         schema: &Schema,
         version: &Version,
-    ) -> Result<Vec<VersionedField<SchemaItem>>, String> {
-        let mut items = Vec::new();
+    ) -> Result<(Vec<VersionedField<ResourceItem>>, Vec<VersionedField<ReferencedType>>), String> {
+        let mut resource_items = Vec::new();
+        let mut referenced_types = Vec::new();
 
         for (_, schema_type) in &schema.types {
             match schema_type {
@@ -144,7 +331,7 @@ impl RedfishResource {
                     for property in &entity_type.properties {
                         match &property.attrs {
                             PropertyAttrs::StructuralProperty(structural_prop) => {
-                                let item = SchemaItem::Property(PropertyData {
+                                let item = ResourceItem::Property(PropertyData {
                                     metadata: ItemMetadata {
                                         name: property.name.clone(),
                                         description: structural_prop
@@ -177,14 +364,14 @@ impl RedfishResource {
                                         .and_then(|a| a.string.clone()),
                                     constraints: None,
                                 });
-                                items.push(VersionedField {
+                                resource_items.push(VersionedField {
                                     field: item,
                                     introduced_in: version.clone(),
                                     deprecated_in: None,
                                 });
                             }
                             PropertyAttrs::NavigationProperty(nav_prop) => {
-                                let item = SchemaItem::NavigationProperty(NavigationPropertyData {
+                                let item = ResourceItem::NavigationProperty(NavigationPropertyData {
                                     metadata: ItemMetadata {
                                         name: property.name.clone(),
                                         description: nav_prop
@@ -213,7 +400,7 @@ impl RedfishResource {
                                         .any(|a| a.term.contains("AutoExpand")),
                                     excerpt_copy: None,
                                 });
-                                items.push(VersionedField {
+                                resource_items.push(VersionedField {
                                     field: item,
                                     introduced_in: version.clone(),
                                     deprecated_in: None,
@@ -297,7 +484,7 @@ impl RedfishResource {
                         }
                     }
 
-                    let item = SchemaItem::ComplexType(ComplexTypeData {
+                    let item = ReferencedType::ComplexType(ComplexTypeData {
                         metadata: ItemMetadata {
                             name: complex_type.name.clone(),
                             description: complex_type
@@ -319,14 +506,14 @@ impl RedfishResource {
                             a.term == "OData.AdditionalProperties" && a.bool_value == Some(true)
                         }),
                     });
-                    items.push(VersionedField {
+                    referenced_types.push(VersionedField {
                         field: item,
                         introduced_in: version.clone(),
                         deprecated_in: None,
                     });
                 }
                 Type::EnumType(enum_type) => {
-                    let item = SchemaItem::Enum(EnumData {
+                    let item = ReferencedType::Enum(EnumData {
                         metadata: ItemMetadata {
                             name: enum_type.name.clone(),
                             description: enum_type
@@ -354,7 +541,7 @@ impl RedfishResource {
                             })
                             .collect(),
                     });
-                    items.push(VersionedField {
+                    referenced_types.push(VersionedField {
                         field: item,
                         introduced_in: version.clone(),
                         deprecated_in: None,
@@ -364,7 +551,7 @@ impl RedfishResource {
             }
         }
 
-        Ok(items)
+        Ok((resource_items, referenced_types))
     }
 
     fn parse_version_from_namespace(namespace: &str) -> Result<Option<Version>, String> {
@@ -408,7 +595,7 @@ impl RedfishResource {
             "Edm.Int64" => Ok(PropertyType::Int64),
             _ if property_type.starts_with("Collection(") => {
                 let inner_type = &property_type[11..property_type.len() - 1];
-                Ok(PropertyType::Collection(Box::new(
+                Ok(PropertyType::Collection(Rc::new(
                     Self::convert_property_type(inner_type)?,
                 )))
             }
@@ -457,7 +644,7 @@ mod tests {
 
         let edmx: Edmx = Edmx::parse(&data).map_err(|e| format!("EDMX parse error: {:?}", e))?;
 
-        let resources = RedfishResource::from_edmx(&edmx)?;
+        let (resources, type_registry) = RedfishResource::from_edmx(&edmx)?;
 
         assert!(
             !resources.is_empty(),
@@ -493,21 +680,53 @@ mod tests {
         let properties_count = coolant_connector
             .items
             .iter()
-            .filter(|item| matches!(item.field, SchemaItem::Property(_)))
+            .filter(|item| matches!(item.field, ResourceItem::Property(_)))
             .count();
 
         let nav_properties_count = coolant_connector
             .items
             .iter()
-            .filter(|item| matches!(item.field, SchemaItem::NavigationProperty(_)))
+            .filter(|item| matches!(item.field, ResourceItem::NavigationProperty(_)))
             .count();
 
         assert!(
-            properties_count > 0 || nav_properties_count > 0,
-            "Should have at least some properties or navigation properties"
-        );
+             properties_count > 0 || nav_properties_count > 0,
+             "Should have at least some properties or navigation properties"
+         );
 
-        println!("{coolant_connector:#?}");
+                            // Verify type registry has ComplexTypes and Enums
+                    let versioned_complex_types_count = type_registry.versioned_types
+                        .iter()
+                        .filter(|t| matches!(t.field, ReferencedType::ComplexType(_)))
+                        .count();
+                    
+                    let versioned_enums_count = type_registry.versioned_types
+                        .iter()
+                        .filter(|t| matches!(t.field, ReferencedType::Enum(_)))
+                        .count();
+
+                    let base_complex_types_count = type_registry.base_types
+                        .iter()
+                        .filter(|t| matches!(t.as_ref(), ReferencedType::ComplexType(_)))
+                        .count();
+                    
+                    let base_enums_count = type_registry.base_types
+                        .iter()
+                        .filter(|t| matches!(t.as_ref(), ReferencedType::Enum(_)))
+                        .count();
+
+                    let total_complex_types = versioned_complex_types_count + base_complex_types_count;
+                    let total_enums = versioned_enums_count + base_enums_count;
+
+        assert!(total_complex_types > 0, "Should have ComplexTypes in type registry");
+        assert!(total_enums > 0, "Should have Enums in type registry");
+ 
+         println!("=== Resources ===");
+         println!("{coolant_connector:#?}");
+         println!("\n=== Type Registry ===");
+         println!("Versioned ComplexTypes: {}, Versioned Enums: {}", versioned_complex_types_count, versioned_enums_count);
+         println!("Base ComplexTypes: {}, Base Enums: {}", base_complex_types_count, base_enums_count);
+         println!("Total ComplexTypes: {}, Total Enums: {}", total_complex_types, total_enums);
 
         Ok(())
     }

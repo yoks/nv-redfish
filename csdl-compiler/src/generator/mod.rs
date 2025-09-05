@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::rc::Rc;
+
 pub mod converter;
+
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Version {
@@ -32,11 +35,8 @@ pub struct VersionedField<T> {
 #[derive(Debug)]
 pub struct RedfishResource {
     pub metadata: ItemMetadata,
-    
     pub uris: Vec<String>,
-    
-    pub items: Vec<VersionedField<SchemaItem>>,
-    
+    pub items: Vec<VersionedField<ResourceItem>>,
     pub capabilities: Capabilities,
 }
 
@@ -48,11 +48,9 @@ pub struct ItemMetadata {
 }
 
 #[derive(Debug)]
-pub enum SchemaItem {
+pub enum ResourceItem {
     Property(PropertyData),
     NavigationProperty(NavigationPropertyData),
-    ComplexType(ComplexTypeData),
-    Enum(EnumData),
     Action(ActionData),
 }
 
@@ -113,7 +111,7 @@ pub struct ActionParameter {
     pub nullable: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PropertyType {
     // Edm types
     String,
@@ -122,19 +120,25 @@ pub enum PropertyType {
     Int32,
     Int64,
     
-    Collection(Box<PropertyType>),
+    Collection(Rc<PropertyType>),
     
     Reference(ResourceReference),
 }
 
 #[derive(Debug)]
-pub enum ResourceReference {
-    Local(Box<SchemaItem>),
-    VersionedLocal(Box<VersionedField<SchemaItem>>),
-    External(Box<RedfishResource>),
-    VersionedExternal(Box<VersionedField<RedfishResource>>),
+pub enum ReferencedType {
+    ComplexType(ComplexTypeData),
+    Enum(EnumData),
+}
 
-    // TODO: This is temporary, just to be able to test without compiling all references
+#[derive(Debug, Clone)]
+pub enum ResourceReference {
+    LocalVersionedType(Rc<VersionedField<ReferencedType>>),
+    LocalType(Rc<ReferencedType>),
+    External(Rc<RedfishResource>),
+    VersionedExternal(Rc<VersionedField<RedfishResource>>),
+
+    // TODO: This is temporary, just to be able to test without compiling all references for all external resources
     TypeName(String),
 }
 
