@@ -164,6 +164,14 @@ pub struct Annotation {
     pub int_value: Option<i64>,
     #[serde(rename = "@EnumMember")]
     pub enum_member: Option<String>,
+    #[serde(rename = "Collection")]
+    pub collection: Option<AnnotationCollection>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AnnotationCollection {
+    #[serde(rename = "String", default)]
+    pub strings: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]

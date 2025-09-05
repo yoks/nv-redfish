@@ -41,6 +41,7 @@
 
 /// Entity Data Model XML definitions.
 pub mod edmx;
+pub mod generator;
 
 use edmx::ValidateError;
 use std::io::Error as IoError;
