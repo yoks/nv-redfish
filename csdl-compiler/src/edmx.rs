@@ -59,12 +59,16 @@ pub enum ValidateError {
     WrongDataServicesNumber,
     /// In the `EntityType` too many keys.
     TooManyKeys,
+    /// In the `NavigationProperty` too `OnDelete` items.
+    TooManyOnDelete,
     /// Schema validation error.
     Schema(SchemaNamespace, Box<ValidateError>),
     /// `ComplexType` validation error.
     ComplexType(TypeName, Box<ValidateError>),
     /// `EntityType` validation error.
     EntityType(TypeName, Box<ValidateError>),
+    /// `NavigationProperty` validation error.
+    NavigationProperty(PropertyName, Box<ValidateError>),
 }
 
 /// Reexport of Edmx type to root.

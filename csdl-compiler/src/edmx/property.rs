@@ -81,9 +81,10 @@ pub struct DeNavigationProperty {
 #[derive(Debug, Deserialize)]
 pub enum DeNavigationPropertyItem {
     /// 7.2 Element edm:ReferentialConstraint
-    ReferentialConstrain(ReferentialConstraint),
+    ReferentialConstraint(ReferentialConstraint),
     /// 7.3 Element edm:OnDelete
     OnDelete(OnDelete),
+    /// Annotations can be in any property.
     Annotation(Annotation),
 }
 
@@ -121,7 +122,7 @@ pub enum PropertyAttrs {
     /// Properties of the structural property.
     StructuralProperty(DeStructuralProperty),
     /// Properties of the navigation property.
-    NavigationProperty(DeNavigationProperty),
+    NavigationProperty(NavigationProperty),
 }
 
 impl DeStructuralProperty {
@@ -141,9 +142,49 @@ impl DeNavigationProperty {
     ///
     /// Actually, doesn't return any errors. Keep it for consistency.
     pub fn validate(self) -> Result<Property, ValidateError> {
+        let (mut on_deletes, referential_constraints, annotations) = self.items.into_iter().fold(
+            (Vec::new(), Vec::new(), Vec::new()),
+            |(mut dels, mut rcs, mut anns), v| {
+                match v {
+                    DeNavigationPropertyItem::OnDelete(v) => dels.push(v),
+                    DeNavigationPropertyItem::ReferentialConstraint(v) => rcs.push(v),
+                    DeNavigationPropertyItem::Annotation(v) => anns.push(v),
+                }
+                (dels, rcs, anns)
+            },
+        );
+        if on_deletes.len() > 1 {
+            return Err(ValidateError::NavigationProperty(
+                self.name,
+                Box::new(ValidateError::TooManyOnDelete),
+            ));
+        }
+        let on_delete = on_deletes.pop();
         Ok(Property {
             name: self.name.clone(),
-            attrs: PropertyAttrs::NavigationProperty(self),
+            attrs: PropertyAttrs::NavigationProperty(NavigationProperty {
+                name: self.name,
+                ptype: self.ptype,
+                nullable: self.nullable,
+                partner: self.partner,
+                contains_target: self.contains_target,
+                annotations,
+                on_delete,
+                referential_constraints,
+            }),
         })
     }
+}
+
+/// Validated navigation property.
+#[derive(Debug)]
+pub struct NavigationProperty {
+    pub name: PropertyName,
+    pub ptype: TypeName,
+    pub nullable: Option<bool>,
+    pub partner: Option<String>,
+    pub contains_target: Option<bool>,
+    pub annotations: Vec<Annotation>,
+    pub on_delete: Option<OnDelete>,
+    pub referential_constraints: Vec<ReferentialConstraint>,
 }
