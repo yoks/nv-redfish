@@ -14,12 +14,12 @@
 // limitations under the License.
 
 use crate::ValidateError;
-use crate::edmx::Annotation;
 use crate::edmx::EntityContainer;
 use crate::edmx::SchemaNamespace;
 use crate::edmx::Term;
 use crate::edmx::TypeDefinition;
 use crate::edmx::TypeName;
+use crate::edmx::annotation::Annotation;
 use crate::edmx::complex_type::ComplexType;
 use crate::edmx::complex_type::DeComplexType;
 use crate::edmx::entity_type::DeEntityType;

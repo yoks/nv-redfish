@@ -165,7 +165,7 @@ pub struct Constraints {
     pub pattern: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Capabilities {
     pub insertable: Option<CapabilityInfo>,
     pub updatable: Option<CapabilityInfo>,
@@ -175,5 +175,5 @@ pub struct Capabilities {
 #[derive(Debug, Clone)]
 pub struct CapabilityInfo {
     pub enabled: bool,
-    pub description: Option<String>,
+    pub description: Option<Description>,
 }

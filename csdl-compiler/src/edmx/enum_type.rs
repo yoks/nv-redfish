@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use crate::ValidateError;
-use crate::edmx::Annotation;
 use crate::edmx::TypeName;
+use crate::edmx::annotation::Annotation;
 use serde::Deserialize;
 
 pub type EnumMemberName = String;

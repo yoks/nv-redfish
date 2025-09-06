@@ -15,7 +15,8 @@
 
 //! Helper of handling annotations in edmx types.
 
-use crate::edmx::Annotation;
+use crate::edmx::annotation::Annotation;
+use crate::edmx::annotation::AnnotationRecord;
 use crate::edmx::complex_type::ComplexType;
 use crate::edmx::entity_type::EntityType;
 use crate::edmx::enum_type::EnumMember;
@@ -48,7 +49,7 @@ pub trait ODataAnnotations {
     fn odata_description(&self) -> Option<DescriptionRef<'_>> {
         self.annotations()
             .iter()
-            .find(|a| a.term == "OData.Description")
+            .find(|a| a.term.inner() == "OData.Description")
             .and_then(|a| a.string.as_ref())
             .map(DescriptionRef::new)
     }
@@ -61,9 +62,15 @@ pub trait ODataAnnotations {
     fn odata_long_description(&self) -> Option<LongDescriptionRef<'_>> {
         self.annotations()
             .iter()
-            .find(|a| a.term == "OData.LongDescription")
+            .find(|a| a.term.inner() == "OData.LongDescription")
             .and_then(|a| a.string.as_ref())
             .map(LongDescriptionRef::new)
+    }
+
+    fn odata_additional_properties(&self) -> Option<&Annotation> {
+        self.annotations()
+            .iter()
+            .find(|a| a.term.inner() == "OData.AdditionalProperties")
     }
 }
 
@@ -124,5 +131,15 @@ impl ODataAnnotations for NavigationProperty {
 
     fn default_description(&self) -> Description {
         Description::new(format!("Navigation property {}", self.name))
+    }
+}
+
+impl ODataAnnotations for AnnotationRecord {
+    fn annotations(&self) -> &Vec<Annotation> {
+        &self.annotations
+    }
+
+    fn default_description(&self) -> Description {
+        Description::new("Annotation record".into())
     }
 }

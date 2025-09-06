@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! EDMX parser and validator.
+
 /// 3.1 Element edmx:Edmx
 pub mod edmx_root;
 
@@ -40,9 +42,13 @@ pub mod entity_type;
 /// 9 Complex Type
 pub mod complex_type;
 
-/// 9 Complex Type
+/// 10 Enumeration Type
 pub mod enum_type;
 
+/// 14.3 Element edm:Annotation
+pub mod annotation;
+
+use annotation::Annotation;
 use quick_xml::DeError;
 use serde::Deserialize;
 use tagged_types::TaggedType;
@@ -53,6 +59,13 @@ pub type TypeName = TaggedType<String, TypeNameTag>;
 #[transparent(Debug, Display, Deserialize)]
 #[capability(inner_access)]
 pub enum TypeNameTag {}
+
+pub type TermName = TaggedType<String, TermNameTag>;
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Hash, PartialEq, Eq)]
+#[transparent(Debug, Display, Deserialize)]
+#[capability(inner_access)]
+pub enum TermNameTag {}
 
 pub type SchemaNamespace = String;
 pub type PropertyName = String;
@@ -157,50 +170,6 @@ pub struct FunctionImport {
     pub function: String,
     #[serde(rename = "Annotation", default)]
     pub annotations: Vec<Annotation>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Annotation {
-    #[serde(rename = "@Term")]
-    pub term: String,
-    #[serde(rename = "@String")]
-    pub string: Option<String>,
-    #[serde(rename = "@Bool")]
-    pub bool_value: Option<bool>,
-    #[serde(rename = "@Int")]
-    pub int_value: Option<i64>,
-    #[serde(rename = "@EnumMember")]
-    pub enum_member: Option<String>,
-    #[serde(rename = "Collection")]
-    pub collection: Option<AnnotationCollection>,
-    #[serde(rename = "Record")]
-    pub record: Option<AnnotationRecord>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct AnnotationCollection {
-    #[serde(rename = "String", default)]
-    pub strings: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct AnnotationRecord {
-    #[serde(rename = "PropertyValue")]
-    pub property_value: PropertyValue,
-    #[serde(rename = "Annotation", default)]
-    pub annotations: Vec<Annotation>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct PropertyValue {
-    #[serde(rename = "@Property")]
-    pub property: String,
-    #[serde(rename = "@Bool")]
-    pub bool_value: Option<bool>,
-    #[serde(rename = "@String")]
-    pub string_value: Option<String>,
-    #[serde(rename = "@Int")]
-    pub int_value: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]

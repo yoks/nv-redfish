@@ -23,7 +23,8 @@ use super::{
     ReferencedType, ResourceItem, ResourceReference, Version, VersionedField,
 };
 use crate::edmx::{
-    Annotation, Edmx, TypeName,
+    Edmx, TermName, TypeName,
+    annotation::Annotation,
     property::PropertyAttrs,
     schema::{Schema, Type},
 };
@@ -128,7 +129,7 @@ impl RedfishResource {
 
                             let mut uris = Vec::new();
                             for annotation in &entity_type.annotations {
-                                if annotation.term == "Redfish.Uris" {
+                                if annotation.term.inner() == "Redfish.Uris" {
                                     if let Some(collection) = &annotation.collection {
                                         uris.extend(collection.strings.clone());
                                     }
@@ -173,11 +174,7 @@ impl RedfishResource {
                             },
                             uris: Vec::new(),
                             items: Vec::new(),
-                            capabilities: Capabilities {
-                                deletable: None,
-                                insertable: None,
-                                updatable: None,
-                            },
+                            capabilities: Capabilities::default(),
                         };
 
                         if let Some((description, long_description, uris, capabilities)) =
@@ -355,7 +352,8 @@ impl RedfishResource {
                                         .annotations
                                         .iter()
                                         .find(|a| {
-                                            a.term.contains("Measures") && a.term.contains("Unit")
+                                            a.term.inner().contains("Measures")
+                                                && a.term.inner().contains("Unit")
                                         })
                                         .and_then(|a| a.string.clone()),
                                     constraints: Self::extract_constraints(
@@ -389,7 +387,7 @@ impl RedfishResource {
                                         auto_expand: nav_prop
                                             .annotations
                                             .iter()
-                                            .any(|a| a.term.contains("AutoExpand")),
+                                            .any(|a| a.term.inner().contains("AutoExpand")),
                                         excerpt_copy: None,
                                     });
                                 resource_items.push(VersionedField {
@@ -424,7 +422,8 @@ impl RedfishResource {
                                         .annotations
                                         .iter()
                                         .find(|a| {
-                                            a.term.contains("Measures") && a.term.contains("Unit")
+                                            a.term.inner().contains("Measures")
+                                                && a.term.inner().contains("Unit")
                                         })
                                         .and_then(|a| a.string.clone()),
                                     constraints: Self::extract_constraints(
@@ -447,7 +446,7 @@ impl RedfishResource {
                                     auto_expand: nav_prop
                                         .annotations
                                         .iter()
-                                        .any(|a| a.term.contains("AutoExpand")),
+                                        .any(|a| a.term.inner().contains("AutoExpand")),
                                     excerpt_copy: None,
                                 });
                             }
@@ -463,9 +462,7 @@ impl RedfishResource {
                         properties,
                         navigation_properties,
                         additional_properties: complex_type
-                            .annotations
-                            .iter()
-                            .find(|a| a.term == "OData.AdditionalProperties")
+                            .odata_additional_properties()
                             .and_then(|a| a.bool_value)
                             .unwrap_or(false),
                     });
@@ -556,7 +553,7 @@ impl RedfishResource {
 
     fn convert_permissions(annotations: &[Annotation]) -> Permission {
         for annotation in annotations {
-            if annotation.term == "OData.Permissions" {
+            if annotation.term.inner() == "OData.Permissions" {
                 if let Some(enum_member) = &annotation.enum_member {
                     return match enum_member.as_str() {
                         "OData.Permission/Read" => Permission::Read,
@@ -576,7 +573,7 @@ impl RedfishResource {
         let mut pattern = None;
 
         for annotation in annotations {
-            match annotation.term.as_str() {
+            match annotation.term.inner().as_str() {
                 "Validation.Minimum" => {
                     if let Some(int_val) = annotation.int_value {
                         minimum = Some(int_val);
@@ -611,16 +608,13 @@ impl RedfishResource {
         let mut deletable = None;
 
         for annotation in annotations {
-            match annotation.term.as_str() {
+            match annotation.term.inner().as_str() {
                 "Capabilities.InsertRestrictions" => {
                     if let Some(record) = &annotation.record {
                         if record.property_value.property == "Insertable" {
                             if let Some(enabled) = record.property_value.bool_value {
-                                let description = record
-                                    .annotations
-                                    .iter()
-                                    .find(|a| a.term == "OData.Description")
-                                    .and_then(|a| a.string.clone());
+                                let description =
+                                    record.odata_description().map(TaggedType::cloned);
                                 insertable = Some(CapabilityInfo {
                                     enabled,
                                     description,
@@ -633,19 +627,8 @@ impl RedfishResource {
                     if let Some(record) = &annotation.record {
                         if record.property_value.property == "Updatable" {
                             if let Some(enabled) = record.property_value.bool_value {
-                                let description = record
-                                    .annotations
-                                    .iter()
-                                    .find(|a| a.term == "OData.Description")
-                                    .and_then(|a| a.string.clone())
-                                    .or_else(|| {
-                                        // Check for description at the record level
-                                        record
-                                            .annotations
-                                            .iter()
-                                            .find(|a| a.term == "OData.Description")
-                                            .and_then(|a| a.string.clone())
-                                    });
+                                let description =
+                                    record.odata_description().map(TaggedType::cloned);
                                 updatable = Some(CapabilityInfo {
                                     enabled,
                                     description,
@@ -658,11 +641,8 @@ impl RedfishResource {
                     if let Some(record) = &annotation.record {
                         if record.property_value.property == "Deletable" {
                             if let Some(enabled) = record.property_value.bool_value {
-                                let description = record
-                                    .annotations
-                                    .iter()
-                                    .find(|a| a.term == "OData.Description")
-                                    .and_then(|a| a.string.clone());
+                                let description =
+                                    record.odata_description().map(TaggedType::cloned);
                                 deletable = Some(CapabilityInfo {
                                     enabled,
                                     description,
