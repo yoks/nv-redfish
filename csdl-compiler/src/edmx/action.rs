@@ -30,9 +30,6 @@ pub struct DeAction {
     /// 12.1.2 Attribute `IsBound`
     #[serde(rename = "@IsBound")]
     pub is_bound: Option<IsBound>,
-    /// 12.1.3 Attribute `EntitySetPath`
-    #[serde(rename = "@EntitySetPath")]
-    pub entity_set_path: Option<String>,
     /// Items of edm:NavigationProperty
     #[serde(rename = "$value", default)]
     pub items: Vec<DeActionItem>,

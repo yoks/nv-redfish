@@ -107,7 +107,6 @@ mod test {
         if let Some(Type::Term(term)) = &edmx.data_services.schemas[0].types.get(&computed) {
             assert_eq!(term.ttype.as_ref().unwrap(), &"Core.Tag".parse().unwrap());
             assert_eq!(term.default_value.as_ref().unwrap(), "true");
-            assert_eq!(term.applies_to.as_ref().unwrap(), "Property");
         }
         Ok(())
     }

@@ -144,104 +144,62 @@ pub enum ValidateError {
 /// Reexport of Edmx type to root.
 pub type Edmx = edmx_root::Edmx;
 
+/// 11.1 Element edm:TypeDefinition
 #[derive(Debug, Deserialize)]
 pub struct TypeDefinition {
+    /// 11.1.1 Attribute Name
     #[serde(rename = "@Name")]
     pub name: LocalTypeName,
+    /// 11.1.2 Attribute `UnderlyingType`
+    ///
+    /// Note that we can narrow down this type from
+    /// `QualifiedTypeName` to primitive types starting with `Edm`
+    /// prefix.
     #[serde(rename = "@UnderlyingType")]
     pub underlying_type: QualifiedTypeName,
+    /// Annotations can be pretty much everywhere.
     #[serde(rename = "Annotation", default)]
     pub annotations: Vec<Annotation>,
 }
 
+/// 13.2 Element edm:EntitySet
 #[derive(Debug, Deserialize)]
 pub struct EntityContainer {
+    /// 13.2.1 Attribute Name
     #[serde(rename = "@Name")]
     pub name: LocalTypeName,
-    #[serde(rename = "EntitySet", default)]
-    pub entity_sets: Vec<EntitySet>,
+    /// 13.3 Element edm:Singleton
+    ///
+    /// This is the only used element of edm:EntityContainer in
+    /// Redfish.
     #[serde(rename = "Singleton", default)]
     pub singletons: Vec<Singleton>,
-    #[serde(rename = "ActionImport", default)]
-    pub action_imports: Vec<ActionImport>,
-    #[serde(rename = "FunctionImport", default)]
-    pub function_imports: Vec<FunctionImport>,
-    #[serde(rename = "Annotation", default)]
-    pub annotations: Vec<Annotation>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct EntitySet {
-    #[serde(rename = "@Name")]
-    pub name: String,
-    #[serde(rename = "@EntityType")]
-    pub entity_type: String,
-    #[serde(rename = "NavigationPropertyBinding", default)]
-    pub navigation_property_bindings: Vec<NavigationPropertyBinding>,
-    #[serde(rename = "Annotation", default)]
-    pub annotations: Vec<Annotation>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct NavigationPropertyBinding {
-    #[serde(rename = "@Path")]
-    pub path: String,
-    #[serde(rename = "@Target")]
-    pub target: String,
-}
-
+/// 13.3 Element edm:Singleton
 #[derive(Debug, Deserialize)]
 pub struct Singleton {
+    /// 13.3.1 Attribute Name
     #[serde(rename = "@Name")]
-    pub name: String,
+    pub name: SimpleIdentifier,
+    /// 13.3.2 Attribute Type
     #[serde(rename = "@Type")]
-    pub r#type: String,
-    #[serde(rename = "NavigationPropertyBinding", default)]
-    pub navigation_property_bindings: Vec<NavigationPropertyBinding>,
-    #[serde(rename = "Annotation", default)]
-    pub annotations: Vec<Annotation>,
+    pub stype: QualifiedTypeName,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct ActionImport {
-    #[serde(rename = "@Name")]
-    pub name: String,
-    #[serde(rename = "@Action")]
-    pub action: String,
-    #[serde(rename = "Annotation", default)]
-    pub annotations: Vec<Annotation>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct FunctionImport {
-    #[serde(rename = "@Name")]
-    pub name: String,
-    #[serde(rename = "@Function")]
-    pub function: String,
-    #[serde(rename = "Annotation", default)]
-    pub annotations: Vec<Annotation>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Annotations {
-    #[serde(rename = "@Target")]
-    pub target: String,
-    #[serde(rename = "@Qualifier")]
-    pub qualifier: Option<String>,
-    #[serde(rename = "Annotation", default)]
-    pub annotations: Vec<Annotation>,
-}
-
+/// 14.1 Element edm:Term
 #[derive(Debug, Deserialize)]
 pub struct Term {
+    /// 14.1.1 Attribute `Name`
     #[serde(rename = "@Name")]
     pub name: LocalTypeName,
+    /// 14.1.2 Attribute `Type`
     #[serde(rename = "@Type")]
     pub ttype: Option<TypeName>,
-    #[serde(rename = "@AppliesTo")]
-    pub applies_to: Option<String>,
+    /// 14.1.4 Attribute `DefaultValue`
     #[serde(rename = "@DefaultValue")]
     pub default_value: Option<String>,
+    /// Annotations can be pretty much everywhere.
     #[serde(rename = "Annotation", default)]
     pub annotations: Vec<Annotation>,
 }
