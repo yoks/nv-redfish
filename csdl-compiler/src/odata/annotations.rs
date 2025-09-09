@@ -17,6 +17,7 @@
 
 use crate::edmx::annotation::Annotation;
 use crate::edmx::annotation::AnnotationRecord;
+use crate::edmx::attribute_values::Namespace;
 use crate::edmx::complex_type::ComplexType;
 use crate::edmx::entity_type::EntityType;
 use crate::edmx::enum_type::EnumMember;
@@ -47,13 +48,12 @@ trait IsODataNamespace {
 
 impl IsODataNamespace for Namespace {
     fn is_odata_namespace(&self) -> bool {
-        self.term.inner().namespace.ids.len() == 1
-            && self.term.inner().namespace.ids[0].inner() == "OData"
+        self.ids.len() == 1 && self.ids[0].inner() == "OData"
     }
 }
 
 pub trait ODataAnnotation {
-    fn is_odata_annotation(&self) -> bool;
+    fn is_odata_annotation(&self, name: &str) -> bool;
 }
 
 impl ODataAnnotation for Annotation {
