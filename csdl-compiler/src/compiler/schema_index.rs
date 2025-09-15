@@ -84,6 +84,11 @@ impl<'a> SchemaIndex<'a> {
         mut qtype: QualifiedName<'a>,
     ) -> Result<(QualifiedName<'a>, &'a EntityType), Error<'a>> {
         while let Some(children) = self.child_map.get(&qtype) {
+            let children = children
+                .iter()
+                .filter(|child| self.child_adds_property(child))
+                .copied()
+                .collect::<Vec<_>>();
             if children.len() > 1 {
                 return Err(Error::AmbigousHeirarchy(qtype, children.clone()));
             }
@@ -104,6 +109,21 @@ impl<'a> SchemaIndex<'a> {
     pub fn find_type(&self, qtype: &QualifiedTypeName) -> Option<&'a Type> {
         self.get(&qtype.inner().namespace)
             .and_then(|ns| ns.types.get(&qtype.inner().name))
+    }
+
+    #[must_use]
+    fn find_entity_type_by_qname(&self, qtype: &QualifiedName<'a>) -> Option<&'a EntityType> {
+        self.get(qtype.namespace)
+            .and_then(|ns| ns.entity_types.get(qtype.name))
+    }
+
+    fn child_adds_property(&self, qtype: &QualifiedName<'_>) -> bool {
+        self.find_entity_type_by_qname(qtype).is_some_and(|et| {
+            !et.properties.is_empty()
+                || self.child_map.get(qtype).is_some_and(|children| {
+                    children.iter().any(|child| self.child_adds_property(child))
+                })
+        })
     }
 }
 

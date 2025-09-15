@@ -21,11 +21,16 @@ pub mod schema_index;
 /// Compilation stack.
 pub mod stack;
 
+/// Error diagnostics
+pub mod error;
+
+/// Qualified name
+pub mod qualified_name;
+
 use crate::edmx::Edmx;
 use crate::edmx::PropertyName;
 use crate::edmx::QualifiedTypeName;
 use crate::edmx::Singleton;
-use crate::edmx::attribute_values::Namespace;
 use crate::edmx::attribute_values::SimpleIdentifier;
 use crate::edmx::attribute_values::TypeName;
 use crate::edmx::entity_type::EntityType;
@@ -41,20 +46,10 @@ use schema_index::SchemaIndex;
 use stack::Stack;
 use std::collections::HashMap;
 
-#[derive(Debug)]
-pub enum Error<'a> {
-    Unimplemented,
-    AmbigousHeirarchy(QualifiedName<'a>, Vec<QualifiedName<'a>>),
-    EntityTypeNotFound(QualifiedName<'a>),
-    EntityType(&'a QualifiedTypeName, Box<Error<'a>>),
-    TypeNotFound(QualifiedName<'a>),
-    TypeDefinitionOfNotPrimitiveType(QualifiedName<'a>),
-    TypeDefinition(QualifiedName<'a>, Box<Error<'a>>),
-    ComplexType(QualifiedName<'a>, Box<Error<'a>>),
-    Property(&'a PropertyName, Box<Error<'a>>),
-    Singleton(&'a SimpleIdentifier, Box<Error<'a>>),
-    Schema(&'a Namespace, Box<Error<'a>>),
-}
+/// Rexport `Error` to the level of compiler.
+pub type Error<'a> = error::Error<'a>;
+/// Rexport `QualifiedName` to the level of compiler.
+pub type QualifiedName<'a> = qualified_name::QualifiedName<'a>;
 
 #[derive(Default)]
 pub struct SchemaBundle {
@@ -125,6 +120,8 @@ impl SchemaBundle {
                     Ok(Compiled::default())
                 } else {
                     Self::compile_entity_type(qtype, et, schema_index, stack)
+                        .map_err(Box::new)
+                        .map_err(|e| Error::EntityType(qtype, e))
                 }
                 .map(|compiled| (qtype, compiled))
             })
@@ -160,7 +157,7 @@ impl SchemaBundle {
             .ok_or_else(|| Error::EntityTypeNotFound(qtype.into()))
             .and_then(|et| Self::compile_entity_type(qtype.into(), et, schema_index, stack))
             .map_err(Box::new)
-            .map_err(|e| Error::EntityType(qtype, e))
+            .map_err(|e| Error::EntityType(qtype.into(), e))
     }
 
     fn compile_entity_type<'a>(
@@ -224,7 +221,7 @@ impl SchemaBundle {
                         stack.merge(compiled)
                     }
                     PropertyAttrs::NavigationProperty(v) => {
-                        let (_qtype, compiled) = schema_index
+                        let (ptype, compiled) = schema_index
                             // We are searching for deepest available child in tre
                             // hierarchy of types for singleton. So, we can parse most
                             // recent protocol versions.
@@ -235,6 +232,8 @@ impl SchemaBundle {
                                     Ok(Compiled::default())
                                 } else {
                                     Self::compile_entity_type(qtype, et, schema_index, &stack)
+                                        .map_err(Box::new)
+                                        .map_err(|e| Error::EntityType(qtype, e))
                                 }
                                 .map(|compiled| (qtype, compiled))
                             })
@@ -242,7 +241,12 @@ impl SchemaBundle {
                             .map_err(|e| Error::Property(&sp.name, e))?;
                         np.push(CompiledNavProperty {
                             name: &v.name,
-                            ptype: (&v.ptype).into(),
+                            ptype: match &v.ptype {
+                                TypeName::One(_) => CompiledPropertyType::One(ptype),
+                                TypeName::CollectionOf(_) => {
+                                    CompiledPropertyType::CollectionOf(ptype)
+                                }
+                            },
                             description: v.odata_description(),
                             long_description: v.odata_long_description(),
                         });
@@ -304,7 +308,7 @@ impl SchemaBundle {
                     let name = qtype.into();
                     // Ensure that base entity type compiled if present.
                     let (base, compiled) = if let Some(base_type) = &ct.base_type {
-                        let compiled = Self::ensure_entity_type(base_type, schema_index, stack)?;
+                        let compiled = Self::compile_type(base_type, schema_index, stack)?;
                         (Some(base_type.into()), compiled)
                     } else {
                         (None, Compiled::default())
@@ -313,9 +317,7 @@ impl SchemaBundle {
                     let stack = stack.new_frame().merge(compiled);
 
                     let (stack, nav_properties, properties) =
-                        Self::compile_properties(&ct.properties, schema_index, stack.new_frame())
-                            .map_err(Box::new)
-                            .map_err(|e| Error::ComplexType(name, e))?;
+                        Self::compile_properties(&ct.properties, schema_index, stack.new_frame())?;
 
                     Ok(stack
                         .merge(Compiled::new_complex_type(CompiledComplexType {
@@ -329,28 +331,8 @@ impl SchemaBundle {
                         .done())
                 }
             })
-    }
-}
-
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-pub struct QualifiedName<'a> {
-    namespace: &'a Namespace,
-    name: &'a SimpleIdentifier,
-}
-
-impl<'a> QualifiedName<'a> {
-    #[must_use]
-    pub const fn new(namespace: &'a Namespace, name: &'a SimpleIdentifier) -> Self {
-        Self { namespace, name }
-    }
-}
-
-impl<'a> From<&'a QualifiedTypeName> for QualifiedName<'a> {
-    fn from(v: &'a QualifiedTypeName) -> Self {
-        Self {
-            namespace: &v.inner().namespace,
-            name: &v.inner().name,
-        }
+            .map_err(Box::new)
+            .map_err(|e| Error::Type(qtype.into(), e))
     }
 }
 

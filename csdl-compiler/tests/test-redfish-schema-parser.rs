@@ -30,7 +30,7 @@ enum Error {
 
 fn main() -> Result<(), Error> {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 2 {
+    if args.len() < 2 {
         println!("Usage:");
         println!(" {} <redfish-csdl-file> ...", args[0]);
         return Err(Error::ParameterNeeded);
@@ -51,7 +51,7 @@ fn main() -> Result<(), Error> {
             })?;
     let compiled = schema_bundle
         .compile()
-        .inspect_err(|e| println!("{e:#?}"))
+        .inspect_err(|e| println!("{e}"))
         .map_err(|_| Error::Compile("compilation error".into()))?;
     println!("{compiled:#?}");
     Ok(())
