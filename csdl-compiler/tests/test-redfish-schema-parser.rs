@@ -19,6 +19,7 @@ use csdl_compiler::compiler::SimpleTypeAttrs;
 use csdl_compiler::edmx::Edmx;
 use csdl_compiler::edmx::ValidateError;
 use csdl_compiler::edmx::attribute_values::Error as AttributeValuesError;
+use csdl_compiler::optimizer::optimize;
 use std::io::Error as IoError;
 use std::io::Read;
 
@@ -58,6 +59,7 @@ fn main() -> Result<(), Error> {
         .compile(&[root_service])
         .inspect_err(|e| println!("{e}"))
         .map_err(|_| Error::Compile("compilation error".into()))?;
+    let compiled = optimize(compiled);
 
     println!("Simple types:");
     for t in compiled.simple_types.values() {

@@ -46,6 +46,8 @@ pub mod edmx;
 pub mod generator;
 /// OData-related functions.
 pub mod odata;
+/// Optimizer of compiled data strcutres.
+pub mod optimizer;
 
 use edmx::ValidateError;
 use std::io::Error as IoError;

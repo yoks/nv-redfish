@@ -474,6 +474,19 @@ pub enum CompiledPropertyType<'a> {
     CollectionOf(QualifiedName<'a>),
 }
 
+impl<'a> CompiledPropertyType<'a> {
+    #[must_use]
+    pub fn map<F>(self, f: F) -> Self
+    where
+        F: FnOnce(QualifiedName<'a>) -> QualifiedName<'a>,
+    {
+        match self {
+            Self::One(v) => Self::One(f(v)),
+            Self::CollectionOf(v) => Self::CollectionOf(f(v)),
+        }
+    }
+}
+
 impl<'a> From<&'a TypeName> for CompiledPropertyType<'a> {
     fn from(v: &'a TypeName) -> Self {
         match v {
