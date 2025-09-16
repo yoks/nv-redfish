@@ -15,7 +15,7 @@
 
 mod prune_complex_type_inheritance;
 mod prune_entity_type_inheritance;
-mod prune_simple_types_namespaces;
+mod prune_namespaces;
 mod remove_empty_complex_types;
 mod remove_empty_entity_types;
 
@@ -23,7 +23,7 @@ use crate::compiler::Compiled;
 use crate::compiler::QualifiedName;
 use prune_complex_type_inheritance::prune_complex_type_inheritance;
 use prune_entity_type_inheritance::prune_entity_type_inheritance;
-use prune_simple_types_namespaces::prune_simple_types_namespaces;
+use prune_namespaces::prune_namespaces;
 use remove_empty_complex_types::remove_empty_complex_types;
 use remove_empty_entity_types::remove_empty_entity_types;
 use std::collections::HashMap;
@@ -36,7 +36,7 @@ pub fn optimize(input: Compiled<'_>) -> Compiled<'_> {
         remove_empty_entity_types,
         prune_complex_type_inheritance,
         prune_entity_type_inheritance,
-        prune_simple_types_namespaces,
+        prune_namespaces,
     ]
     .iter()
     .fold(input, |input, f| f(input))

@@ -1,0 +1,53 @@
+// SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Prune complex types namespaces.
+
+use crate::compiler::Compiled;
+use crate::compiler::CompiledProperty;
+use crate::compiler::MapBase as _;
+use crate::compiler::MapType as _;
+use crate::compiler::PropertiesManipulation as _;
+use crate::optimizer::replace;
+
+pub fn prune<'a>(input: Compiled<'a>) -> Compiled<'a> {
+    let replacements = super::prune_namepaces_replacements(|| input.complex_types.keys().copied());
+    let map_prop = |p: CompiledProperty<'a>| p.map_type(|t| replace(&t, &replacements));
+    Compiled {
+        simple_types: input.simple_types,
+        complex_types: input
+            .complex_types
+            .into_iter()
+            .map(|(name, mut ct)| {
+                let new_name = *replacements.get(&name).map_or(&name, |v| v);
+                ct.name = new_name;
+                (new_name, ct)
+            })
+            .map(|(name, v)| {
+                (
+                    name,
+                    v.map_properties(map_prop)
+                        .map_base(|base| replace(&base, &replacements)),
+                )
+            })
+            .collect(),
+        entity_types: input
+            .entity_types
+            .into_iter()
+            .map(|(name, v)| (name, v.map_properties(map_prop)))
+            .collect(),
+        root_singletons: input.root_singletons,
+    }
+}

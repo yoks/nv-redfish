@@ -30,8 +30,6 @@ use crate::compiler::PropertiesManipulation as _;
 use crate::compiler::QualifiedName;
 use std::collections::HashMap;
 
-type Replacements<'a> = HashMap<QualifiedName<'a>, QualifiedName<'a>>;
-
 pub fn prune_complex_type_inheritance<'a>(input: Compiled<'a>) -> Compiled<'a> {
     // 1. Create parent -> child map where parent have only one child.
     let single_child_parents = input
@@ -75,7 +73,7 @@ pub fn prune_complex_type_inheritance<'a>(input: Compiled<'a>) -> Compiled<'a> {
         .into_iter()
         .partition(|(name, _)| replacements.contains_key(name));
 
-    let map_prop = |p: CompiledProperty<'a>| p.map_type(|t| replace(&t, &replacements));
+    let map_prop = |p: CompiledProperty<'a>| p.map_type(|t| super::replace(&t, &replacements));
     Compiled {
         complex_types: retain
             .into_iter()
@@ -116,8 +114,4 @@ pub fn prune_complex_type_inheritance<'a>(input: Compiled<'a>) -> Compiled<'a> {
         root_singletons: input.root_singletons,
         simple_types: input.simple_types,
     }
-}
-
-fn replace<'a>(target: &QualifiedName<'a>, replacements: &Replacements<'a>) -> QualifiedName<'a> {
-    *replacements.get(target).unwrap_or(target)
 }

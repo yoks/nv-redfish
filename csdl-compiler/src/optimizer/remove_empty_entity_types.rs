@@ -27,13 +27,12 @@ use crate::compiler::MapBase as _;
 use crate::compiler::MapType as _;
 use crate::compiler::PropertiesManipulation as _;
 use crate::compiler::QualifiedName;
-use std::collections::HashMap;
-
-type Replacements<'a> = HashMap<QualifiedName<'a>, QualifiedName<'a>>;
+use crate::optimizer::Replacements;
 
 pub fn remove_empty_entity_types<'a>(input: Compiled<'a>) -> Compiled<'a> {
     let et_replacements = collect_et_replacements(&input);
-    let map_nav_prop = |p: CompiledNavProperty<'a>| p.map_type(|t| replace(&t, &et_replacements));
+    let map_nav_prop =
+        |p: CompiledNavProperty<'a>| p.map_type(|t| super::replace(&t, &et_replacements));
     Compiled {
         entity_types: input
             .entity_types
@@ -45,7 +44,7 @@ pub fn remove_empty_entity_types<'a>(input: Compiled<'a>) -> Compiled<'a> {
                     Some((
                         name,
                         v.map_nav_properties(map_nav_prop)
-                            .map_base(|base| replace(&base, &et_replacements)),
+                            .map_base(|base| super::replace(&base, &et_replacements)),
                     ))
                 }
             })
@@ -58,7 +57,7 @@ pub fn remove_empty_entity_types<'a>(input: Compiled<'a>) -> Compiled<'a> {
         root_singletons: input
             .root_singletons
             .into_iter()
-            .map(|s| s.map_type(|t| replace(&t, &et_replacements)))
+            .map(|s| s.map_type(|t| super::replace(&t, &et_replacements)))
             .collect(),
         simple_types: input.simple_types,
     }
@@ -66,10 +65,6 @@ pub fn remove_empty_entity_types<'a>(input: Compiled<'a>) -> Compiled<'a> {
 
 const fn et_is_empty(et: &CompiledEntityType<'_>) -> bool {
     et.properties.is_empty() && et.nav_properties.is_empty() && et.key.is_none()
-}
-
-fn replace<'a>(target: &QualifiedName<'a>, replacements: &Replacements<'a>) -> QualifiedName<'a> {
-    *replacements.get(target).unwrap_or(target)
 }
 
 fn collect_et_replacements<'a>(input: &Compiled<'a>) -> Replacements<'a> {
