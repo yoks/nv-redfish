@@ -177,10 +177,14 @@ impl SchemaBundle {
         let stack = stack.new_frame().merge(compiled);
 
         // Compile navigation and regular properties
-        let (stack, nav_properties, properties) =
-            Self::compile_properties(&schema_entity_type.properties, schema_index, stack)?;
+        let (compiled, nav_properties, properties) = Self::compile_properties(
+            &schema_entity_type.properties,
+            schema_index,
+            stack.new_frame(),
+        )?;
 
         Ok(stack
+            .merge(compiled)
             .merge(Compiled::new_entity_type(CompiledEntityType {
                 name,
                 base,
@@ -192,70 +196,73 @@ impl SchemaBundle {
             .done())
     }
 
-    fn compile_properties<'a, 'stack>(
+    fn compile_properties<'a>(
         props: &'a [Property],
         schema_index: &SchemaIndex<'a>,
-        stack: Stack<'a, 'stack>,
+        stack: Stack<'a, '_>,
     ) -> Result<
         (
-            Stack<'a, 'stack>,
+            Compiled<'a>,
             Vec<CompiledNavProperty<'a>>,
             Vec<CompiledProperty<'a>>,
         ),
         Error<'a>,
     > {
-        props.iter().try_fold(
-            (stack, Vec::new(), Vec::new()),
-            |(stack, mut np, mut p), sp| {
-                let stack = match &sp.attrs {
-                    PropertyAttrs::StructuralProperty(v) => {
-                        let compiled = Self::ensure_type(&v.ptype, schema_index, &stack)
-                            .map_err(Box::new)
-                            .map_err(|e| Error::Property(&sp.name, e))?;
-                        p.push(CompiledProperty {
-                            name: &v.name,
-                            ptype: (&v.ptype).into(),
-                            description: v.odata_description(),
-                            long_description: v.odata_long_description(),
-                        });
-                        stack.merge(compiled)
-                    }
-                    PropertyAttrs::NavigationProperty(v) => {
-                        let (ptype, compiled) = schema_index
-                            // We are searching for deepest available child in tre
-                            // hierarchy of types for singleton. So, we can parse most
-                            // recent protocol versions.
-                            .find_child_entity_type(v.ptype.qualified_type_name().into())
-                            .and_then(|(qtype, et)| {
-                                if stack.contains_entity(qtype) {
-                                    // Aready compiled entity
-                                    Ok(Compiled::default())
-                                } else {
-                                    Self::compile_entity_type(qtype, et, schema_index, &stack)
-                                        .map_err(Box::new)
-                                        .map_err(|e| Error::EntityType(qtype, e))
-                                }
-                                .map(|compiled| (qtype, compiled))
-                            })
-                            .map_err(Box::new)
-                            .map_err(|e| Error::Property(&sp.name, e))?;
-                        np.push(CompiledNavProperty {
-                            name: &v.name,
-                            ptype: match &v.ptype {
-                                TypeName::One(_) => CompiledPropertyType::One(ptype),
-                                TypeName::CollectionOf(_) => {
-                                    CompiledPropertyType::CollectionOf(ptype)
-                                }
-                            },
-                            description: v.odata_description(),
-                            long_description: v.odata_long_description(),
-                        });
-                        stack.merge(compiled)
-                    }
-                };
-                Ok((stack, np, p))
-            },
-        )
+        props
+            .iter()
+            .try_fold(
+                (stack, Vec::new(), Vec::new()),
+                |(stack, mut np, mut p), sp| {
+                    let stack = match &sp.attrs {
+                        PropertyAttrs::StructuralProperty(v) => {
+                            let compiled = Self::ensure_type(&v.ptype, schema_index, &stack)
+                                .map_err(Box::new)
+                                .map_err(|e| Error::Property(&sp.name, e))?;
+                            p.push(CompiledProperty {
+                                name: &v.name,
+                                ptype: (&v.ptype).into(),
+                                description: v.odata_description(),
+                                long_description: v.odata_long_description(),
+                            });
+                            stack.merge(compiled)
+                        }
+                        PropertyAttrs::NavigationProperty(v) => {
+                            let (ptype, compiled) = schema_index
+                                // We are searching for deepest available child in tre
+                                // hierarchy of types for singleton. So, we can parse most
+                                // recent protocol versions.
+                                .find_child_entity_type(v.ptype.qualified_type_name().into())
+                                .and_then(|(qtype, et)| {
+                                    if stack.contains_entity(qtype) {
+                                        // Aready compiled entity
+                                        Ok(Compiled::default())
+                                    } else {
+                                        Self::compile_entity_type(qtype, et, schema_index, &stack)
+                                            .map_err(Box::new)
+                                            .map_err(|e| Error::EntityType(qtype, e))
+                                    }
+                                    .map(|compiled| (qtype, compiled))
+                                })
+                                .map_err(Box::new)
+                                .map_err(|e| Error::Property(&sp.name, e))?;
+                            np.push(CompiledNavProperty {
+                                name: &v.name,
+                                ptype: match &v.ptype {
+                                    TypeName::One(_) => CompiledPropertyType::One(ptype),
+                                    TypeName::CollectionOf(_) => {
+                                        CompiledPropertyType::CollectionOf(ptype)
+                                    }
+                                },
+                                description: v.odata_description(),
+                                long_description: v.odata_long_description(),
+                            });
+                            stack.merge(compiled)
+                        }
+                    };
+                    Ok((stack, np, p))
+                },
+            )
+            .map(|(stack, np, p)| (stack.done(), np, p))
     }
 
     fn is_simple_type(qtype: &QualifiedTypeName) -> bool {
@@ -316,10 +323,11 @@ impl SchemaBundle {
 
                     let stack = stack.new_frame().merge(compiled);
 
-                    let (stack, nav_properties, properties) =
+                    let (compiled, nav_properties, properties) =
                         Self::compile_properties(&ct.properties, schema_index, stack.new_frame())?;
 
                     Ok(stack
+                        .merge(compiled)
                         .merge(Compiled::new_complex_type(CompiledComplexType {
                             name,
                             base,
