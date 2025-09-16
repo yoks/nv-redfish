@@ -340,7 +340,7 @@ impl SchemaBundle {
 pub struct Compiled<'a> {
     pub complex_types: HashMap<QualifiedName<'a>, CompiledComplexType<'a>>,
     pub entity_types: HashMap<QualifiedName<'a>, CompiledEntityType<'a>>,
-    pub types: HashMap<QualifiedName<'a>, CompiledType<'a>>,
+    pub simple_types: HashMap<QualifiedName<'a>, SimpleType<'a>>,
     pub root_singletons: Vec<CompiledSingleton<'a>>,
 }
 
@@ -372,9 +372,15 @@ impl<'a> Compiled<'a> {
     #[must_use]
     pub fn new_type_definition(v: CompiledTypeDefinition<'a>) -> Self {
         Self {
-            types: vec![(v.name, CompiledType::TypeDefinition(v))]
-                .into_iter()
-                .collect(),
+            simple_types: vec![(
+                v.name,
+                SimpleType {
+                    name: v.name,
+                    attrs: SimpleTypeAttrs::TypeDefinition(v),
+                },
+            )]
+            .into_iter()
+            .collect(),
             ..Default::default()
         }
     }
@@ -382,9 +388,15 @@ impl<'a> Compiled<'a> {
     #[must_use]
     pub fn new_enum_type(v: CompiledEnumType<'a>) -> Self {
         Self {
-            types: vec![(v.name, CompiledType::EnumType(v))]
-                .into_iter()
-                .collect(),
+            simple_types: vec![(
+                v.name,
+                SimpleType {
+                    name: v.name,
+                    attrs: SimpleTypeAttrs::EnumType(v),
+                },
+            )]
+            .into_iter()
+            .collect(),
             ..Default::default()
         }
     }
@@ -392,7 +404,7 @@ impl<'a> Compiled<'a> {
     #[must_use]
     pub fn merge(mut self, other: Self) -> Self {
         self.complex_types.extend(other.complex_types);
-        self.types.extend(other.types);
+        self.simple_types.extend(other.simple_types);
         self.entity_types.extend(other.entity_types);
         self.root_singletons.extend(other.root_singletons);
         self
@@ -400,10 +412,15 @@ impl<'a> Compiled<'a> {
 }
 
 #[derive(Debug)]
-pub enum CompiledType<'a> {
+pub struct SimpleType<'a> {
+    pub name: QualifiedName<'a>,
+    pub attrs: SimpleTypeAttrs<'a>,
+}
+
+#[derive(Debug)]
+pub enum SimpleTypeAttrs<'a> {
     TypeDefinition(CompiledTypeDefinition<'a>),
     EnumType(CompiledEnumType<'a>),
-    ComplexType(CompiledComplexType<'a>),
 }
 
 #[derive(Debug)]

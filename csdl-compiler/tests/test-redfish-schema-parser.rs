@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use csdl_compiler::compiler::CompiledPropertyType;
 use csdl_compiler::compiler::SchemaBundle;
+use csdl_compiler::compiler::SimpleTypeAttrs;
 use csdl_compiler::edmx::Edmx;
 use csdl_compiler::edmx::ValidateError;
 use std::io::Error as IoError;
@@ -53,11 +55,79 @@ fn main() -> Result<(), Error> {
         .compile()
         .inspect_err(|e| println!("{e}"))
         .map_err(|_| Error::Compile("compilation error".into()))?;
-    println!("{compiled:#?}");
-    println!("statistics:");
+
+    println!("Simple types:");
+    for t in compiled.simple_types.values() {
+        print!("  {}: ", t.name);
+        match &t.attrs {
+            SimpleTypeAttrs::EnumType(v) => println!("Enum ({:?})", v.underlying_type),
+            SimpleTypeAttrs::TypeDefinition(v) => println!("Typedef ({})", v.underlying_type),
+        }
+    }
+    println!();
+    println!("Complex types:");
+    for t in compiled.complex_types.values() {
+        print!("  {}", t.name);
+        if let Some(base) = t.base {
+            print!(" extends {base}");
+        }
+        println!();
+        if !t.properties.is_empty() {
+            println!("    properties:");
+            for p in &t.properties {
+                match p.ptype {
+                    CompiledPropertyType::One(t) => println!("      {}: {}", p.name, t),
+                    CompiledPropertyType::CollectionOf(t) => println!("      {}: {}[]", p.name, t),
+                }
+            }
+        }
+        if !t.nav_properties.is_empty() {
+            println!("    Nav properties:");
+            for p in &t.nav_properties {
+                match p.ptype {
+                    CompiledPropertyType::One(t) => println!("      {}: {}", p.name, t),
+                    CompiledPropertyType::CollectionOf(t) => println!("      {}: {}[]", p.name, t),
+                }
+            }
+        }
+    }
+    println!();
+    println!("Entity types:");
+    for t in compiled.entity_types.values() {
+        print!("  {}", t.name);
+        if let Some(base) = t.base {
+            print!(" extends {base}");
+        }
+        println!();
+        if !t.properties.is_empty() {
+            println!("    properties:");
+            for p in &t.properties {
+                match p.ptype {
+                    CompiledPropertyType::One(t) => println!("      {}: {}", p.name, t),
+                    CompiledPropertyType::CollectionOf(t) => println!("      {}: {}[]", p.name, t),
+                }
+            }
+        }
+        if !t.nav_properties.is_empty() {
+            println!("    Nav properties:");
+            for p in &t.nav_properties {
+                match p.ptype {
+                    CompiledPropertyType::One(t) => println!("      {}: {}", p.name, t),
+                    CompiledPropertyType::CollectionOf(t) => println!("      {}: {}[]", p.name, t),
+                }
+            }
+        }
+    }
+    println!();
+    println!("Singletons:");
+    for s in &compiled.root_singletons {
+        println!("  {} of {}", s.name, s.stype);
+    }
+    println!();
+    println!("Statistics:");
     println!(" complex types:   {}", compiled.complex_types.len());
     println!(" entity types:    {}", compiled.entity_types.len());
-    println!(" other types:     {}", compiled.types.len());
+    println!(" simple types:    {}", compiled.simple_types.len());
     println!(" root singletons: {}", compiled.root_singletons.len());
     Ok(())
 }
