@@ -79,16 +79,16 @@ fn main() -> Result<(), Error> {
         println!();
         if !t.properties.is_empty() {
             println!("    properties:");
-            for p in &t.properties {
+            for p in &t.properties.properties {
                 match p.ptype {
                     CompiledPropertyType::One(t) => println!("      {}: {}", p.name, t),
                     CompiledPropertyType::CollectionOf(t) => println!("      {}: {}[]", p.name, t),
                 }
             }
         }
-        if !t.nav_properties.is_empty() {
+        if !t.properties.nav_properties.is_empty() {
             println!("    Nav properties:");
-            for p in &t.nav_properties {
+            for p in &t.properties.nav_properties {
                 match p.ptype {
                     CompiledPropertyType::One(t) => println!("      {}: {}", p.name, t),
                     CompiledPropertyType::CollectionOf(t) => println!("      {}: {}[]", p.name, t),
@@ -106,16 +106,16 @@ fn main() -> Result<(), Error> {
         println!();
         if !t.properties.is_empty() {
             println!("    properties:");
-            for p in &t.properties {
+            for p in &t.properties.properties {
                 match p.ptype {
                     CompiledPropertyType::One(t) => println!("      {}: {}", p.name, t),
                     CompiledPropertyType::CollectionOf(t) => println!("      {}: {}[]", p.name, t),
                 }
             }
         }
-        if !t.nav_properties.is_empty() {
+        if !t.properties.nav_properties.is_empty() {
             println!("    Nav properties:");
-            for p in &t.nav_properties {
+            for p in &t.properties.nav_properties {
                 match p.ptype {
                     CompiledPropertyType::One(t) => println!("      {}: {}", p.name, t),
                     CompiledPropertyType::CollectionOf(t) => println!("      {}: {}[]", p.name, t),

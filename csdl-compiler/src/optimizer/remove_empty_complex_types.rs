@@ -60,7 +60,7 @@ pub fn remove_empty_complex_types<'a>(input: Compiled<'a>) -> Compiled<'a> {
 }
 
 const fn ct_is_empty(ct: &CompiledComplexType<'_>) -> bool {
-    ct.properties.is_empty() && ct.nav_properties.is_empty()
+    ct.properties.is_empty()
 }
 
 fn collect_ct_replacements<'a>(input: &Compiled<'a>) -> Replacements<'a> {

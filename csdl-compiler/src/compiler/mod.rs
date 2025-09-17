@@ -24,11 +24,20 @@ pub mod stack;
 /// Error diagnostics
 pub mod error;
 
+/// Compiled schema bundle.
+pub mod compiled;
+
 /// Qualified name
 pub mod qualified_name;
 
 /// Compiled namespace
 pub mod namespace;
+
+/// Compiled odata
+pub mod odata;
+
+/// Compiled properties of `ComplexType` or `EntityType`.
+pub mod compiled_properties;
 
 use crate::edmx::Edmx;
 use crate::edmx::PropertyName;
@@ -43,19 +52,21 @@ use crate::edmx::property::Property;
 use crate::edmx::property::PropertyAttrs;
 use crate::edmx::schema::Schema;
 use crate::edmx::schema::Type;
-use crate::odata::annotations::DescriptionRef;
-use crate::odata::annotations::LongDescriptionRef;
-use crate::odata::annotations::ODataAnnotations as _;
 use schema_index::SchemaIndex;
 use stack::Stack;
-use std::collections::HashMap;
 
-/// Rexport `Error` to the level of compiler.
+/// Reexport `Compiled` to the level of the compiler.
+pub type Compiled<'a> = compiled::Compiled<'a>;
+/// Reexport `Error` to the level of the compiler.
 pub type Error<'a> = error::Error<'a>;
-/// Rexport `QualifiedName` to the level of the compiler.
+/// Reexport `QualifiedName` to the level of the compiler.
 pub type QualifiedName<'a> = qualified_name::QualifiedName<'a>;
-/// Rexport `CompiledNamespace` to the level of the compiler.
+/// Reexport `CompiledNamespace` to the level of the compiler.
 pub type CompiledNamespace<'a> = namespace::CompiledNamespace<'a>;
+/// Reexport `CompiledOData` to the level of the compiler.
+pub type CompiledOData<'a> = odata::CompiledOData<'a>;
+/// Resolving `CompiledProperties` to the level of the compiler.
+pub type CompiledProperties<'a> = compiled_properties::CompiledProperties<'a>;
 
 #[derive(Default)]
 pub struct SchemaBundle {
@@ -188,7 +199,7 @@ impl SchemaBundle {
         let stack = stack.new_frame().merge(compiled);
 
         // Compile navigation and regular properties
-        let (compiled, nav_properties, properties) = Self::compile_properties(
+        let (compiled, properties) = Self::compile_properties(
             &schema_entity_type.properties,
             schema_index,
             stack.new_frame(),
@@ -201,9 +212,7 @@ impl SchemaBundle {
                 base,
                 key: schema_entity_type.key.as_ref(),
                 properties,
-                nav_properties,
-                description: schema_entity_type.odata_description(),
-                long_description: schema_entity_type.odata_long_description(),
+                odata: CompiledOData::new(schema_entity_type),
             }))
             .done())
     }
@@ -212,29 +221,21 @@ impl SchemaBundle {
         props: &'a [Property],
         schema_index: &SchemaIndex<'a>,
         stack: Stack<'a, '_>,
-    ) -> Result<
-        (
-            Compiled<'a>,
-            Vec<CompiledNavProperty<'a>>,
-            Vec<CompiledProperty<'a>>,
-        ),
-        Error<'a>,
-    > {
+    ) -> Result<(Compiled<'a>, CompiledProperties<'a>), Error<'a>> {
         props
             .iter()
             .try_fold(
-                (stack, Vec::new(), Vec::new()),
-                |(stack, mut np, mut p), sp| {
+                (stack, CompiledProperties::default()),
+                |(stack, mut p), sp| {
                     let stack = match &sp.attrs {
                         PropertyAttrs::StructuralProperty(v) => {
                             let compiled = Self::ensure_type(&v.ptype, schema_index, &stack)
                                 .map_err(Box::new)
                                 .map_err(|e| Error::Property(&sp.name, e))?;
-                            p.push(CompiledProperty {
+                            p.properties.push(CompiledProperty {
                                 name: &v.name,
                                 ptype: (&v.ptype).into(),
-                                description: v.odata_description(),
-                                long_description: v.odata_long_description(),
+                                odata: CompiledOData::new(v),
                             });
                             stack.merge(compiled)
                         }
@@ -257,7 +258,7 @@ impl SchemaBundle {
                                 })
                                 .map_err(Box::new)
                                 .map_err(|e| Error::Property(&sp.name, e))?;
-                            np.push(CompiledNavProperty {
+                            p.nav_properties.push(CompiledNavProperty {
                                 name: &v.name,
                                 ptype: match &v.ptype {
                                     TypeName::One(_) => CompiledPropertyType::One(ptype),
@@ -265,16 +266,15 @@ impl SchemaBundle {
                                         CompiledPropertyType::CollectionOf(ptype)
                                     }
                                 },
-                                description: v.odata_description(),
-                                long_description: v.odata_long_description(),
+                                odata: CompiledOData::new(v),
                             });
                             stack.merge(compiled)
                         }
                     };
-                    Ok((stack, np, p))
+                    Ok((stack, p))
                 },
             )
-            .map(|(stack, np, p)| (stack.done(), np, p))
+            .map(|(stack, p)| (stack.done(), p))
     }
 
     fn is_simple_type(qtype: &QualifiedTypeName) -> bool {
@@ -335,7 +335,7 @@ impl SchemaBundle {
 
                     let stack = stack.new_frame().merge(compiled);
 
-                    let (compiled, nav_properties, properties) =
+                    let (compiled, properties) =
                         Self::compile_properties(&ct.properties, schema_index, stack.new_frame())?;
 
                     Ok(stack
@@ -344,90 +344,13 @@ impl SchemaBundle {
                             name,
                             base,
                             properties,
-                            nav_properties,
-                            description: ct.odata_description(),
-                            long_description: ct.odata_long_description(),
+                            odata: CompiledOData::new(ct),
                         }))
                         .done())
                 }
             })
             .map_err(Box::new)
             .map_err(|e| Error::Type(qtype.into(), e))
-    }
-}
-
-#[derive(Default, Debug)]
-pub struct Compiled<'a> {
-    pub complex_types: HashMap<QualifiedName<'a>, CompiledComplexType<'a>>,
-    pub entity_types: HashMap<QualifiedName<'a>, CompiledEntityType<'a>>,
-    pub simple_types: HashMap<QualifiedName<'a>, SimpleType<'a>>,
-    pub root_singletons: Vec<CompiledSingleton<'a>>,
-}
-
-impl<'a> Compiled<'a> {
-    #[must_use]
-    pub fn new_entity_type(v: CompiledEntityType<'a>) -> Self {
-        Self {
-            entity_types: vec![(v.name, v)].into_iter().collect(),
-            ..Default::default()
-        }
-    }
-
-    #[must_use]
-    pub fn new_complex_type(v: CompiledComplexType<'a>) -> Self {
-        Self {
-            complex_types: vec![(v.name, v)].into_iter().collect(),
-            ..Default::default()
-        }
-    }
-
-    #[must_use]
-    pub fn new_singleton(v: CompiledSingleton<'a>) -> Self {
-        Self {
-            root_singletons: vec![v],
-            ..Default::default()
-        }
-    }
-
-    #[must_use]
-    pub fn new_type_definition(v: CompiledTypeDefinition<'a>) -> Self {
-        Self {
-            simple_types: vec![(
-                v.name,
-                SimpleType {
-                    name: v.name,
-                    attrs: SimpleTypeAttrs::TypeDefinition(v),
-                },
-            )]
-            .into_iter()
-            .collect(),
-            ..Default::default()
-        }
-    }
-
-    #[must_use]
-    pub fn new_enum_type(v: CompiledEnumType<'a>) -> Self {
-        Self {
-            simple_types: vec![(
-                v.name,
-                SimpleType {
-                    name: v.name,
-                    attrs: SimpleTypeAttrs::EnumType(v),
-                },
-            )]
-            .into_iter()
-            .collect(),
-            ..Default::default()
-        }
-    }
-
-    #[must_use]
-    pub fn merge(mut self, other: Self) -> Self {
-        self.complex_types.extend(other.complex_types);
-        self.simple_types.extend(other.simple_types);
-        self.entity_types.extend(other.entity_types);
-        self.root_singletons.extend(other.root_singletons);
-        self
     }
 }
 
@@ -486,10 +409,8 @@ pub struct CompiledEntityType<'a> {
     pub name: QualifiedName<'a>,
     pub base: Option<QualifiedName<'a>>,
     pub key: Option<&'a Key>,
-    pub properties: Vec<CompiledProperty<'a>>,
-    pub nav_properties: Vec<CompiledNavProperty<'a>>,
-    pub description: Option<DescriptionRef<'a>>,
-    pub long_description: Option<LongDescriptionRef<'a>>,
+    pub properties: CompiledProperties<'a>,
+    pub odata: CompiledOData<'a>,
 }
 
 impl<'a> PropertiesManipulation<'a> for CompiledEntityType<'a> {
@@ -497,7 +418,7 @@ impl<'a> PropertiesManipulation<'a> for CompiledEntityType<'a> {
     where
         F: Fn(CompiledProperty<'a>) -> CompiledProperty<'a>,
     {
-        self.properties = self.properties.into_iter().map(f).collect();
+        self.properties.properties = self.properties.properties.into_iter().map(f).collect();
         self
     }
 
@@ -505,7 +426,8 @@ impl<'a> PropertiesManipulation<'a> for CompiledEntityType<'a> {
     where
         F: Fn(CompiledNavProperty<'a>) -> CompiledNavProperty<'a>,
     {
-        self.nav_properties = self.nav_properties.into_iter().map(f).collect();
+        self.properties.nav_properties =
+            self.properties.nav_properties.into_iter().map(f).collect();
         self
     }
 }
@@ -524,10 +446,8 @@ impl<'a> MapBase<'a> for CompiledEntityType<'a> {
 pub struct CompiledComplexType<'a> {
     pub name: QualifiedName<'a>,
     pub base: Option<QualifiedName<'a>>,
-    pub properties: Vec<CompiledProperty<'a>>,
-    pub nav_properties: Vec<CompiledNavProperty<'a>>,
-    pub description: Option<DescriptionRef<'a>>,
-    pub long_description: Option<LongDescriptionRef<'a>>,
+    pub properties: CompiledProperties<'a>,
+    pub odata: CompiledOData<'a>,
 }
 
 impl<'a> PropertiesManipulation<'a> for CompiledComplexType<'a> {
@@ -535,7 +455,7 @@ impl<'a> PropertiesManipulation<'a> for CompiledComplexType<'a> {
     where
         F: Fn(CompiledProperty<'a>) -> CompiledProperty<'a>,
     {
-        self.properties = self.properties.into_iter().map(f).collect();
+        self.properties.properties = self.properties.properties.into_iter().map(f).collect();
         self
     }
 
@@ -543,7 +463,8 @@ impl<'a> PropertiesManipulation<'a> for CompiledComplexType<'a> {
     where
         F: Fn(CompiledNavProperty<'a>) -> CompiledNavProperty<'a>,
     {
-        self.nav_properties = self.nav_properties.into_iter().map(f).collect();
+        self.properties.nav_properties =
+            self.properties.nav_properties.into_iter().map(f).collect();
         self
     }
 }
@@ -590,8 +511,7 @@ impl<'a> From<&'a TypeName> for CompiledPropertyType<'a> {
 pub struct CompiledProperty<'a> {
     pub name: &'a PropertyName,
     pub ptype: CompiledPropertyType<'a>,
-    pub description: Option<DescriptionRef<'a>>,
-    pub long_description: Option<LongDescriptionRef<'a>>,
+    pub odata: CompiledOData<'a>,
 }
 
 impl<'a> MapType<'a> for CompiledProperty<'a> {
@@ -608,8 +528,7 @@ impl<'a> MapType<'a> for CompiledProperty<'a> {
 pub struct CompiledNavProperty<'a> {
     pub name: &'a PropertyName,
     pub ptype: CompiledPropertyType<'a>,
-    pub description: Option<DescriptionRef<'a>>,
-    pub long_description: Option<LongDescriptionRef<'a>>,
+    pub odata: CompiledOData<'a>,
 }
 
 impl<'a> MapType<'a> for CompiledNavProperty<'a> {
@@ -684,9 +603,14 @@ mod test {
         }
         let qtype: QualifiedTypeName = "ServiceRoot.ServiceRoot".parse().unwrap();
         let et = compiled.entity_types.get(&(&qtype).into()).unwrap();
-        assert_eq!(et.properties.len(), 1);
+        assert_eq!(et.properties.properties.len(), 1);
         assert_eq!(
-            et.properties[0].description.as_ref().unwrap().inner(),
+            et.properties.properties[0]
+                .odata
+                .description
+                .as_ref()
+                .unwrap()
+                .inner(),
             &"The version of the Redfish service."
         );
     }

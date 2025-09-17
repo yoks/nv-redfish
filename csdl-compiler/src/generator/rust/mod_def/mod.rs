@@ -80,8 +80,7 @@ impl<'a> ModDef<'a> {
                 Entry::Vacant(v) => {
                     v.insert(StructDef {
                         name: struct_name,
-                        description: ct.description,
-                        long_description: ct.long_description,
+                        odata: ct.odata,
                     });
                     Ok(self)
                 }
@@ -125,8 +124,7 @@ impl<'a> ModDef<'a> {
                 Entry::Vacant(v) => {
                     v.insert(StructDef {
                         name: struct_name,
-                        description: et.description,
-                        long_description: et.long_description,
+                        odata: et.odata,
                     });
                     Ok(self)
                 }

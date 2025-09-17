@@ -24,6 +24,7 @@
 
 use crate::compiler::Compiled;
 use crate::compiler::CompiledComplexType;
+use crate::compiler::CompiledProperties;
 use crate::compiler::CompiledProperty;
 use crate::compiler::MapType as _;
 use crate::compiler::PropertiesManipulation as _;
@@ -81,11 +82,9 @@ pub fn prune_complex_type_inheritance<'a>(input: Compiled<'a>) -> Compiled<'a> {
             .map(|(name, v)| {
                 let mut base = v.base;
                 let mut properties = vec![v.properties];
-                let mut nav_properties = vec![v.nav_properties];
                 while let Some(next_base) = base {
                     if let Some(parent) = remove.remove(&next_base) {
                         properties.push(parent.properties);
-                        nav_properties.push(parent.nav_properties);
                         base = parent.base;
                     } else {
                         break;
@@ -96,10 +95,8 @@ pub fn prune_complex_type_inheritance<'a>(input: Compiled<'a>) -> Compiled<'a> {
                     CompiledComplexType {
                         name: v.name,
                         base,
-                        properties: properties.into_iter().rev().flatten().collect(),
-                        nav_properties: nav_properties.into_iter().rev().flatten().collect(),
-                        description: v.description,
-                        long_description: v.long_description,
+                        properties: CompiledProperties::rev_join(properties),
+                        odata: v.odata,
                     },
                 )
             })
