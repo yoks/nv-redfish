@@ -62,6 +62,7 @@ impl<'a> ModDef<'a> {
         ct: CompiledComplexType<'a>,
         depth: usize,
     ) -> Result<Self, Error<'a>> {
+        let short_name = ct.name.name;
         if let Some(id) = ct.name.namespace.get_id(depth) {
             let mod_name = ModName::new(id);
             self.sub_mods
@@ -73,16 +74,20 @@ impl<'a> ModDef<'a> {
                     self
                 })
         } else {
-            let struct_name = StructName::new(ct.name.name);
+            let struct_name = StructName::new(short_name);
             match self.structs.entry(struct_name) {
                 Entry::Occupied(_) => Err(Error::NameConflict(ct.name)),
                 Entry::Vacant(v) => {
-                    v.insert(StructDef::new(struct_name));
+                    v.insert(StructDef {
+                        name: struct_name,
+                        description: ct.description,
+                        long_description: ct.long_description,
+                    });
                     Ok(self)
                 }
             }
             .map_err(Box::new)
-            .map_err(|e| Error::CreateStruct(ct.name.name, e))
+            .map_err(|e| Error::CreateStruct(short_name, e))
         }
     }
 
@@ -102,6 +107,7 @@ impl<'a> ModDef<'a> {
         et: CompiledEntityType<'a>,
         depth: usize,
     ) -> Result<Self, Error<'a>> {
+        let short_name = et.name.name;
         if let Some(id) = et.name.namespace.get_id(depth) {
             let mod_name = ModName::new(id);
             self.sub_mods
@@ -113,16 +119,20 @@ impl<'a> ModDef<'a> {
                     self
                 })
         } else {
-            let struct_name = StructName::new(et.name.name);
+            let struct_name = StructName::new(short_name);
             match self.structs.entry(struct_name) {
                 Entry::Occupied(_) => Err(Error::NameConflict(et.name)),
                 Entry::Vacant(v) => {
-                    v.insert(StructDef::new(struct_name));
+                    v.insert(StructDef {
+                        name: struct_name,
+                        description: et.description,
+                        long_description: et.long_description,
+                    });
                     Ok(self)
                 }
             }
             .map_err(Box::new)
-            .map_err(|e| Error::CreateStruct(et.name.name, e))
+            .map_err(|e| Error::CreateStruct(short_name, e))
         }
     }
 
