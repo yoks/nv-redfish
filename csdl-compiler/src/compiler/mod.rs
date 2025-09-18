@@ -15,16 +15,16 @@
 
 //! Compiler of multiple schemas
 
-/// Index of schemas.
+/// Index of schemas
 pub mod schema_index;
 
-/// Compilation stack.
+/// Compilation stack
 pub mod stack;
 
 /// Error diagnostics
 pub mod error;
 
-/// Compiled schema bundle.
+/// Compiled schema bundle
 pub mod compiled;
 
 /// Qualified name
@@ -36,8 +36,11 @@ pub mod namespace;
 /// Compiled odata
 pub mod odata;
 
-/// Compiled properties of `ComplexType` or `EntityType`.
+/// Compiled properties of `ComplexType` or `EntityType`
 pub mod compiled_properties;
+
+/// Simple type (type definition or enum)
+pub mod simple_type;
 
 use crate::edmx::Edmx;
 use crate::edmx::PropertyName;
@@ -47,7 +50,6 @@ use crate::edmx::attribute_values::SimpleIdentifier;
 use crate::edmx::attribute_values::TypeName;
 use crate::edmx::entity_type::EntityType;
 use crate::edmx::entity_type::Key;
-use crate::edmx::enum_type::EnumUnderlyingType;
 use crate::edmx::property::Property;
 use crate::edmx::property::PropertyAttrs;
 use crate::edmx::schema::Schema;
@@ -65,8 +67,16 @@ pub type QualifiedName<'a> = qualified_name::QualifiedName<'a>;
 pub type CompiledNamespace<'a> = namespace::CompiledNamespace<'a>;
 /// Reexport `CompiledOData` to the level of the compiler.
 pub type CompiledOData<'a> = odata::CompiledOData<'a>;
-/// Resolving `CompiledProperties` to the level of the compiler.
+/// Reexport `CompiledProperties` to the level of the compiler.
 pub type CompiledProperties<'a> = compiled_properties::CompiledProperties<'a>;
+/// Reexport `SimpleType` to the level of the compiler.
+pub type SimpleType<'a> = simple_type::SimpleType<'a>;
+/// Reexport `SimpleTypeAttrs` to the level of the compiler.
+pub type SimpleTypeAttrs<'a> = simple_type::SimpleTypeAttrs<'a>;
+/// Reexport `CompiledTypeDefinition` to the level of the compiler.
+pub type CompiledTypeDefinition<'a> = simple_type::CompiledTypeDefinition<'a>;
+/// Reexport `CompiledEnumType` to the level of the compiler.
+pub type CompiledEnumType<'a> = simple_type::CompiledEnumType<'a>;
 
 /// Collection of EDMX documents that are compiled together to produce
 /// code.
@@ -355,43 +365,6 @@ impl SchemaBundle {
             .map_err(Box::new)
             .map_err(|e| Error::Type(qtype.into(), e))
     }
-}
-
-/// Compiled simple type (type definition or enumeration).
-#[derive(Debug)]
-pub struct SimpleType<'a> {
-    /// Fully-qualified type name.
-    pub name: QualifiedName<'a>,
-    /// Attributes of the type.
-    pub attrs: SimpleTypeAttrs<'a>,
-}
-
-/// Attributes of the simple type.
-#[derive(Debug)]
-pub enum SimpleTypeAttrs<'a> {
-    /// Attributes of the type definition.
-    TypeDefinition(CompiledTypeDefinition<'a>),
-    /// Attributes of the enumeration.
-    EnumType(CompiledEnumType<'a>),
-}
-
-/// Compiled type definition.
-#[derive(Debug)]
-pub struct CompiledTypeDefinition<'a> {
-    /// Fully-qualified type name.
-    pub name: QualifiedName<'a>,
-    /// Underlying type name. This is always primitive type in Edm
-    /// namespace.
-    pub underlying_type: QualifiedName<'a>,
-}
-
-/// Compiled enum definition.
-#[derive(Debug)]
-pub struct CompiledEnumType<'a> {
-    /// Fully-qualified type name.
-    pub name: QualifiedName<'a>,
-    /// Underlying type. It is always Integer of some size.
-    pub underlying_type: EnumUnderlyingType,
 }
 
 pub trait PropertiesManipulation<'a> {
