@@ -72,7 +72,7 @@ impl StructDef<'_> {
         tokens.extend([
             doc_format_and_generate(self.name, &self.odata),
             quote! {
-                #[serde(Deserialize)]
+                #[derive(Deserialize)]
                 pub struct #name
             },
             TokenTree::Group(Group::new(Delimiter::Brace, content)).into(),

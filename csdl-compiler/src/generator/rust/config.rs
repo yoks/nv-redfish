@@ -25,7 +25,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            top_module_alias: Ident::new("top", Span::call_site()),
+            top_module_alias: Ident::new("redfish", Span::call_site()),
         }
     }
 }

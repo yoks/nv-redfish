@@ -190,14 +190,14 @@ impl<'a> ModDef<'a> {
                 TokenTree::Punct(Punct::new(':', Spacing::Joint)),
                 TokenTree::Ident(Ident::new("super", Span::call_site())),
             ],
-            depth,
+            depth + 1,
         )
         .flatten()
         .collect::<Vec<_>>();
         let mut ts = TokenStream::new();
         ts.extend(quote! { use super });
         ts.extend(supers);
-        ts.extend(quote! { as #top ; });
+        ts.extend(quote! { ::#top  as #top ; });
         ts
     }
 }
