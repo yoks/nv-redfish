@@ -86,10 +86,17 @@ pub fn prune_entity_type_inheritance<'a>(input: Compiled<'a>) -> Compiled<'a> {
             .map(|(name, v)| {
                 let mut base = v.base;
                 let mut properties = vec![v.properties];
+                let mut odata = v.odata;
                 while let Some(next_base) = base {
                     if let Some(parent) = remove.remove(&next_base) {
                         properties.push(parent.properties);
                         base = parent.base;
+                        if odata.description.is_none() {
+                            odata.description = parent.odata.description;
+                        }
+                        if odata.long_description.is_none() {
+                            odata.long_description = parent.odata.long_description;
+                        }
                     } else {
                         break;
                     }
@@ -101,7 +108,7 @@ pub fn prune_entity_type_inheritance<'a>(input: Compiled<'a>) -> Compiled<'a> {
                         base,
                         key: v.key,
                         properties: CompiledProperties::rev_join(properties),
-                        odata: v.odata,
+                        odata,
                     },
                 )
             })

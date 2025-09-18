@@ -65,19 +65,12 @@ impl ODataAnnotation for Annotation {
 pub trait ODataAnnotations {
     fn annotations(&self) -> &Vec<Annotation>;
 
-    fn default_description(&self) -> Description;
-
     fn odata_description(&self) -> Option<DescriptionRef<'_>> {
         self.annotations()
             .iter()
             .find(|a| a.is_odata_annotation("Description"))
             .and_then(|a| a.string.as_ref())
             .map(DescriptionRef::new)
-    }
-
-    fn odata_description_or_default(&self) -> Description {
-        self.odata_description()
-            .map_or_else(|| self.default_description(), TaggedType::cloned)
     }
 
     fn odata_long_description(&self) -> Option<LongDescriptionRef<'_>> {
@@ -99,19 +92,11 @@ impl ODataAnnotations for EnumType {
     fn annotations(&self) -> &Vec<Annotation> {
         &self.annotations
     }
-
-    fn default_description(&self) -> Description {
-        Description::new(format!("Enum {}", self.name))
-    }
 }
 
 impl ODataAnnotations for EnumMember {
     fn annotations(&self) -> &Vec<Annotation> {
         &self.annotations
-    }
-
-    fn default_description(&self) -> Description {
-        Description::new(format!("EnumMember {}", self.name))
     }
 }
 
@@ -119,19 +104,11 @@ impl ODataAnnotations for EntityType {
     fn annotations(&self) -> &Vec<Annotation> {
         &self.annotations
     }
-
-    fn default_description(&self) -> Description {
-        Description::new(format!("Resource {}", self.name))
-    }
 }
 
 impl ODataAnnotations for ComplexType {
     fn annotations(&self) -> &Vec<Annotation> {
         &self.annotations
-    }
-
-    fn default_description(&self) -> Description {
-        Description::new(format!("Complex type {}", self.name))
     }
 }
 
@@ -139,28 +116,16 @@ impl ODataAnnotations for DeStructuralProperty {
     fn annotations(&self) -> &Vec<Annotation> {
         &self.annotations
     }
-
-    fn default_description(&self) -> Description {
-        Description::new(format!("Property {}", self.name))
-    }
 }
 
 impl ODataAnnotations for NavigationProperty {
     fn annotations(&self) -> &Vec<Annotation> {
         &self.annotations
     }
-
-    fn default_description(&self) -> Description {
-        Description::new(format!("Navigation property {}", self.name))
-    }
 }
 
 impl ODataAnnotations for AnnotationRecord {
     fn annotations(&self) -> &Vec<Annotation> {
         &self.annotations
-    }
-
-    fn default_description(&self) -> Description {
-        Description::new("Annotation record".into())
     }
 }

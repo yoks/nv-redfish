@@ -35,4 +35,10 @@ impl<'a> CompiledOData<'a> {
             long_description: src.odata_long_description(),
         }
     }
+
+    /// `OData` doesn't contain anything.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.description.is_none() && self.long_description.is_none()
+    }
 }

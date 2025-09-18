@@ -64,7 +64,7 @@ pub fn remove_empty_entity_types<'a>(input: Compiled<'a>) -> Compiled<'a> {
 }
 
 const fn et_is_empty(et: &CompiledEntityType<'_>) -> bool {
-    et.properties.is_empty() && et.key.is_none()
+    et.properties.is_empty() && et.key.is_none() && et.odata.is_empty()
 }
 
 fn collect_et_replacements<'a>(input: &Compiled<'a>) -> Replacements<'a> {
