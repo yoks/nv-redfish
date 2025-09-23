@@ -41,6 +41,9 @@ pub mod full_type_name;
 /// Property name for structs
 pub mod property_name;
 
+/// Action name for structs
+pub mod action_name;
+
 /// Mod definition
 pub mod mod_def;
 
@@ -79,12 +82,16 @@ pub type TypeName<'a> = type_name::TypeName<'a>;
 pub type FullTypeName<'a, 'config> = full_type_name::FullTypeName<'a, 'config>;
 /// Reexport of `PropertyName`.
 pub type PropertyName<'a> = property_name::PropertyName<'a>;
+/// Reexport of `ActionName`.
+pub type ActionName<'a> = action_name::ActionName<'a>;
+/// Reexport of `ActionFullType`.
+pub type ActionFullTypeName<'a, 'config> = action_name::ActionFullTypeName<'a, 'config>;
 
 /// Errors that can occur during code generation.
 pub enum Error<'a> {
     BaseTypeConflict,
     NameConflict,
-    CreateStruct(QualifiedName<'a>, Box<Error<'a>>),
+    CreateStruct(TypeName<'a>, Box<Error<'a>>),
     CreateSimplType(QualifiedName<'a>, Box<Error<'a>>),
 }
 
@@ -114,10 +121,18 @@ impl<'a> RustGenerator<'a> {
     /// data structure.
     pub fn new(compiled: Compiled<'a>, config: Config) -> Result<Self, Error<'a>> {
         let root = ModDef::default();
+        let mut cactions = compiled.actions;
+        let root = cactions.iter().try_fold(root, |m, (_, ma)| {
+            ma.iter()
+                .try_fold(m, |m, (_, a)| m.add_action_type(a, &config))
+        })?;
         let root = compiled
             .complex_types
             .into_iter()
-            .try_fold(root, |m, (_, t)| m.add_complex_type(t, &config))?;
+            .try_fold(root, |m, (name, t)| {
+                let actions = cactions.remove(&name).unwrap_or_default();
+                m.add_complex_type(t, actions, &config)
+            })?;
         let root = compiled
             .entity_types
             .into_iter()
@@ -145,6 +160,7 @@ impl RustGenerator<'_> {
             use nv_redfish::EntityType;
             use nv_redfish::Expandable;
             type NavProperty<T> = nv_redfish::NavProperty<T>;
+            type Action<T> = nv_redfish::Action<T>;
             type ODataId = nv_redfish::ODataId;
 
             pub mod edm {

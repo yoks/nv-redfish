@@ -29,7 +29,7 @@ mod remove_empty_entity_types;
 use crate::compiler::Compiled;
 use crate::compiler::MapType as _;
 use crate::compiler::QualifiedName;
-use crate::compiler::compiled::CompiledActionsMap;
+use crate::compiler::TypeActions;
 use prune_complex_type_inheritance::prune_complex_type_inheritance;
 use prune_entity_type_inheritance::prune_entity_type_inheritance;
 use prune_namespaces::prune_namespaces;
@@ -57,7 +57,7 @@ fn replace<'a>(target: &QualifiedName<'a>, replacements: &Replacements<'a>) -> Q
     *replacements.get(target).unwrap_or(target)
 }
 
-pub fn map_types_in_actions<'a, F>(actions: CompiledActionsMap<'a>, f: F) -> CompiledActionsMap<'a>
+pub fn map_types_in_actions<'a, F>(actions: TypeActions<'a>, f: F) -> TypeActions<'a>
 where
     F: Fn(QualifiedName<'a>) -> QualifiedName<'a>,
 {

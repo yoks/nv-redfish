@@ -54,7 +54,7 @@ impl ToTokens for FullTypeName<'_, '_> {
                 tokens.extend(quote! { #name });
             }
         }
-        let name = TypeName::new(self.type_name.name);
+        let name = TypeName::new_qualified(self.type_name.name);
         tokens.append(Punct::new(':', Spacing::Joint));
         tokens.append(Punct::new(':', Spacing::Joint));
         tokens.extend(quote! { #name });

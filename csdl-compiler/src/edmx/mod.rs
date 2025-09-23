@@ -81,7 +81,7 @@ pub enum LocalTypeNameTag {}
 
 pub type ActionName = TaggedType<String, ActionNameTag>;
 #[derive(tagged_types::Tag)]
-#[implement(Clone, Hash, PartialEq, Eq)]
+#[implement(Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[transparent(Debug, Display, Deserialize)]
 #[capability(inner_access)]
 pub enum ActionNameTag {}
@@ -97,7 +97,7 @@ pub enum PropertyNameTag {}
 
 pub type ParameterName = TaggedType<SimpleIdentifier, ParameterNameTag>;
 #[derive(tagged_types::Tag)]
-#[implement(Clone, PartialEq, Eq)]
+#[implement(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[transparent(Debug, Display, Deserialize)]
 #[capability(inner_access)]
 pub enum ParameterNameTag {}
@@ -230,4 +230,7 @@ pub struct Parameter {
     /// 12.4.3 Attribute Nullable
     #[serde(rename = "@Nullable")]
     pub nullable: Option<IsNullable>,
+    /// Annotations can be pretty much everywhere.
+    #[serde(rename = "Annotation", default)]
+    pub annotations: Vec<Annotation>,
 }

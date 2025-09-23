@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::edmx::ActionName as EdmxActionName;
+use crate::edmx::ParameterName;
 use crate::edmx::attribute_values::SimpleIdentifier;
 use heck::AsUpperCamelCase;
 use proc_macro2::Ident;
@@ -26,12 +28,28 @@ use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-pub struct TypeName<'a>(&'a SimpleIdentifier);
+pub enum TypeName<'a> {
+    Qualified(&'a SimpleIdentifier),
+    Action {
+        binding_name: &'a ParameterName,
+        action_name: &'a EdmxActionName,
+    },
+}
 
 impl<'a> TypeName<'a> {
     #[must_use]
-    pub const fn new(v: &'a SimpleIdentifier) -> Self {
-        Self(v)
+    pub const fn new_qualified(v: &'a SimpleIdentifier) -> Self {
+        Self::Qualified(v)
+    }
+    #[must_use]
+    pub const fn new_action(
+        binding_name: &'a ParameterName,
+        action_name: &'a EdmxActionName,
+    ) -> Self {
+        Self::Action {
+            binding_name,
+            action_name,
+        }
     }
 }
 
@@ -43,7 +61,15 @@ impl ToTokens for TypeName<'_> {
 
 impl Display for TypeName<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        AsUpperCamelCase(self.0).fmt(f)
+        match self {
+            Self::Qualified(v) => AsUpperCamelCase(v).fmt(f),
+            Self::Action {
+                binding_name,
+                action_name,
+            } => {
+                write!(f, "{binding_name}{action_name}Action")
+            }
+        }
     }
 }
 

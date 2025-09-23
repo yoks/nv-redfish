@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/// Type for desrialization of Action.
+pub mod action;
 /// Type for `@odata.id` identifier.
 pub mod bmc;
 /// Type for navigation property.
@@ -29,6 +31,8 @@ pub use bmc::Bmc;
 pub type ODataId = odata_id::ODataId;
 /// Reexport `NavProperty` to make it available through crate root.
 pub type NavProperty<T> = nav_property::NavProperty<T>;
+/// Reexport `Action` to make it available through crate root.
+pub type Action<T> = action::Action<T>;
 
 /// Entity type trait that is implemented by CSDL compiler for all
 /// generated entity types.

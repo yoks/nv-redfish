@@ -13,10 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::compiler::Action;
+use crate::compiler::ActionsMap;
 use crate::compiler::ComplexType;
 use crate::compiler::EntityType;
 use crate::compiler::EnumType;
 use crate::compiler::OData;
+use crate::compiler::Parameter;
 use crate::compiler::Properties;
 use crate::compiler::QualifiedName;
 use crate::compiler::TypeDefinition;
@@ -70,14 +73,20 @@ impl<'a> ModDef<'a> {
     /// Returns `CreateStruct` error if failed to add new struct to the
     /// module.  it may only happen in case of name conflicts because
     /// of case conversion.
-    pub fn add_complex_type(self, ct: ComplexType<'a>, config: &Config) -> Result<Self, Error<'a>> {
-        self.inner_add_complex_type(ct, 0, config)
+    pub fn add_complex_type(
+        self,
+        ct: ComplexType<'a>,
+        actions: ActionsMap<'a>,
+        config: &Config,
+    ) -> Result<Self, Error<'a>> {
+        self.inner_add_complex_type(ct, 0, actions, config)
     }
 
     fn inner_add_complex_type(
         mut self,
         ct: ComplexType<'a>,
         depth: usize,
+        actions: ActionsMap<'a>,
         config: &Config,
     ) -> Result<Self, Error<'a>> {
         if let Some(id) = ct.name.namespace.get_id(depth) {
@@ -85,16 +94,24 @@ impl<'a> ModDef<'a> {
             self.sub_mods
                 .remove(&mod_name)
                 .unwrap_or_else(|| ModDef::new(mod_name, depth))
-                .inner_add_complex_type(ct, depth + 1, config)
+                .inner_add_complex_type(ct, depth + 1, actions, config)
                 .map(|submod| {
                     self.sub_mods.insert(mod_name, submod);
                     self
                 })
         } else {
-            let name = ct.name;
-            self.add_struct_def(ct.name, ct.base, ct.properties, ct.odata, config)
-                .map_err(Box::new)
-                .map_err(|e| Error::CreateStruct(name, e))
+            let struct_name = TypeName::new_qualified(ct.name.name);
+            self.add_struct_def(
+                struct_name,
+                ct.base,
+                ct.properties,
+                Vec::new(),
+                ct.odata,
+                actions,
+                config,
+            )
+            .map_err(Box::new)
+            .map_err(|e| Error::CreateStruct(struct_name, e))
         }
     }
 
@@ -120,7 +137,7 @@ impl<'a> ModDef<'a> {
                 })
         } else {
             let name = t.name;
-            let type_name = TypeName::new(t.name.name);
+            let type_name = TypeName::new_qualified(t.name.name);
             match self.enums.entry(type_name) {
                 Entry::Occupied(_) => Err(Error::NameConflict),
                 Entry::Vacant(v) => {
@@ -162,7 +179,7 @@ impl<'a> ModDef<'a> {
                 })
         } else {
             let name = t.name;
-            let type_name = TypeName::new(t.name.name);
+            let type_name = TypeName::new_qualified(t.name.name);
             match self.typedefs.entry(type_name) {
                 Entry::Occupied(_) => Err(Error::NameConflict),
                 Entry::Vacant(v) => {
@@ -206,27 +223,88 @@ impl<'a> ModDef<'a> {
                     self
                 })
         } else {
-            let name = t.name;
-            self.add_struct_def(t.name, t.base, t.properties, t.odata, config)
-                .map_err(Box::new)
-                .map_err(|e| Error::CreateStruct(name, e))
+            let struct_name = TypeName::new_qualified(t.name.name);
+            self.add_struct_def(
+                struct_name,
+                t.base,
+                t.properties,
+                Vec::new(),
+                t.odata,
+                ActionsMap::default(),
+                config,
+            )
+            .map_err(Box::new)
+            .map_err(|e| Error::CreateStruct(struct_name, e))
         }
     }
 
-    fn add_struct_def(
+    /// Add complex type to the module.
+    ///
+    /// # Errors
+    ///
+    /// Returns `CreateStruct` error if failed to add new struct to the
+    /// module.  it may only happen in case of name conflicts because
+    /// of case conversion.
+    pub fn add_action_type(self, t: &Action<'a>, config: &Config) -> Result<Self, Error<'a>> {
+        self.inner_add_action_type(t, 0, config)
+    }
+
+    fn inner_add_action_type(
         mut self,
-        qname: QualifiedName<'a>,
-        base: Option<QualifiedName<'a>>,
-        properties: Properties<'a>,
-        odata: OData<'a>,
+        t: &Action<'a>,
+        depth: usize,
         config: &Config,
     ) -> Result<Self, Error<'a>> {
-        let struct_name = TypeName::new(qname.name);
+        if let Some(id) = t.binding.namespace.get_id(depth) {
+            let mod_name = ModName::new(id);
+            self.sub_mods
+                .remove(&mod_name)
+                .unwrap_or_else(|| ModDef::new(mod_name, depth))
+                .inner_add_action_type(t, depth + 1, config)
+                .map(|submod| {
+                    self.sub_mods.insert(mod_name, submod);
+                    self
+                })
+        } else {
+            let struct_name = TypeName::new_action(t.binding_name, t.name);
+            self.add_struct_def(
+                struct_name,
+                None,
+                Properties::default(),
+                t.parameters.clone(),
+                t.odata,
+                HashMap::new(),
+                config,
+            )
+            .map_err(Box::new)
+            .map_err(|e| Error::CreateStruct(struct_name, e))
+        }
+    }
+
+    #[deny(clippy::too_many_arguments)]
+    fn add_struct_def(
+        mut self,
+        struct_name: TypeName<'a>,
+        base: Option<QualifiedName<'a>>,
+        properties: Properties<'a>,
+        parameters: Vec<Parameter<'a>>,
+        odata: OData<'a>,
+        actions: ActionsMap<'a>,
+        config: &Config,
+    ) -> Result<Self, Error<'a>> {
         match self.structs.entry(struct_name) {
             Entry::Occupied(_) => Err(Error::NameConflict),
             Entry::Vacant(v) => {
-                StructDef::new(struct_name, base, properties, odata, config)
-                    .map(|st| v.insert(st))?;
+                StructDef::new(
+                    struct_name,
+                    base,
+                    properties,
+                    parameters,
+                    odata,
+                    actions,
+                    config,
+                )
+                .map(|st| v.insert(st))?;
                 Ok(self)
             }
         }

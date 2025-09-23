@@ -28,7 +28,7 @@ pub type MustHaveId = TaggedType<bool, MustHaveIdTag>;
 pub enum MustHaveIdTag {}
 
 /// `OData` attributes attached to different compiled enities.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct OData<'a> {
     pub must_have_id: MustHaveId,
     pub description: Option<DescriptionRef<'a>>,

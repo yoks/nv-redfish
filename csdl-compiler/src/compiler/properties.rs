@@ -123,7 +123,7 @@ impl<'a> Properties<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum PropertyType<'a> {
     One(QualifiedName<'a>),
     CollectionOf(QualifiedName<'a>),

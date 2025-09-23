@@ -62,7 +62,6 @@ fn main() -> Result<(), Error> {
         .inspect_err(|e| println!("{e}"))
         .map_err(|_| Error::Compile("compilation error".into()))?;
     let compiled = optimize(compiled);
-    println!("{:#?}", compiled.actions);
     let generator = RustGenerator::new(compiled, Config::default())
         .inspect_err(|e| println!("{e}"))
         .map_err(|_| Error::Generate("generation error".into()))?;

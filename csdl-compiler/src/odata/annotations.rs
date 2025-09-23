@@ -15,6 +15,8 @@
 
 //! Helper of handling annotations in edmx types.
 
+use crate::edmx::Parameter;
+use crate::edmx::action::Action;
 use crate::edmx::annotation::Annotation;
 use crate::edmx::annotation::AnnotationRecord;
 use crate::edmx::attribute_values::Namespace;
@@ -29,7 +31,7 @@ use tagged_types::TaggedType;
 pub type Description = TaggedType<String, DescriptionTag>;
 pub type DescriptionRef<'a> = TaggedType<&'a String, DescriptionTag>;
 #[derive(tagged_types::Tag)]
-#[implement(Clone)]
+#[implement(Clone, Copy)]
 #[transparent(Display, Debug)]
 #[capability(inner_access, cloned)]
 pub enum DescriptionTag {}
@@ -37,7 +39,7 @@ pub enum DescriptionTag {}
 pub type LongDescription = TaggedType<String, LongDescriptionTag>;
 pub type LongDescriptionRef<'a> = TaggedType<&'a String, LongDescriptionTag>;
 #[derive(tagged_types::Tag)]
-#[implement(Clone)]
+#[implement(Clone, Copy)]
 #[transparent(Display, Debug)]
 #[capability(inner_access, cloned)]
 pub enum LongDescriptionTag {}
@@ -125,6 +127,18 @@ impl ODataAnnotations for NavigationProperty {
 }
 
 impl ODataAnnotations for AnnotationRecord {
+    fn annotations(&self) -> &Vec<Annotation> {
+        &self.annotations
+    }
+}
+
+impl ODataAnnotations for Action {
+    fn annotations(&self) -> &Vec<Annotation> {
+        &self.annotations
+    }
+}
+
+impl ODataAnnotations for Parameter {
     fn annotations(&self) -> &Vec<Annotation> {
         &self.annotations
     }

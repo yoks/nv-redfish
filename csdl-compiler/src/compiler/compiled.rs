@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::compiler::CompiledAction;
+use crate::compiler::Action;
 use crate::compiler::ComplexType;
 use crate::compiler::EntityType;
 use crate::compiler::EnumType;
@@ -23,8 +23,8 @@ use crate::compiler::TypeDefinition;
 use crate::edmx::ActionName;
 use std::collections::HashMap;
 
-pub type CompiledActionsMap<'a> =
-    HashMap<QualifiedName<'a>, HashMap<&'a ActionName, CompiledAction<'a>>>;
+pub type ActionsMap<'a> = HashMap<&'a ActionName, Action<'a>>;
+pub type TypeActions<'a> = HashMap<QualifiedName<'a>, ActionsMap<'a>>;
 
 /// Compiled data from schema.
 #[derive(Default, Debug)]
@@ -33,7 +33,7 @@ pub struct Compiled<'a> {
     pub entity_types: HashMap<QualifiedName<'a>, EntityType<'a>>,
     pub type_definitions: HashMap<QualifiedName<'a>, TypeDefinition<'a>>,
     pub enum_types: HashMap<QualifiedName<'a>, EnumType<'a>>,
-    pub actions: CompiledActionsMap<'a>,
+    pub actions: TypeActions<'a>,
     pub root_singletons: Vec<Singleton<'a>>,
 }
 
@@ -91,7 +91,7 @@ impl<'a> Compiled<'a> {
     /// Creates compiled data structure that contains only one enum
     /// type.
     #[must_use]
-    pub fn new_action(v: CompiledAction<'a>) -> Self {
+    pub fn new_action(v: Action<'a>) -> Self {
         Self {
             actions: vec![(v.binding, vec![(v.name, v)].into_iter().collect())]
                 .into_iter()

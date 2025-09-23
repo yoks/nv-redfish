@@ -13,12 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::compiler::Action;
+use crate::compiler::ActionsMap;
 use crate::compiler::NavProperty;
 use crate::compiler::OData;
+use crate::compiler::Parameter;
 use crate::compiler::Properties;
 use crate::compiler::Property;
 use crate::compiler::PropertyType;
 use crate::compiler::QualifiedName;
+use crate::generator::rust::ActionName;
 use crate::generator::rust::Config;
 use crate::generator::rust::Error;
 use crate::generator::rust::FullTypeName;
@@ -40,6 +44,8 @@ pub struct StructDef<'a> {
     pub name: TypeName<'a>,
     base: Option<QualifiedName<'a>>,
     properties: Properties<'a>,
+    parameters: Vec<Parameter<'a>>,
+    actions: ActionsMap<'a>,
     odata: OData<'a>,
 }
 
@@ -52,7 +58,9 @@ impl<'a> StructDef<'a> {
         name: TypeName<'a>,
         base: Option<QualifiedName<'a>>,
         properties: Properties<'a>,
+        parameters: Vec<Parameter<'a>>,
         odata: OData<'a>,
+        actions: ActionsMap<'a>,
         config: &Config,
     ) -> Result<Self, Error<'a>> {
         if base.is_some() {
@@ -74,6 +82,8 @@ impl<'a> StructDef<'a> {
             name,
             base,
             properties,
+            parameters,
+            actions,
             odata,
         })
     }
@@ -123,6 +133,14 @@ impl<'a> StructDef<'a> {
 
         for p in self.properties.nav_properties {
             Self::generate_nav_property(&mut content, &p, config);
+        }
+
+        for (_, a) in self.actions {
+            Self::generate_action_property(&mut content, &a, config);
+        }
+
+        for p in self.parameters {
+            Self::generate_parameter(&mut content, &p, config);
         }
 
         let name = self.name;
@@ -219,5 +237,18 @@ impl<'a> StructDef<'a> {
                 content.extend(quote! { pub #name: Vec<NavProperty<#ptype>>, });
             }
         }
+    }
+
+    fn generate_parameter(_content: &mut TokenStream, _p: &Parameter<'_>, _config: &Config) {
+        // content.extend(doc_format_and_generate(p.name, &p.odata));
+    }
+
+    fn generate_action_property(content: &mut TokenStream, a: &Action, config: &Config) {
+        let top = &config.top_module_alias;
+        let rename = Literal::string(&format!("#{}.{}", a.binding_name, a.name));
+        let name = ActionName::new(a.name);
+        let typename = TypeName::new_action(a.binding_name, a.name);
+        content.extend(quote! { #[serde(rename=#rename)] });
+        content.extend(quote! { pub #name: #top::Action<#typename>, });
     }
 }

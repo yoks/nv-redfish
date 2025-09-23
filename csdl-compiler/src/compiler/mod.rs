@@ -66,7 +66,7 @@ use crate::edmx::Edmx;
 use crate::edmx::IsNullable;
 use crate::edmx::ParameterName;
 use crate::edmx::QualifiedTypeName;
-use crate::edmx::action::Action;
+use crate::edmx::action::Action as EdmxAction;
 use crate::edmx::attribute_values::SimpleIdentifier;
 use crate::edmx::attribute_values::TypeName;
 use crate::edmx::schema::Schema;
@@ -82,7 +82,7 @@ pub type Error<'a> = error::Error<'a>;
 pub type QualifiedName<'a> = qualified_name::QualifiedName<'a>;
 /// Reexport `Namespace` to the level of the compiler.
 pub type Namespace<'a> = namespace::Namespace<'a>;
-/// Reexport `CompiledOData` to the level of the compiler.
+/// Reexport `OData` to the level of the compiler.
 pub type OData<'a> = odata::OData<'a>;
 /// Reexport `Properties` to the level of the compiler.
 pub type Properties<'a> = properties::Properties<'a>;
@@ -96,12 +96,16 @@ pub type PropertyType<'a> = properties::PropertyType<'a>;
 pub type EnumType<'a> = enum_type::EnumType<'a>;
 /// Reexport `TypeDefinition` to the level of the compiler.
 pub type TypeDefinition<'a> = type_definition::TypeDefinition<'a>;
-/// Reexport `CompiledEntityType` to the level of the compiler.
+/// Reexport `EntityType` to the level of the compiler.
 pub type EntityType<'a> = entity_type::EntityType<'a>;
 /// Reexport `ComplexType` to the level of the compiler.
 pub type ComplexType<'a> = complex_type::ComplexType<'a>;
-/// Reexport `CompiledComplexType` to the level of the compiler.
+/// Reexport `Singleton` to the level of the compiler.
 pub type Singleton<'a> = singleton::Singleton<'a>;
+/// Reexport `Singleton` to the level of the compiler.
+pub type TypeActions<'a> = compiled::TypeActions<'a>;
+/// Reexport `Singleton` to the level of the compiler.
+pub type ActionsMap<'a> = compiled::ActionsMap<'a>;
 
 /// Reexport `MapBase` to the level of the compiler.
 pub use traits::MapBase;
@@ -204,7 +208,7 @@ impl SchemaBundle {
     }
 
     fn compile_action<'a>(
-        action: &'a Action,
+        action: &'a EdmxAction,
         schema_index: &SchemaIndex<'a>,
         stack: &Stack<'a, '_>,
     ) -> Result<Compiled<'a>, Error<'a>> {
@@ -214,6 +218,7 @@ impl SchemaBundle {
         let mut iter = action.parameters.iter();
         let binding_param = iter.next().ok_or(Error::NoBindingParameterForAction)?;
         let binding = binding_param.ptype.qualified_type_name().into();
+        let binding_name = &binding_param.name;
         // If action is bound to not compiled type, just ignore it. We
         // will not have node to attach this action. Note: This may
         // not be correct for common CSDL schema but Redfish always
@@ -247,33 +252,32 @@ impl SchemaBundle {
                 // ComputerSystem schema.
                 let qtype_name = p.ptype.qualified_type_name();
                 let (compiled, ptype) = if is_simple_type(qtype_name) {
-                    Ok((
-                        Compiled::default(),
-                        CompiledParameterType::Type((&p.ptype).into()),
-                    ))
+                    Ok((Compiled::default(), ParameterType::Type((&p.ptype).into())))
                 } else if schema_index.find_type(qtype_name).is_some() {
                     ensure_type(&p.ptype, schema_index, &cstack)
-                        .map(|compiled| (compiled, CompiledParameterType::Type((&p.ptype).into())))
+                        .map(|compiled| (compiled, ParameterType::Type((&p.ptype).into())))
                 } else {
-                    EntityType::ensure(qtype_name, schema_index, &cstack).map(|compiled| {
-                        (compiled, CompiledParameterType::Entity((&p.ptype).into()))
-                    })
+                    EntityType::ensure(qtype_name, schema_index, &cstack)
+                        .map(|compiled| (compiled, ParameterType::Entity((&p.ptype).into())))
                 }
                 .map_err(Box::new)
                 .map_err(|e| Error::ActionParameter(&p.name, e))?;
-                params.push(CompiledParameter {
+                params.push(Parameter {
                     name: &p.name,
                     ptype,
                     is_nullable: p.nullable.unwrap_or(IsNullable::new(true)),
+                    odata: OData::new(MustHaveId::new(false), p),
                 });
                 Ok((cstack.merge(compiled), params))
             })?;
         Ok(stack
-            .merge(Compiled::new_action(CompiledAction {
+            .merge(Compiled::new_action(Action {
                 binding,
+                binding_name,
                 name: &action.name,
                 return_type,
                 parameters,
+                odata: OData::new(MustHaveId::new(false), action),
             }))
             .done())
     }
@@ -358,26 +362,28 @@ fn compile_type<'a>(
 }
 
 /// Compiled parameter of the action.
-#[derive(Debug)]
-pub struct CompiledParameter<'a> {
+#[derive(Debug, Clone, Copy)]
+pub struct Parameter<'a> {
     /// Name of the parameter.
     pub name: &'a ParameterName,
     /// Type of the parameter. Can be either entity reference or some
     /// specific type.
-    pub ptype: CompiledParameterType<'a>,
+    pub ptype: ParameterType<'a>,
     /// Flag that parameter is nullable.
     pub is_nullable: IsNullable,
+    /// Odata for parameter
+    pub odata: OData<'a>,
 }
 
 /// Type of the parameter. Note we reuse `CompiledPropertyType`, it
 /// maybe not exact and may be change in future.
-#[derive(Debug)]
-pub enum CompiledParameterType<'a> {
+#[derive(Debug, Clone, Copy)]
+pub enum ParameterType<'a> {
     Entity(PropertyType<'a>),
     Type(PropertyType<'a>),
 }
 
-impl<'a> CompiledParameterType<'a> {
+impl<'a> ParameterType<'a> {
     fn map<F>(self, f: F) -> Self
     where
         F: Fn(QualifiedName<'a>) -> QualifiedName<'a>,
@@ -389,7 +395,7 @@ impl<'a> CompiledParameterType<'a> {
     }
 }
 
-impl<'a> MapType<'a> for CompiledParameter<'a> {
+impl<'a> MapType<'a> for Parameter<'a> {
     fn map_type<F>(self, f: F) -> Self
     where
         F: Fn(QualifiedName<'a>) -> QualifiedName<'a>,
@@ -398,27 +404,32 @@ impl<'a> MapType<'a> for CompiledParameter<'a> {
             name: self.name,
             ptype: self.ptype.map(f),
             is_nullable: self.is_nullable,
+            odata: self.odata,
         }
     }
 }
 
 /// Compuled parameter of the action.
 #[derive(Debug)]
-pub struct CompiledAction<'a> {
+pub struct Action<'a> {
     /// Bound type.
     pub binding: QualifiedName<'a>,
+    /// Bound parameter name.
+    pub binding_name: &'a ParameterName,
     /// Name of the parameter.
     pub name: &'a ActionName,
     /// Type of the return value. Note we reuse
-    /// `CompiledPropertyType`, it maybe not exact and may be change
+    /// `PropertyType`, it maybe not exact and may be change
     /// in future.
     pub return_type: Option<PropertyType<'a>>,
-    /// Type of the parameter. Note we reuse `CompiledPropertyType`, it
+    /// Type of the parameter. Note we reuse `PropertyType`, it
     /// maybe not exact and may be change in future.
-    pub parameters: Vec<CompiledParameter<'a>>,
+    pub parameters: Vec<Parameter<'a>>,
+    /// Odata of action.
+    pub odata: OData<'a>,
 }
 
-impl<'a> MapType<'a> for CompiledAction<'a> {
+impl<'a> MapType<'a> for Action<'a> {
     fn map_type<F>(self, f: F) -> Self
     where
         F: Fn(QualifiedName<'a>) -> QualifiedName<'a>,
@@ -426,12 +437,14 @@ impl<'a> MapType<'a> for CompiledAction<'a> {
         Self {
             name: self.name,
             binding: f(self.binding),
+            binding_name: self.binding_name,
             return_type: self.return_type.map(|rt| rt.map(&f)),
             parameters: self
                 .parameters
                 .into_iter()
                 .map(|p| p.map_type(&f))
                 .collect(),
+            odata: self.odata,
         }
     }
 }
