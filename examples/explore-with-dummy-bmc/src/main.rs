@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use nv_redfish::http::ExpandQuery;
 use nv_redfish::Bmc;
 use nv_redfish::Expandable;
 use nv_redfish::ODataId;
@@ -31,11 +34,11 @@ pub enum Error {
 pub struct MockBmc {}
 
 impl MockBmc {
-    pub async fn get_service_root(&self) -> Result<ServiceRoot, Error> {
+    pub async fn get_service_root(&self) -> Result<Arc<ServiceRoot>, Error> {
         nv_redfish::NavProperty::<redfish_std::redfish::service_root::ServiceRoot>::new_reference(
             ODataId::service_root(),
         )
-        .expand(self)
+        .get(self)
         .await
     }
 
@@ -443,16 +446,24 @@ impl MockBmc {
 impl Bmc for MockBmc {
     type Error = Error;
 
-    async fn expand<T>(&self, id: &ODataId) -> Result<T, Error>
+    async fn expand<T>(&self, _id: &ODataId, _query: ExpandQuery) -> Result<Arc<T>, Error>
     where
         T: Expandable,
     {
+        todo!("unimplimented")
+    }
+    
+    async fn get<T: nv_redfish::EntityType + Sized + for<'a> serde::Deserialize<'a>>(
+        &self,
+        id: &ODataId,
+    ) -> Result<Arc<T>, Self::Error> {
         println!("BMC GET {id}");
         // In real implementation: async HTTP GET request and JSON deserialization
         let mock_json = self.get_mock_json_for_uri(&id.to_string());
         let result: T = serde_json::from_str(&mock_json).map_err(Error::ParseError)?;
-        Ok(result)
+        Ok(Arc::new(result))
     }
+
 }
 
 #[tokio::main]
@@ -461,34 +472,35 @@ async fn main() -> Result<(), Error> {
 
     let service_root = bmc.get_service_root().await?;
 
-    let chassis_members = service_root.chassis.unwrap().expand(&bmc).await?.members;
+    let chassis_members = &service_root.chassis.as_ref().unwrap().get(&bmc).await?.members;
 
     let chassis = chassis_members
-        .into_iter()
+        .iter()
         .next()
         .unwrap()
-        .expand(&bmc)
+        .get(&bmc)
         .await?;
 
-    let all_devices = chassis.pc_ie_devices.unwrap().expand(&bmc).await?.members;
+    let all_devices = &chassis.pc_ie_devices.as_ref().unwrap().get(&bmc).await?.members;
     for device in all_devices {
-        let function_handles = device
-            .expand(&bmc)
+        let function_handles = &device
+            .get(&bmc)
             .await?
             .pc_ie_functions
+            .as_ref()
             .unwrap()
-            .expand(&bmc)
+            .get(&bmc)
             .await?
             .members;
         for function_handle in function_handles {
-            let _function = function_handle.expand(&bmc).await?;
+            let _function = function_handle.get(&bmc).await?;
         }
     }
 
-    let systems = service_root.systems.unwrap().expand(&bmc).await?.members;
+    let systems = &service_root.systems.as_ref().unwrap().get(&bmc).await?.members;
     println!(
         "{:?}",
-        systems.into_iter().next().unwrap().expand(&bmc).await?
+        systems.into_iter().next().unwrap().get(&bmc).await?
     );
 
     Ok(())

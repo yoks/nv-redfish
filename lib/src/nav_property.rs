@@ -13,11 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use crate::Bmc;
 use crate::EntityType;
-use crate::Expandable;
 use crate::ODataId;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
 
 /// Reference varian of the navigation property (only `@odata.id`
@@ -28,6 +30,23 @@ pub struct Reference {
     pub odata_id: ODataId,
 }
 
+/// Container struct for expanded property variant
+#[derive(Debug)]
+pub struct Expanded<T>(Arc<T>);
+
+/// Deserializer wraps Expanded property into Arc
+impl<'de, T> Deserialize<'de> for Expanded<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        T::deserialize(deserializer).map(Arc::new).map(Expanded)
+    }
+}
+
 /// Navigation property variants. All navigation properties in
 /// generated code are wrapped with this type.
 #[derive(Deserialize, Debug)]
@@ -35,7 +54,7 @@ pub struct Reference {
 pub enum NavProperty<T: EntityType> {
     /// Expanded property variant (content included into the
     /// response).
-    Expanded(T),
+    Expanded(Expanded<T>),
     /// Reference variant (only `@odata.id` is included into the
     /// response).
     Reference(Reference),
@@ -52,17 +71,17 @@ impl<T: EntityType> NavProperty<T> {
     pub fn id(&self) -> &ODataId {
         match self {
             Self::Reference(v) => &v.odata_id,
-            Self::Expanded(v) => v.id(),
+            Self::Expanded(v) => v.0.id(),
         }
     }
 }
 
-impl<T: Expandable> NavProperty<T> {
+impl<T: EntityType + Sized + for<'a> Deserialize<'a>> NavProperty<T> {
     /// Expand property
-    pub async fn expand<B: Bmc>(self, bmc: &B) -> Result<T, B::Error> {
+    pub async fn get<B: Bmc>(&self, bmc: &B) -> Result<Arc<T>, B::Error> {
         match self {
-            Self::Expanded(v) => Ok(v),
-            Self::Reference(_) => bmc.expand::<T>(self.id()).await,
+            Self::Expanded(v) => Ok(v.0.clone()),
+            Self::Reference(_) => bmc.get::<T>(self.id()).await,
         }
     }
 }

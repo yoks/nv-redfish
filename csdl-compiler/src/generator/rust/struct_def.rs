@@ -245,9 +245,7 @@ impl<'a> StructDef<'a> {
                 if p.redfish.is_required.into_inner() {
                     content.extend(quote! { pub #name: NavProperty<#ptype>, });
                 } else {
-                    // Because navigation properties can produce
-                    // cycles we use Option<Box<_>> here.
-                    content.extend(quote! { pub #name: Option<Box<NavProperty<#ptype>>>, });
+                    content.extend(quote! { pub #name: Option<NavProperty<#ptype>>, });
                 }
             }
             PropertyType::CollectionOf(v) => {

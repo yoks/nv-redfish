@@ -15,9 +15,15 @@
 
 //! BMC trait definition
 
+use serde::Deserialize;
+
+use crate::http::ExpandQuery;
+use crate::EntityType;
 use crate::Expandable;
 use crate::ODataId;
+use std::fmt;
 use std::future::Future;
+use std::sync::Arc;
 
 /// BMC trait defined access to Board Management Controller using
 /// Redfish protocol.
@@ -28,5 +34,42 @@ pub trait Bmc {
     fn expand<T: Expandable>(
         &self,
         id: &ODataId,
-    ) -> impl Future<Output = Result<T, Self::Error>> + Send;
+        query: ExpandQuery,
+    ) -> impl Future<Output = Result<Arc<T>, Self::Error>> + Send;
+
+    fn get<T: EntityType + Sized + for<'a> Deserialize<'a>>(
+        &self,
+        id: &ODataId,
+    ) -> impl Future<Output = Result<Arc<T>, Self::Error>> + Send;
+}
+
+#[derive(Clone)]
+pub struct BmcCredentials {
+    pub username: String,
+    password: String,
+}
+
+impl BmcCredentials {
+    pub fn new(username: String, password: String) -> Self {
+        Self { username, password }
+    }
+    
+    pub fn password(&self) -> &str {
+        &self.password
+    }
+}
+
+impl fmt::Debug for BmcCredentials {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BmcCredentials")
+            .field("username", &self.username)
+            .field("password", &"[REDACTED]")
+            .finish()
+    }
+}
+
+impl fmt::Display for BmcCredentials {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "BmcCredentials(username: {}, password: [REDACTED])", self.username)
+    }
 }

@@ -17,16 +17,20 @@
 pub mod action;
 /// Type for `@odata.id` identifier.
 pub mod bmc;
+/// HTTP client abstractions and Redfish expand query support
+pub mod http;
 /// Type for navigation property.
 pub mod nav_property;
 /// Type for `@odata.id` identifier.
 pub mod odata_id;
 
 use serde::Deserialize;
-use std::future::Future;
+use std::{future::Future, sync::Arc};
 
 /// Reexport `Bmc` trait to make it available through crate root.
 pub use bmc::Bmc;
+
+use crate::http::ExpandQuery;
 /// Reexport `ODataId` to make it available through crate root.
 pub type ODataId = odata_id::ODataId;
 /// Reexport `NavProperty` to make it available through crate root.
@@ -43,7 +47,7 @@ pub trait EntityType {
 
 pub trait Expandable: EntityType + Sized + for<'a> Deserialize<'a> {
     /// Expand entity type.
-    fn expand<B: Bmc>(&self, bmc: &B) -> impl Future<Output = Result<Self, B::Error>> + Send {
-        bmc.expand::<Self>(self.id())
+    fn expand<B: Bmc>(&self, bmc: &B, query: ExpandQuery) -> impl Future<Output = Result<Arc<Self>, B::Error>> + Send {
+        bmc.expand::<Self>(self.id(), query)
     }
 }

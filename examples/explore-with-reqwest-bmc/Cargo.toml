@@ -1,5 +1,5 @@
 [package]
-name = "nv-redfish"
+name = "explore-with-reqwest-bmc"
 version.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -9,13 +9,10 @@ keywords.workspace = true
 categories.workspace = true
 documentation.workspace = true
 
-[features]
-default = ["reqwest"]
-
-# HTTP client implementations with reqwest
-reqwest = ["dep:reqwest"]
-
 [dependencies]
-serde = { workspace = true, featues = [ "derive" ] }
+tokio = { version = "1", features = ["full"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+redfish-std = { path = "../redfish-std" }
+nv-redfish = { path = "../../lib" }
 url = { workspace = true }
-reqwest = { workspace = true, optional = true, features = ["json"] }
