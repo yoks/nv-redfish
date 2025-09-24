@@ -38,7 +38,11 @@ pub type ODataETag = odata::ODataETag;
 /// Reexport `NavProperty` to make it available through crate root.
 pub type NavProperty<T> = nav_property::NavProperty<T>;
 /// Reexport `Action` to make it available through crate root.
-pub type Action<T> = action::Action<T>;
+pub type Action<T, R> = action::Action<T, R>;
+
+pub enum Error {
+    ActionIsNotSupported,
+}
 
 /// Entity type trait that is implemented by CSDL compiler for all
 /// generated entity types.
@@ -52,7 +56,11 @@ pub trait EntityType {
 
 pub trait Expandable: EntityType + Sized + for<'a> Deserialize<'a> {
     /// Expand entity type.
-    fn expand<B: Bmc>(&self, bmc: &B, query: ExpandQuery) -> impl Future<Output = Result<Arc<Self>, B::Error>> + Send {
+    fn expand<B: Bmc>(
+        &self,
+        bmc: &B,
+        query: ExpandQuery,
+    ) -> impl Future<Output = Result<Arc<Self>, B::Error>> + Send {
         bmc.expand::<Self>(self.id(), query)
     }
 }

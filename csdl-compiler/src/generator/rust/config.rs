@@ -25,6 +25,10 @@ pub struct Config {
     /// property to generated code. The name for the property is
     /// defined by this parameter.
     pub base_type_prop_name: PropertyName,
+
+    /// Maximum number of parameters that are passed as function
+    /// parameter before switching to action struct.
+    pub action_fn_max_param_number_threshold: usize,
 }
 
 impl Default for Config {
@@ -34,6 +38,7 @@ impl Default for Config {
             base_type_prop_name: PropertyName::new(
                 "Base".parse().expect("should always be parsed"),
             ),
+            action_fn_max_param_number_threshold: 3,
         }
     }
 }

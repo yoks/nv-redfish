@@ -13,13 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::Bmc;
+use crate::Error;
 use core::fmt::Display;
 use core::fmt::Formatter;
 use core::fmt::Result as FmtResult;
 use serde::Deserialize;
 use std::marker::PhantomData;
 
-/// Type for `@odata.id` identifier.
+/// Type for `target` field of Action.
 #[derive(Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct ActionTarget(String);
@@ -31,10 +33,19 @@ impl Display for ActionTarget {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Action<T> {
+pub struct Action<T, R> {
     #[serde(rename = "target")]
     pub target: ActionTarget,
     // TODO: we can retrieve constrains on attributes here.
     #[serde(skip_deserializing)]
     pub _marker: PhantomData<T>,
+    #[serde(skip_deserializing)]
+    pub _marker_retval: PhantomData<R>,
+}
+
+impl<T, R> Action<T, R> {
+    /// Run specific action with parameters passed as argument.
+    pub async fn run<B: Bmc>(&self, _bmc: &B, _params: &T) -> Result<R, Error> {
+        Err(Error::ActionIsNotSupported)
+    }
 }

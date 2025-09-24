@@ -137,7 +137,10 @@ impl<'a> StructDef<'a> {
             Self::generate_nav_property(&mut content, p, config);
         }
 
-        for a in self.actions.values() {
+        let mut actions = self.actions.values().collect::<Vec<_>>();
+        actions.sort_by_key(|a| a.name);
+
+        for a in &actions {
             Self::generate_action_property(&mut content, a, config);
         }
 
@@ -184,6 +187,17 @@ impl<'a> StructDef<'a> {
                 });
             }
             ImplOdataType::None => (),
+        }
+
+        if !actions.is_empty() {
+            let mut content = TokenStream::new();
+            for a in &actions {
+                Self::generate_action_function(&mut content, a, config);
+            }
+            tokens.extend(quote! {
+                impl #name
+            });
+            tokens.append(TokenTree::Group(Group::new(Delimiter::Brace, content)));
         }
     }
 
@@ -315,27 +329,43 @@ impl<'a> StructDef<'a> {
             } => {
                 let rename = Literal::string(p.name.inner().inner());
                 let name = StructFieldName::new_parameter(p.name);
-                let container = if matches!(ptype, PropertyType::One(_)) {
-                    Ident::new("Option", Span::call_site())
-                } else {
-                    Ident::new("Vec", Span::call_site())
-                };
-                content.extend([
-                    quote! {
-                        #[serde(rename=#rename)]
-                        pub #name: #container
-                    },
-                    TokenTree::Punct(Punct::new('<', Spacing::Joint)).into(),
-                ]);
+
+                let mut base_type = TokenStream::new();
                 if class == TypeClass::ComplexType {
-                    FullTypeName::new(v, config).for_update().to_tokens(content);
+                    FullTypeName::new(v, config)
+                        .for_update()
+                        .to_tokens(&mut base_type);
                 } else {
-                    FullTypeName::new(v, config).to_tokens(content);
+                    FullTypeName::new(v, config).to_tokens(&mut base_type);
                 }
-                content.extend([
-                    TokenTree::Punct(Punct::new('>', Spacing::Joint)),
-                    TokenTree::Punct(Punct::new(',', Spacing::Alone)),
-                ]);
+                match ptype {
+                    PropertyType::One(_) => {
+                        if *p.is_nullable.inner() {
+                            content.extend(quote! {
+                                #[serde(rename=#rename)]
+                                pub #name: #base_type,
+                            });
+                        } else {
+                            content.extend(quote! {
+                                #[serde(rename=#rename)]
+                                pub #name: Option<#base_type>,
+                            });
+                        }
+                    }
+                    PropertyType::CollectionOf(_) => {
+                        if *p.is_nullable.inner() {
+                            content.extend(quote! {
+                                #[serde(rename=#rename)]
+                                pub #name: Vec<#base_type>,
+                            });
+                        } else {
+                            content.extend(quote! {
+                                #[serde(rename=#rename, default)]
+                                pub #name: Vec<#base_type>,
+                            });
+                        }
+                    }
+                }
             }
             ParameterType::Entity(PropertyType::One(_)) => {
                 let top = &config.top_module_alias;
@@ -359,8 +389,111 @@ impl<'a> StructDef<'a> {
         let rename = Literal::string(&format!("#{}.{}", a.binding_name, a.name));
         let name = ActionName::new(a.name);
         let typename = TypeName::new_action(a.binding_name, a.name);
+        let mut ret_type = TokenStream::new();
+        match a.return_type {
+            Some(PropertyType::One(v)) => {
+                FullTypeName::new(v, config).to_tokens(&mut ret_type);
+            }
+            Some(PropertyType::CollectionOf(v)) => {
+                let mut typename = TokenStream::new();
+                FullTypeName::new(v, config).to_tokens(&mut typename);
+                ret_type.extend(quote! { Vec<#typename> });
+            }
+            None => ret_type.extend(quote! { () }),
+        }
         content.extend(quote! { #[serde(rename=#rename)] });
-        content.extend(quote! { pub #name: Option<#top::Action<#typename>>, });
+        content.extend(quote! { pub #name: Option<#top::Action<#typename, #ret_type>>, });
+    }
+
+    fn generate_action_function(content: &mut TokenStream, a: &Action, config: &Config) {
+        let top = &config.top_module_alias;
+        let name = ActionName::new(a.name);
+        let typename = TypeName::new_action(a.binding_name, a.name);
+        let mut ret_type = TokenStream::new();
+        match a.return_type {
+            Some(PropertyType::One(v)) => {
+                FullTypeName::new(v, config).to_tokens(&mut ret_type);
+            }
+            Some(PropertyType::CollectionOf(v)) => {
+                let mut typename = TokenStream::new();
+                FullTypeName::new(v, config).to_tokens(&mut typename);
+                ret_type.extend(quote! { Vec<#typename> });
+            }
+            None => ret_type.extend(quote! { () }),
+        }
+        if a.parameters.len() <= config.action_fn_max_param_number_threshold {
+            let mut arglist = TokenStream::new();
+            let mut params = TokenStream::new();
+            for p in &a.parameters {
+                let top = &config.top_module_alias;
+                let name = StructFieldName::new_parameter(p.name);
+                params.extend(quote! { #name, });
+                match p.ptype {
+                    ParameterType::Type {
+                        ptype: ptype @ (PropertyType::One(v) | PropertyType::CollectionOf(v)),
+                        class,
+                    } => {
+                        let mut base_type = TokenStream::new();
+                        if class == TypeClass::ComplexType {
+                            FullTypeName::new(v, config)
+                                .for_update()
+                                .to_tokens(&mut base_type);
+                        } else {
+                            FullTypeName::new(v, config).to_tokens(&mut base_type);
+                        }
+                        match ptype {
+                            PropertyType::One(_) => {
+                                if *p.is_nullable.inner() {
+                                    arglist.extend(quote! {, #name: #base_type });
+                                } else {
+                                    arglist.extend(quote! {, #name: Option<#base_type> });
+                                }
+                            }
+                            PropertyType::CollectionOf(_) => {
+                                if *p.is_nullable.inner() {
+                                    arglist.extend(quote! {, #name: Vec<#base_type> });
+                                } else {
+                                    arglist.extend(quote! {, #name: Vec<#base_type> });
+                                }
+                            }
+                        }
+                    }
+                    ParameterType::Entity(PropertyType::One(_)) => {
+                        arglist.extend(quote! {, #name: Option<#top::Reference> });
+                    }
+                    ParameterType::Entity(PropertyType::CollectionOf(_)) => {
+                        arglist.extend(quote! {, #name: Vec<#top::Reference> });
+                    }
+                }
+            }
+            content.extend([
+                doc_format_and_generate(a.name, &a.odata),
+                quote! {
+                    pub async fn #name<B: #top::Bmc>(&self, bmc: &B #arglist) -> Result<#ret_type, #top::Error> {
+                        if let Some(a) = &self.#name  {
+                            a.run(bmc, &#typename{
+                                #params
+                            }).await
+                        } else {
+                            Err(#top::Error::ActionIsNotSupported)
+                        }
+                    }
+                },
+            ]);
+        } else {
+            content.extend([
+                doc_format_and_generate(a.name, &a.odata),
+                quote! {
+                    pub async fn #name<B: #top::Bmc>(&self, bmc: &B, t: &#typename) -> Result<#ret_type, #top::Error> {
+                        if let Some(a) = &self.#name  {
+                            a.run(bmc, t).await
+                        } else {
+                            Err(#top::Error::ActionIsNotSupported)
+                        }
+                    }
+                },
+            ]);
+        }
     }
 }
 

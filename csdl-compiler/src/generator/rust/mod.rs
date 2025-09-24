@@ -159,9 +159,11 @@ impl RustGenerator<'_> {
 
             use nv_redfish::EntityType;
             use nv_redfish::Expandable;
+            use nv_redfish::Bmc;
             use nv_redfish::nav_property::Reference;
             type NavProperty<T> = nv_redfish::NavProperty<T>;
-            type Action<T> = nv_redfish::Action<T>;
+            type Action<T, R> = nv_redfish::Action<T, R>;
+            type Error = nv_redfish::Error;
             type ODataId = nv_redfish::ODataId;
             type ODataETag = nv_redfish::ODataETag;
 
