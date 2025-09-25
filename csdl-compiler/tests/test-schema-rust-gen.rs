@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use csdl_compiler::compiler::Config as CompilerConfig;
 use csdl_compiler::compiler::SchemaBundle;
 use csdl_compiler::edmx::Edmx;
 use csdl_compiler::edmx::ValidateError;
 use csdl_compiler::edmx::attribute_values::Error as AttributeValuesError;
-use csdl_compiler::generator::rust::Config;
+use csdl_compiler::generator::rust::Config as GeneratorConfig;
 use csdl_compiler::generator::rust::RustGenerator;
 use csdl_compiler::optimizer::optimize;
 use std::io::Error as IoError;
@@ -58,11 +59,11 @@ fn main() -> Result<(), Error> {
                 Ok(schema_bundle)
             })?;
     let compiled = schema_bundle
-        .compile(&[root_service])
+        .compile(&[root_service], CompilerConfig::default())
         .inspect_err(|e| println!("{e}"))
         .map_err(|_| Error::Compile("compilation error".into()))?;
     let compiled = optimize(compiled);
-    let generator = RustGenerator::new(compiled, Config::default())
+    let generator = RustGenerator::new(compiled, GeneratorConfig::default())
         .inspect_err(|e| println!("{e}"))
         .map_err(|_| Error::Generate("generation error".into()))?;
 

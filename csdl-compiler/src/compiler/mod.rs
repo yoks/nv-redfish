@@ -21,6 +21,9 @@ pub mod schema_index;
 /// Compilation stack
 pub mod stack;
 
+/// Compilation context
+pub mod context;
+
 /// Error diagnostics
 pub mod error;
 
@@ -69,35 +72,22 @@ use crate::edmx::schema::Type;
 use schema_index::SchemaIndex;
 use stack::Stack;
 
-/// Reexport `Compiled` to the level of the compiler.
 pub type Compiled<'a> = compiled::Compiled<'a>;
-/// Reexport `Error` to the level of the compiler.
 pub type Error<'a> = error::Error<'a>;
-/// Reexport `QualifiedName` to the level of the compiler.
+pub type Context<'a> = context::Context<'a>;
+pub type Config<'a> = context::Config;
 pub type QualifiedName<'a> = qualified_name::QualifiedName<'a>;
-/// Reexport `Namespace` to the level of the compiler.
 pub type Namespace<'a> = namespace::Namespace<'a>;
-/// Reexport `OData` to the level of the compiler.
 pub type OData<'a> = odata::OData<'a>;
-/// Reexport `Properties` to the level of the compiler.
 pub type Properties<'a> = properties::Properties<'a>;
-/// Reexport `Property` to the level of the compiler.
 pub type Property<'a> = properties::Property<'a>;
-/// Reexport `NavProperty` to the level of the compiler.
 pub type NavProperty<'a> = properties::NavProperty<'a>;
-/// Reexport `PropertyType` to the level of the compiler.
 pub type PropertyType<'a> = properties::PropertyType<'a>;
-/// Reexport `EnumType` to the level of the compiler.
 pub type EnumType<'a> = enum_type::EnumType<'a>;
-/// Reexport `TypeDefinition` to the level of the compiler.
 pub type TypeDefinition<'a> = type_definition::TypeDefinition<'a>;
-/// Reexport `EntityType` to the level of the compiler.
 pub type EntityType<'a> = entity_type::EntityType<'a>;
-/// Reexport `ComplexType` to the level of the compiler.
 pub type ComplexType<'a> = complex_type::ComplexType<'a>;
-/// Reexport `Singleton` to the level of the compiler.
 pub type TypeActions<'a> = compiled::TypeActions<'a>;
-/// Reexport `Singleton` to the level of the compiler.
 pub type ActionsMap<'a> = compiled::ActionsMap<'a>;
 
 /// Reexport `MapBase` to the level of the compiler.
@@ -142,10 +132,17 @@ impl SchemaBundle {
     /// # Errors
     ///
     /// Returns compile error if any type cannot be resolved.
-    pub fn compile(&self, singletons: &[SimpleIdentifier]) -> Result<Compiled<'_>, Error<'_>> {
-        let schema_index = SchemaIndex::build(&self.edmx_docs);
-        let root_set = self.root_set_from_singletons(&schema_index, singletons)?;
-        self.compile_root_set(&root_set, &schema_index)
+    pub fn compile(
+        &self,
+        singletons: &[SimpleIdentifier],
+        config: Config,
+    ) -> Result<Compiled<'_>, Error<'_>> {
+        let ctx = Context {
+            schema_index: SchemaIndex::build(&self.edmx_docs),
+            config,
+        };
+        let root_set = self.root_set_from_singletons(&ctx, singletons)?;
+        self.compile_root_set(&root_set, &ctx)
     }
 
     /// Compile multiple schema, resolving all type dependencies.
@@ -155,15 +152,18 @@ impl SchemaBundle {
     /// # Errors
     ///
     /// Returns compile error if any type cannot be resolved.
-    pub fn compile_all(&self) -> Result<Compiled<'_>, Error<'_>> {
-        let schema_index = SchemaIndex::build(&self.edmx_docs);
+    pub fn compile_all(&self, config: Config) -> Result<Compiled<'_>, Error<'_>> {
         let root_set = self.root_set_all();
-        self.compile_root_set(&root_set, &schema_index)
+        let ctx = Context {
+            schema_index: SchemaIndex::build(&self.edmx_docs),
+            config,
+        };
+        self.compile_root_set(&root_set, &ctx)
     }
 
     fn root_set_from_singletons<'a>(
         &'a self,
-        schema_index: &SchemaIndex<'a>,
+        ctx: &Context<'a>,
         singletons: &[SimpleIdentifier],
     ) -> Result<RootSet<'a>, Error<'a>> {
         // Go through: all signletons located in
@@ -186,7 +186,7 @@ impl SchemaBundle {
                                 .filter_map(|singleton| {
                                     if singletons.contains(&singleton.name) {
                                         Some(
-                                            schema_index
+                                            ctx.schema_index
                                                 .find_child_entity_type((&singleton.stype).into())
                                                 .map(|(qname, _)| qname),
                                         )
@@ -255,18 +255,17 @@ impl SchemaBundle {
     fn compile_root_set<'a>(
         &'a self,
         root_set: &RootSet<'a>,
-        schema_index: &SchemaIndex<'a>,
+        ctx: &Context<'a>,
     ) -> Result<Compiled<'a>, Error<'a>> {
         let stack = Stack::default();
         let stack = root_set
             .entity_types
             .iter()
             .try_fold(stack, |cstack, qname| {
-                EntityType::ensure(*qname, schema_index, &cstack)
-                    .map(|compiled| cstack.merge(compiled))
+                EntityType::ensure(*qname, ctx, &cstack).map(|compiled| cstack.merge(compiled))
             })?;
         let stack = root_set.complex_types.iter().try_fold(stack, |cstack, t| {
-            ensure_type(*t, schema_index, &cstack).map(|(compiled, _)| cstack.merge(compiled))
+            ensure_type(*t, ctx, &cstack).map(|(compiled, _)| cstack.merge(compiled))
         })?;
         // Compile actions for all extracted types
         self.edmx_docs
@@ -278,7 +277,7 @@ impl SchemaBundle {
                     .schemas
                     .iter()
                     .try_fold(cstack, |stack, s| {
-                        Self::compile_schema_actions(s, schema_index, stack.new_frame())
+                        Self::compile_schema_actions(s, ctx, stack.new_frame())
                             .map(|v| stack.merge(v))
                     })?
                     .done();
@@ -289,13 +288,13 @@ impl SchemaBundle {
 
     fn compile_schema_actions<'a>(
         s: &'a Schema,
-        schema_index: &SchemaIndex<'a>,
+        ctx: &Context<'a>,
         stack: Stack<'a, '_>,
     ) -> Result<Compiled<'a>, Error<'a>> {
         s.actions
             .iter()
             .try_fold(stack, |stack, action| {
-                let compiled = Self::compile_action(action, schema_index, &stack)
+                let compiled = Self::compile_action(action, ctx, &stack)
                     .map_err(Box::new)
                     .map_err(|e| Error::Action(&action.name, e))?;
                 Ok(stack.merge(compiled))
@@ -307,7 +306,7 @@ impl SchemaBundle {
 
     fn compile_action<'a>(
         action: &'a EdmxAction,
-        schema_index: &SchemaIndex<'a>,
+        ctx: &Context<'a>,
         stack: &Stack<'a, '_>,
     ) -> Result<Compiled<'a>, Error<'a>> {
         if !action.is_bound.into_inner() {
@@ -332,7 +331,7 @@ impl SchemaBundle {
             .map_or_else(
                 || Ok((Compiled::default(), None)),
                 |rt| {
-                    ensure_type(rt.rtype.qualified_type_name().into(), schema_index, &stack)
+                    ensure_type(rt.rtype.qualified_type_name().into(), ctx, &stack)
                         .map(|(compiled, _)| (compiled, Some((&rt.rtype).into())))
                 },
             )
@@ -357,8 +356,8 @@ impl SchemaBundle {
                             ptype: (&p.ptype).into(),
                         },
                     ))
-                } else if schema_index.find_type(qtype_name).is_some() {
-                    ensure_type(p.ptype.qualified_type_name().into(), schema_index, &cstack).map(
+                } else if ctx.schema_index.find_type(qtype_name).is_some() {
+                    ensure_type(p.ptype.qualified_type_name().into(), ctx, &cstack).map(
                         |(compiled, class)| {
                             (
                                 compiled,
@@ -370,7 +369,7 @@ impl SchemaBundle {
                         },
                     )
                 } else {
-                    EntityType::ensure(qtype_name, schema_index, &cstack)
+                    EntityType::ensure(qtype_name, ctx, &cstack)
                         .map(|compiled| (compiled, ParameterType::Entity((&p.ptype).into())))
                 }
                 .map_err(Box::new)
@@ -402,7 +401,7 @@ fn is_simple_type(qtype: QualifiedName<'_>) -> bool {
 
 fn ensure_type<'a>(
     qtype: QualifiedName<'a>,
-    schema_index: &SchemaIndex<'a>,
+    ctx: &Context<'a>,
     stack: &Stack<'a, '_>,
 ) -> Result<(Compiled<'a>, TypeClass), Error<'a>> {
     if is_simple_type(qtype) {
@@ -414,16 +413,16 @@ fn ensure_type<'a>(
     } else if stack.contains_enum_type(qtype) {
         Ok((Compiled::default(), TypeClass::EnumType))
     } else {
-        compile_type(qtype, schema_index, stack)
+        compile_type(qtype, ctx, stack)
     }
 }
 
 fn compile_type<'a>(
     qtype: QualifiedName<'a>,
-    schema_index: &SchemaIndex<'a>,
+    ctx: &Context<'a>,
     stack: &Stack<'a, '_>,
 ) -> Result<(Compiled<'a>, TypeClass), Error<'a>> {
-    schema_index
+    ctx.schema_index
         .find_type(qtype)
         .ok_or(Error::TypeNotFound(qtype))
         .and_then(|t| match t {
@@ -457,7 +456,7 @@ fn compile_type<'a>(
                 let name = qtype;
                 // Ensure that base entity type compiled if present.
                 let (base, compiled) = if let Some(base_type) = &ct.base_type {
-                    let (compiled, _) = compile_type(base_type.into(), schema_index, stack)?;
+                    let (compiled, _) = compile_type(base_type.into(), ctx, stack)?;
                     (Some(base_type.into()), compiled)
                 } else {
                     (None, Compiled::default())
@@ -466,7 +465,7 @@ fn compile_type<'a>(
                 let stack = stack.new_frame().merge(compiled);
 
                 let (compiled, properties) =
-                    Properties::compile(&ct.properties, schema_index, stack.new_frame())?;
+                    Properties::compile(&ct.properties, ctx, stack.new_frame())?;
 
                 Ok((
                     stack
@@ -619,7 +618,9 @@ mod test {
             edmx_docs: vec![Edmx::parse(schema).unwrap()],
             root_set_threshold: None,
         };
-        let compiled = bundle.compile(&["Service".parse().unwrap()]).unwrap();
+        let compiled = bundle
+            .compile(&["Service".parse().unwrap()], Config::default())
+            .unwrap();
         let qtypename: QualifiedTypeName = "ServiceRoot.ServiceRoot".parse().unwrap();
         let root_type: QualifiedName<'_> = (&qtypename).into();
         let mut cur_type = &root_type;

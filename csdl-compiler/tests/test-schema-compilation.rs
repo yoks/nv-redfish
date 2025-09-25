@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use csdl_compiler::compiler::Config;
 use csdl_compiler::compiler::PropertyType;
 use csdl_compiler::compiler::SchemaBundle;
 use csdl_compiler::edmx::Edmx;
@@ -55,7 +56,7 @@ fn main() -> Result<(), Error> {
                 Ok(schema_bundle)
             })?;
     let compiled = schema_bundle
-        .compile(&[root_service])
+        .compile(&[root_service], Config::default())
         .inspect_err(|e| println!("{e}"))
         .map_err(|_| Error::Compile("compilation error".into()))?;
     let compiled = optimize(compiled);

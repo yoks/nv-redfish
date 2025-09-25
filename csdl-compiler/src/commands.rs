@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::compiler::Config as CompilerConfig;
 use crate::compiler::SchemaBundle;
 use crate::edmx::Edmx;
 use crate::edmx::ValidateError;
 use crate::edmx::attribute_values::Error as AttributeValuesError;
-use crate::generator::rust::Config;
+use crate::generator::rust::Config as GeneratorConfig;
 use crate::generator::rust::RustGenerator;
 use crate::optimizer::optimize;
 use clap::Subcommand;
@@ -90,7 +91,7 @@ pub fn process_command(command: &Commands) -> Result<Vec<String>, Error> {
             }
             let schema_bundle = read_csdls(csdls)?;
             let compiled = schema_bundle
-                .compile(&[root_service])
+                .compile(&[root_service], CompilerConfig::default())
                 .map_err(|e| {
                     format!("{e}")
                         .split('\n')
@@ -99,7 +100,7 @@ pub fn process_command(command: &Commands) -> Result<Vec<String>, Error> {
                 })
                 .map_err(Error::Compile)?;
             let compiled = optimize(compiled);
-            let generator = RustGenerator::new(compiled, Config::default())
+            let generator = RustGenerator::new(compiled, GeneratorConfig::default())
                 .map_err(|e| {
                     format!("{e}")
                         .split('\n')
@@ -121,7 +122,7 @@ pub fn process_command(command: &Commands) -> Result<Vec<String>, Error> {
             }
             let schema_bundle = read_csdls(csdls)?;
             let compiled = schema_bundle
-                .compile_all()
+                .compile_all(CompilerConfig::default())
                 .map_err(|e| {
                     format!("{e}")
                         .split('\n')
@@ -130,7 +131,7 @@ pub fn process_command(command: &Commands) -> Result<Vec<String>, Error> {
                 })
                 .map_err(Error::Compile)?;
             let compiled = optimize(compiled);
-            let generator = RustGenerator::new(compiled, Config::default())
+            let generator = RustGenerator::new(compiled, GeneratorConfig::default())
                 .map_err(|e| {
                     format!("{e}")
                         .split('\n')

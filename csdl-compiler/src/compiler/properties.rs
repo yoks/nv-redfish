@@ -14,13 +14,13 @@
 // limitations under the License.
 
 use crate::compiler::Compiled;
+use crate::compiler::Context;
 use crate::compiler::EntityType;
 use crate::compiler::Error;
 use crate::compiler::MapType;
 use crate::compiler::MustHaveId;
 use crate::compiler::OData;
 use crate::compiler::QualifiedName;
-use crate::compiler::SchemaIndex;
 use crate::compiler::Stack;
 use crate::compiler::TypeClass;
 use crate::compiler::ensure_type;
@@ -47,7 +47,7 @@ impl<'a> Properties<'a> {
     /// Returens error if failed to compile and dependency.
     pub fn compile(
         props: &'a [EdmxProperty],
-        schema_index: &SchemaIndex<'a>,
+        ctx: &Context<'a>,
         stack: Stack<'a, '_>,
     ) -> Result<(Compiled<'a>, Self), Error<'a>> {
         props
@@ -56,7 +56,7 @@ impl<'a> Properties<'a> {
                 let stack = match &sp.attrs {
                     PropertyAttrs::StructuralProperty(v) => {
                         let (compiled, typeclass) =
-                            ensure_type(v.ptype.qualified_type_name().into(), schema_index, &stack)
+                            ensure_type(v.ptype.qualified_type_name().into(), ctx, &stack)
                                 .map_err(Box::new)
                                 .map_err(|e| Error::Property(&sp.name, e))?;
                         p.properties.push(Property {
@@ -68,7 +68,8 @@ impl<'a> Properties<'a> {
                         stack.merge(compiled)
                     }
                     PropertyAttrs::NavigationProperty(v) => {
-                        let (ptype, compiled) = schema_index
+                        let (ptype, compiled) = ctx
+                            .schema_index
                             // We are searching for deepest available child in tre
                             // hierarchy of types for singleton. So, we can parse most
                             // recent protocol versions.
@@ -78,7 +79,7 @@ impl<'a> Properties<'a> {
                                     // Aready compiled entity
                                     Ok(Compiled::default())
                                 } else {
-                                    EntityType::compile(qtype, et, schema_index, &stack)
+                                    EntityType::compile(qtype, et, ctx, &stack)
                                         .map_err(Box::new)
                                         .map_err(|e| Error::EntityType(qtype, e))
                                 }

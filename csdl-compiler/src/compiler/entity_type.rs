@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crate::compiler::Compiled;
+use crate::compiler::Context;
 use crate::compiler::Error;
 use crate::compiler::MapBase;
 use crate::compiler::NavProperty;
@@ -22,7 +23,6 @@ use crate::compiler::Properties;
 use crate::compiler::PropertiesManipulation;
 use crate::compiler::Property;
 use crate::compiler::QualifiedName;
-use crate::compiler::SchemaIndex;
 use crate::compiler::Stack;
 use crate::compiler::odata::MustHaveId;
 use crate::edmx::entity_type::EntityType as EdmxEntityType;
@@ -48,13 +48,13 @@ impl<'a> EntityType<'a> {
     pub fn compile(
         name: QualifiedName<'a>,
         schema_entity_type: &'a EdmxEntityType,
-        schema_index: &SchemaIndex<'a>,
+        ctx: &Context<'a>,
         stack: &Stack<'a, '_>,
     ) -> Result<Compiled<'a>, Error<'a>> {
         let stack = stack.new_frame().with_enitity_type(name);
         // Ensure that base entity type compiled if present.
         let (base, compiled) = if let Some(base_type) = &schema_entity_type.base_type {
-            let compiled = Self::ensure(base_type.into(), schema_index, &stack)?;
+            let compiled = Self::ensure(base_type.into(), ctx, &stack)?;
             (Some(base_type.into()), compiled)
         } else {
             (None, Compiled::default())
@@ -62,11 +62,8 @@ impl<'a> EntityType<'a> {
         let stack = stack.new_frame().merge(compiled);
 
         // Compile navigation and regular properties
-        let (compiled, properties) = Properties::compile(
-            &schema_entity_type.properties,
-            schema_index,
-            stack.new_frame(),
-        )?;
+        let (compiled, properties) =
+            Properties::compile(&schema_entity_type.properties, ctx, stack.new_frame())?;
 
         Ok(stack
             .merge(compiled)
@@ -88,16 +85,16 @@ impl<'a> EntityType<'a> {
     /// Returns error if failed to compile entity type.
     pub fn ensure(
         qtype: QualifiedName<'a>,
-        schema_index: &SchemaIndex<'a>,
+        ctx: &Context<'a>,
         stack: &Stack<'a, '_>,
     ) -> Result<Compiled<'a>, Error<'a>> {
         if stack.contains_entity(qtype) {
             Ok(Compiled::default())
         } else {
-            schema_index
+            ctx.schema_index
                 .find_entity_type(qtype)
                 .ok_or(Error::EntityTypeNotFound(qtype))
-                .and_then(|et| Self::compile(qtype, et, schema_index, stack))
+                .and_then(|et| Self::compile(qtype, et, ctx, stack))
                 .map_err(Box::new)
                 .map_err(|e| Error::EntityType(qtype, e))
         }
