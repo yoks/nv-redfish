@@ -139,6 +139,17 @@ impl<'a> StructDef<'a> {
             Self::generate_action_property(&mut content, a, config);
         }
 
+        if self.odata.additional_properties.is_some_and(|v| *v.inner()) {
+            // If additional_properties are explicitly set then we add
+            // placeholder with serde_json::Value to
+            // deserializer. Actually, it is almost always Oem /
+            // OemAction.
+            content.extend(quote! {
+                #[serde(flatten)]
+                pub additional_properties: #top::AdditionalProperties,
+            });
+        }
+
         let name = self.name;
         tokens.extend([
             doc_format_and_generate(self.name, &self.odata),
@@ -490,7 +501,7 @@ impl<'a> StructDef<'a> {
             content.extend([
                 doc_format_and_generate(a.name, &a.odata),
                 quote! {
-                    pub async fn #name<B: #top::Bmc>(&self, bmc: &B, t: &#typename) -> Result<#ret_type, B::Error> 
+                    pub async fn #name<B: #top::Bmc>(&self, bmc: &B, t: &#typename) -> Result<#ret_type, B::Error>
                     where B::Error: #top::ActionError,
                     {
                         if let Some(a) = &self.#name  {

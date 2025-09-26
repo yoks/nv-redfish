@@ -24,23 +24,24 @@ pub mod nav_property;
 /// Type for `@odata.id` identifier.
 pub mod odata;
 
+use crate::http::ExpandQuery;
 use serde::{Deserialize, Deserializer};
 use std::{future::Future, sync::Arc};
 
-/// Reexport `Bmc` trait to make it available through crate root.
-pub use bmc::Bmc;
-/// Reexport `ActionError` trait to make it available through crate root.
+#[doc(inline)]
+pub use action::Action;
+#[doc(inline)]
 pub use action::ActionError;
-
-use crate::http::ExpandQuery;
-/// Reexport `ODataId` to make it available through crate root.
-pub type ODataId = odata::ODataId;
-/// Reexport `ODataETag` to make it available through crate root.
-pub type ODataETag = odata::ODataETag;
-/// Reexport `NavProperty` to make it available through crate root.
-pub type NavProperty<T> = nav_property::NavProperty<T>;
-/// Reexport `Action` to make it available through crate root.
-pub type Action<T, R> = action::Action<T, R>;
+#[doc(inline)]
+pub use bmc::Bmc;
+#[doc(inline)]
+pub use nav_property::NavProperty;
+#[doc(inline)]
+pub use odata::ODataETag;
+#[doc(inline)]
+pub use odata::ODataId;
+#[doc(inline)]
+pub use serde_json::Value as AdditionalProperties;
 
 /// Entity type trait that is implemented by CSDL compiler for all
 /// generated entity types.
@@ -68,12 +69,11 @@ pub trait Expandable: EntityType + Sized + for<'a> Deserialize<'a> {
 #[derive(Debug)]
 pub struct Empty {}
 
-impl<'de> Deserialize<'de> for Empty
-{
+impl<'de> Deserialize<'de> for Empty {
     fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        Ok(Empty{})
+        Ok(Empty {})
     }
 }

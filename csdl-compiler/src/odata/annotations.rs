@@ -28,22 +28,35 @@ use crate::edmx::property::DeStructuralProperty;
 use crate::edmx::property::NavigationProperty;
 use tagged_types::TaggedType;
 
-pub type Description = TaggedType<String, DescriptionTag>;
+/// A brief description of a model element.
 pub type DescriptionRef<'a> = TaggedType<&'a String, DescriptionTag>;
+#[doc(hidden)]
 #[derive(tagged_types::Tag)]
 #[implement(Clone, Copy)]
 #[transparent(Display, Debug)]
 #[capability(inner_access, cloned)]
 pub enum DescriptionTag {}
 
-pub type LongDescription = TaggedType<String, LongDescriptionTag>;
+/// A lengthy description of a model element.
 pub type LongDescriptionRef<'a> = TaggedType<&'a String, LongDescriptionTag>;
+#[doc(hidden)]
 #[derive(tagged_types::Tag)]
 #[implement(Clone, Copy)]
 #[transparent(Display, Debug)]
 #[capability(inner_access, cloned)]
 pub enum LongDescriptionTag {}
 
+/// Instances of this type may contain properties in addition to those
+/// declared in `$metadata`.
+pub type AdditionalProperties = TaggedType<bool, AdditionalPropertiesTag>;
+#[doc(hidden)]
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Copy)]
+#[transparent(Display, Debug)]
+#[capability(inner_access, cloned)]
+pub enum AdditionalPropertiesTag {}
+
+/// Permissions for accessing a resource.
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Permissions {
     #[default]
@@ -89,6 +102,14 @@ pub trait ODataAnnotations {
             .find(|a| a.is_odata_annotation("LongDescription"))
             .and_then(|a| a.string.as_ref())
             .map(LongDescriptionRef::new)
+    }
+
+    fn odata_additional_properties(&self) -> Option<AdditionalProperties> {
+        self.annotations()
+            .iter()
+            .find(|a| a.is_odata_annotation("AdditionalProperties"))
+            .and_then(|a| a.bool_value)
+            .map(AdditionalProperties::new)
     }
 
     fn odata_permissions(&self) -> Option<Permissions> {

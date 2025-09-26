@@ -15,6 +15,7 @@
 
 //! `OData` related attributes needed to generate code.
 
+use crate::odata::annotations::AdditionalProperties;
 use crate::odata::annotations::DescriptionRef;
 use crate::odata::annotations::LongDescriptionRef;
 use crate::odata::annotations::ODataAnnotations;
@@ -35,6 +36,7 @@ pub struct OData<'a> {
     pub description: Option<DescriptionRef<'a>>,
     pub long_description: Option<LongDescriptionRef<'a>>,
     pub permissions: Option<Permissions>,
+    pub additional_properties: Option<AdditionalProperties>,
 }
 
 impl<'a> OData<'a> {
@@ -46,6 +48,7 @@ impl<'a> OData<'a> {
             description: src.odata_description(),
             long_description: src.odata_long_description(),
             permissions: src.odata_permissions(),
+            additional_properties: src.odata_additional_properties(),
         }
     }
 
