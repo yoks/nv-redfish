@@ -57,16 +57,45 @@ pub mod attribute_values;
 /// Validation errors.
 pub mod validate_error;
 
-use annotation::Annotation;
-use attribute_values::Namespace;
-use attribute_values::QualifiedName;
-use attribute_values::SimpleIdentifier;
-use attribute_values::TypeName;
 use serde::Deserialize;
 use tagged_types::TaggedType;
 
 #[doc(inline)]
+pub use action::Action;
+#[doc(inline)]
+pub use annotation::Annotation;
+#[doc(inline)]
+pub use attribute_values::Namespace;
+#[doc(inline)]
+pub use attribute_values::QualifiedName;
+#[doc(inline)]
+pub use attribute_values::SimpleIdentifier;
+#[doc(inline)]
+pub use attribute_values::TypeName;
+#[doc(inline)]
+pub use complex_type::ComplexType;
+#[doc(inline)]
 pub use edmx_root::Edmx;
+#[doc(inline)]
+pub use entity_type::EntityType;
+#[doc(inline)]
+pub use enum_type::EnumMember;
+#[doc(inline)]
+pub use enum_type::EnumMemberName;
+#[doc(inline)]
+pub use enum_type::EnumType;
+#[doc(inline)]
+pub use enum_type::EnumUnderlyingType;
+#[doc(inline)]
+pub use property::NavigationProperty;
+#[doc(inline)]
+pub use property::Property;
+#[doc(inline)]
+pub use property::StructuralProperty;
+#[doc(inline)]
+pub use schema::Schema;
+#[doc(inline)]
+pub use schema::Type;
 #[doc(inline)]
 pub use validate_error::ValidateError;
 

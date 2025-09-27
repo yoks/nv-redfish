@@ -111,14 +111,14 @@ pub use traits::MapType;
 pub use traits::PropertiesManipulation;
 
 use crate::compiler::odata::MustHaveId;
+use crate::edmx::Action as EdmxAction;
 use crate::edmx::ActionName;
 use crate::edmx::Edmx;
 use crate::edmx::IsNullable;
 use crate::edmx::ParameterName;
-use crate::edmx::action::Action as EdmxAction;
-use crate::edmx::attribute_values::SimpleIdentifier;
-use crate::edmx::schema::Schema;
-use crate::edmx::schema::Type;
+use crate::edmx::Schema;
+use crate::edmx::SimpleIdentifier;
+use crate::edmx::Type;
 use schema_index::SchemaIndex;
 use stack::Stack;
 

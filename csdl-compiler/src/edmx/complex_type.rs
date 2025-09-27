@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::edmx::Annotation;
 use crate::edmx::LocalTypeName;
+use crate::edmx::Property;
 use crate::edmx::QualifiedTypeName;
+use crate::edmx::StructuralProperty;
 use crate::edmx::ValidateError;
-use crate::edmx::annotation::Annotation;
 use crate::edmx::property::DeNavigationProperty;
-use crate::edmx::property::DeStructuralProperty;
-use crate::edmx::property::Property;
 use serde::Deserialize;
 
 /// 9.1 Element edm:ComplexType
@@ -46,7 +46,7 @@ pub struct DeComplexType {
 #[derive(Debug, Deserialize)]
 pub enum DeComplexTypeItem {
     #[serde(rename = "Property")]
-    StructuralProperty(DeStructuralProperty),
+    StructuralProperty(StructuralProperty),
     NavigationProperty(DeNavigationProperty),
     Annotation(Annotation),
 }

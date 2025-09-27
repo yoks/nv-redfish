@@ -13,16 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::edmx::Annotation;
 use crate::edmx::IsNullable;
 use crate::edmx::PropertyName;
+use crate::edmx::TypeName;
 use crate::edmx::ValidateError;
-use crate::edmx::annotation::Annotation;
-use crate::edmx::attribute_values::TypeName;
 use serde::Deserialize;
 
 /// 6.1 Element edm:Property
 #[derive(Debug, Deserialize)]
-pub struct DeStructuralProperty {
+pub struct StructuralProperty {
     /// 6.1.1 Attribute `Name`
     #[serde(rename = "@Name")]
     pub name: PropertyName,
@@ -121,12 +121,12 @@ pub struct Property {
 #[derive(Debug)]
 pub enum PropertyAttrs {
     /// Properties of the structural property.
-    StructuralProperty(DeStructuralProperty),
+    StructuralProperty(StructuralProperty),
     /// Properties of the navigation property.
     NavigationProperty(NavigationProperty),
 }
 
-impl DeStructuralProperty {
+impl StructuralProperty {
     /// # Errors
     ///
     /// Actually, doesn't return any errors. Keep it for consistency.

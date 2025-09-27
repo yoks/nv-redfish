@@ -16,9 +16,9 @@
 use crate::compiler::OData;
 use crate::compiler::QualifiedName;
 use crate::compiler::odata::MustHaveId;
-use crate::edmx::enum_type::EnumMember as EdmxEnumMember;
-use crate::edmx::enum_type::EnumMemberName;
-use crate::edmx::enum_type::EnumUnderlyingType;
+use crate::edmx::EnumMember as EdmxEnumMember;
+use crate::edmx::EnumMemberName;
+use crate::edmx::EnumUnderlyingType;
 
 /// Compiled simple type (type definition or enumeration).
 #[derive(Debug)]

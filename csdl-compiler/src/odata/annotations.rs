@@ -15,17 +15,16 @@
 
 //! Helper of handling annotations in edmx types.
 
+use crate::edmx::Action;
+use crate::edmx::Annotation;
+use crate::edmx::ComplexType;
+use crate::edmx::EntityType;
+use crate::edmx::EnumMember;
+use crate::edmx::EnumType;
+use crate::edmx::Namespace;
+use crate::edmx::NavigationProperty;
 use crate::edmx::Parameter;
-use crate::edmx::action::Action;
-use crate::edmx::annotation::Annotation;
-use crate::edmx::annotation::AnnotationRecord;
-use crate::edmx::attribute_values::Namespace;
-use crate::edmx::complex_type::ComplexType;
-use crate::edmx::entity_type::EntityType;
-use crate::edmx::enum_type::EnumMember;
-use crate::edmx::enum_type::EnumType;
-use crate::edmx::property::DeStructuralProperty;
-use crate::edmx::property::NavigationProperty;
+use crate::edmx::StructuralProperty;
 use tagged_types::TaggedType;
 
 /// A brief description of a model element.
@@ -150,19 +149,13 @@ impl ODataAnnotations for ComplexType {
     }
 }
 
-impl ODataAnnotations for DeStructuralProperty {
+impl ODataAnnotations for StructuralProperty {
     fn annotations(&self) -> &Vec<Annotation> {
         &self.annotations
     }
 }
 
 impl ODataAnnotations for NavigationProperty {
-    fn annotations(&self) -> &Vec<Annotation> {
-        &self.annotations
-    }
-}
-
-impl ODataAnnotations for AnnotationRecord {
     fn annotations(&self) -> &Vec<Annotation> {
         &self.annotations
     }

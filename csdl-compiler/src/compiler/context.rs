@@ -17,7 +17,7 @@
 
 use crate::compiler::QualifiedName;
 use crate::compiler::SchemaIndex;
-use crate::edmx::attribute_values::SimpleIdentifier;
+use crate::edmx::SimpleIdentifier;
 use std::collections::HashSet;
 use std::error::Error as StdError;
 use std::fmt::Display;

@@ -17,9 +17,9 @@ use crate::compiler::Error;
 use crate::compiler::Namespace;
 use crate::compiler::QualifiedName;
 use crate::edmx::Edmx;
-use crate::edmx::entity_type::EntityType;
-use crate::edmx::schema::Schema;
-use crate::edmx::schema::Type;
+use crate::edmx::EntityType;
+use crate::edmx::Schema;
+use crate::edmx::Type;
 use std::collections::HashMap;
 
 /// Indexing of schema across different documents

@@ -15,10 +15,10 @@
 
 use crate::compiler::QualifiedName;
 use crate::edmx::ActionName;
+use crate::edmx::Namespace;
 use crate::edmx::ParameterName;
 use crate::edmx::PropertyName;
-use crate::edmx::attribute_values::Namespace;
-use crate::edmx::attribute_values::SimpleIdentifier;
+use crate::edmx::SimpleIdentifier;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;

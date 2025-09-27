@@ -13,21 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::edmx::Action;
+use crate::edmx::Annotation;
+use crate::edmx::ComplexType;
 use crate::edmx::EntityContainer;
+use crate::edmx::EntityType;
+use crate::edmx::EnumType;
 use crate::edmx::Namespace;
 use crate::edmx::SimpleIdentifier;
 use crate::edmx::Term;
 use crate::edmx::TypeDefinition;
 use crate::edmx::ValidateError;
-use crate::edmx::action::Action;
 use crate::edmx::action::DeAction;
-use crate::edmx::annotation::Annotation;
-use crate::edmx::complex_type::ComplexType;
 use crate::edmx::complex_type::DeComplexType;
 use crate::edmx::entity_type::DeEntityType;
-use crate::edmx::entity_type::EntityType;
 use crate::edmx::enum_type::DeEnumType;
-use crate::edmx::enum_type::EnumType;
 use serde::Deserialize;
 use std::collections::HashMap;
 

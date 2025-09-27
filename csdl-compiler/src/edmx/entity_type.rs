@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::edmx::Annotation;
 use crate::edmx::LocalTypeName;
+use crate::edmx::Property;
 use crate::edmx::PropertyName;
 use crate::edmx::QualifiedTypeName;
+use crate::edmx::StructuralProperty;
 use crate::edmx::ValidateError;
-use crate::edmx::annotation::Annotation;
 use crate::edmx::property::DeNavigationProperty;
-use crate::edmx::property::DeStructuralProperty;
-use crate::edmx::property::Property;
 use serde::Deserialize;
 
 /// 8.1 Element edm:EntityType
@@ -70,7 +70,7 @@ pub struct PropertyRef {
 pub enum DeEntityTypeItem {
     Key(Key),
     #[serde(rename = "Property")]
-    StructuralProperty(DeStructuralProperty),
+    StructuralProperty(StructuralProperty),
     NavigationProperty(DeNavigationProperty),
     Annotation(Annotation),
 }

@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::edmx::Annotation;
 use crate::edmx::LocalTypeName;
 use crate::edmx::QualifiedTypeName;
 use crate::edmx::SimpleIdentifier;
 use crate::edmx::ValidateError;
-use crate::edmx::annotation::Annotation;
 use crate::edmx::attribute_values::Error as QualifiedNameError;
 use serde::Deserialize;
 use serde::Deserializer;

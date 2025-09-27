@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::edmx::attribute_values::Namespace as EdmxNamespace;
-use crate::edmx::attribute_values::SimpleIdentifier;
+use crate::edmx::Namespace as EdmxNamespace;
+use crate::edmx::SimpleIdentifier;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;

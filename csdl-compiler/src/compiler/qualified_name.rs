@@ -14,9 +14,9 @@
 // limitations under the License.
 
 use crate::compiler::Namespace;
+use crate::edmx::Namespace as EdmxNamespace;
 use crate::edmx::QualifiedTypeName;
-use crate::edmx::attribute_values::Namespace as EdmxNamespace;
-use crate::edmx::attribute_values::SimpleIdentifier;
+use crate::edmx::SimpleIdentifier;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;

@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::edmx::annotation::Annotation;
-use crate::edmx::property::DeStructuralProperty;
-use crate::edmx::property::NavigationProperty;
+use crate::edmx::Annotation;
+use crate::edmx::NavigationProperty;
+use crate::edmx::StructuralProperty;
 use tagged_types::TaggedType;
 
 pub type IsRequired = TaggedType<bool, IsRequiredTag>;
@@ -65,7 +65,7 @@ pub trait RedfishPropertyAnnotations {
     }
 }
 
-impl RedfishPropertyAnnotations for DeStructuralProperty {
+impl RedfishPropertyAnnotations for StructuralProperty {
     fn annotations(&self) -> &Vec<Annotation> {
         &self.annotations
     }

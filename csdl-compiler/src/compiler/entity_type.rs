@@ -25,7 +25,7 @@ use crate::compiler::Property;
 use crate::compiler::QualifiedName;
 use crate::compiler::Stack;
 use crate::compiler::odata::MustHaveId;
-use crate::edmx::entity_type::EntityType as EdmxEntityType;
+use crate::edmx::EntityType as EdmxEntityType;
 use crate::edmx::entity_type::Key;
 
 #[derive(Debug)]
