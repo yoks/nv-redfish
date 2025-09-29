@@ -82,13 +82,24 @@ impl<'de> Deserialize<'de> for Empty {
     }
 }
 
+/// This trait is assigned to entity types that are marked as
+/// updatable in CSDL specification.
 pub trait Updatable<V: Sync + Send + Serialize>: EntityType + Sized {
-    /// Update entity type.
+    /// Update entity using `update` as payload.
     fn expand<B: Bmc>(
         &self,
         bmc: &B,
         update: &V,
     ) -> impl Future<Output = Result<(), B::Error>> + Send {
         bmc.update::<V, Self>(self.id(), update)
+    }
+}
+
+/// This trait is assigned to entity types that are marked as
+/// deletable in CSDL specification.
+pub trait Deletable: EntityType + Sized {
+    /// Delete current entity.
+    fn delete<B: Bmc>(&self, bmc: &B) -> impl Future<Output = Result<(), B::Error>> + Send {
+        bmc.delete(self.id())
     }
 }

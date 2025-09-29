@@ -482,6 +482,10 @@ where
         todo!()
     }
 
+    async fn delete(&self, _id: &ODataId) -> Result<(), Self::Error> {
+        todo!()
+    }
+
     async fn action<
         T: Sync + Send + Serialize,
         R: Sync + Send + Sized + for<'de> Deserialize<'de>,

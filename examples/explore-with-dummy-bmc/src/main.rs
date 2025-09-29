@@ -498,6 +498,10 @@ impl Bmc for MockBmc {
         todo!("unimplimented")
     }
 
+    async fn delete(&self, _id: &ODataId) -> Result<(), Self::Error> {
+        todo!("unimplimented")
+    }
+
     async fn action<
         T: Send + Sync + serde::Serialize,
         R: Send + Sync + Sized + for<'a> serde::Deserialize<'a>,

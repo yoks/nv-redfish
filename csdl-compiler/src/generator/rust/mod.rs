@@ -161,6 +161,7 @@ impl<'a> RustGenerator<'a> {
                 EntityType,
                 Expandable,
                 Updatable,
+                Deletable,
                 Bmc,
                 Empty,
                 ActionError,

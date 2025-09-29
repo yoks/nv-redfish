@@ -40,16 +40,18 @@ pub trait Bmc {
         query: ExpandQuery,
     ) -> impl Future<Output = Result<Arc<T>, Self::Error>> + Send;
 
+    fn get<T: EntityType + Sized + for<'a> Deserialize<'a> + 'static + Send + Sync>(
+        &self,
+        id: &ODataId,
+    ) -> impl Future<Output = Result<Arc<T>, Self::Error>> + Send;
+
     fn update<V: Sync + Send + Serialize, T: Updatable<V>>(
         &self,
         id: &ODataId,
         query: &V,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
-    fn get<T: EntityType + Sized + for<'a> Deserialize<'a> + 'static + Send + Sync>(
-        &self,
-        id: &ODataId,
-    ) -> impl Future<Output = Result<Arc<T>, Self::Error>> + Send;
+    fn delete(&self, id: &ODataId) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     fn action<T: Send + Sync + Serialize, R: Send + Sync + Sized + for<'a> Deserialize<'a>>(
         &self,

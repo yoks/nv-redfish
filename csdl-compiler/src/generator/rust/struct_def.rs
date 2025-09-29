@@ -433,10 +433,17 @@ impl<'a> StructDef<'a> {
         tokens.extend(quote! {
             impl #top::Expandable for #name {}
         });
+
         if self.odata.updatable.is_some_and(|v| v.inner().value) {
             let update_name = self.name.for_update();
             tokens.extend(quote! {
                 impl #top::Updatable<#update_name> for #name {}
+            });
+        }
+
+        if self.odata.deletable.is_some_and(|v| v.inner().value) {
+            tokens.extend(quote! {
+                impl #top::Deletable for #name {}
             });
         }
     }
