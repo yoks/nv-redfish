@@ -12,22 +12,6 @@ documentation.workspace = true
 [lib]
 path = "src/lib.rs"
 
-[[bin]]
-name = "csdl-compiler"
-path = "src/main.rs"
-
-[[bin]]
-name = "test-csdl-parser"
-path = "tests/test-csdl-parser.rs"
-
-[[bin]]
-name = "test-schema-compilation"
-path = "tests/test-schema-compilation.rs"
-
-[[bin]]
-name = "test-schema-rust-gen"
-path = "tests/test-schema-rust-gen.rs"
-
 [dependencies]
 serde = { workspace = true, features = [ "derive" ]}
 heck = { workspace = true }
