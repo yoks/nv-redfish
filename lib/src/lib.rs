@@ -27,7 +27,7 @@ pub mod nav_property;
 pub mod odata;
 
 use crate::http::ExpandQuery;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::{future::Future, sync::Arc};
 
 #[doc(inline)]
@@ -79,5 +79,16 @@ impl<'de> Deserialize<'de> for Empty {
         D: Deserializer<'de>,
     {
         Ok(Empty {})
+    }
+}
+
+pub trait Updatable<V: Sync + Send + Serialize>: EntityType + Sized {
+    /// Update entity type.
+    fn expand<B: Bmc>(
+        &self,
+        bmc: &B,
+        update: &V,
+    ) -> impl Future<Output = Result<(), B::Error>> + Send {
+        bmc.update::<V, Self>(self.id(), update)
     }
 }

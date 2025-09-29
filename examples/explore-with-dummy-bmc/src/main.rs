@@ -18,9 +18,11 @@ use std::sync::Arc;
 use nv_redfish::Bmc;
 use nv_redfish::Expandable;
 use nv_redfish::ODataId;
+use nv_redfish::Updatable;
 use nv_redfish::http::ExpandQuery;
 use redfish_std::redfish::service_root::ServiceRoot;
 use serde::Deserialize;
+use serde::Serialize;
 
 #[derive(Debug)]
 pub enum Error {
@@ -486,6 +488,14 @@ impl Bmc for MockBmc {
         let mock_json = self.get_mock_json_for_uri(&id.to_string());
         let result: T = serde_json::from_str(&mock_json).map_err(Error::ParseError)?;
         Ok(Arc::new(result))
+    }
+
+    async fn update<V: Sync + Send + Serialize, T: Updatable<V>>(
+        &self,
+        _id: &ODataId,
+        _v: &V,
+    ) -> Result<(), Self::Error> {
+        todo!("unimplimented")
     }
 
     async fn action<

@@ -16,10 +16,13 @@
 //! `OData` related attributes needed to generate code.
 
 use crate::odata::annotations::AdditionalProperties;
+use crate::odata::annotations::Deletable;
 use crate::odata::annotations::DescriptionRef;
+use crate::odata::annotations::Insertable;
 use crate::odata::annotations::LongDescriptionRef;
 use crate::odata::annotations::ODataAnnotations;
 use crate::odata::annotations::Permissions;
+use crate::odata::annotations::Updatable;
 use tagged_types::TaggedType;
 
 pub type MustHaveId = TaggedType<bool, MustHaveIdTag>;
@@ -37,6 +40,9 @@ pub struct OData<'a> {
     pub long_description: Option<LongDescriptionRef<'a>>,
     pub permissions: Option<Permissions>,
     pub additional_properties: Option<AdditionalProperties>,
+    pub insertable: Option<Insertable<'a>>,
+    pub updatable: Option<Updatable<'a>>,
+    pub deletable: Option<Deletable<'a>>,
 }
 
 impl<'a> OData<'a> {
@@ -49,13 +55,21 @@ impl<'a> OData<'a> {
             long_description: src.odata_long_description(),
             permissions: src.odata_permissions(),
             additional_properties: src.odata_additional_properties(),
+            insertable: src.capabilities_insertable(),
+            updatable: src.capabilities_updatable(),
+            deletable: src.capabilities_deletable(),
         }
     }
 
     /// `OData` doesn't contain anything.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.description.is_none() && self.long_description.is_none() && self.permissions.is_none()
+        self.description.is_none()
+            && self.long_description.is_none()
+            && self.permissions.is_none()
+            && self.insertable.is_none()
+            && self.updatable.is_none()
+            && self.deletable.is_none()
     }
 
     /// Property is explicitly set to write only.

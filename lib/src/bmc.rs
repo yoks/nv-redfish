@@ -18,11 +18,12 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::http::ExpandQuery;
 use crate::Action;
 use crate::EntityType;
 use crate::Expandable;
 use crate::ODataId;
+use crate::Updatable;
+use crate::http::ExpandQuery;
 use std::fmt;
 use std::future::Future;
 use std::sync::Arc;
@@ -38,6 +39,12 @@ pub trait Bmc {
         id: &ODataId,
         query: ExpandQuery,
     ) -> impl Future<Output = Result<Arc<T>, Self::Error>> + Send;
+
+    fn update<V: Sync + Send + Serialize, T: Updatable<V>>(
+        &self,
+        id: &ODataId,
+        query: &V,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     fn get<T: EntityType + Sized + for<'a> Deserialize<'a> + 'static + Send + Sync>(
         &self,
@@ -61,7 +68,7 @@ impl BmcCredentials {
     pub fn new(username: String, password: String) -> Self {
         Self { username, password }
     }
-    
+
     pub fn password(&self) -> &str {
         &self.password
     }
@@ -78,6 +85,10 @@ impl fmt::Debug for BmcCredentials {
 
 impl fmt::Display for BmcCredentials {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "BmcCredentials(username: {}, password: [REDACTED])", self.username)
+        write!(
+            f,
+            "BmcCredentials(username: {}, password: [REDACTED])",
+            self.username
+        )
     }
 }

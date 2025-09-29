@@ -230,7 +230,15 @@ impl<'a> ModDef<'a> {
             } else {
                 builder
             };
-            let struct_def = builder.with_properties(t.properties).build(config)?;
+            let gen_types = if t.odata.updatable.is_some_and(|v| v.inner().value) {
+                vec![GenerateType::Read, GenerateType::Update]
+            } else {
+                vec![GenerateType::Read]
+            };
+            let struct_def = builder
+                .with_properties(t.properties)
+                .with_generate_type(gen_types)
+                .build(config)?;
             self.add_struct_def(struct_def)
                 .map_err(Box::new)
                 .map_err(|e| Error::CreateStruct(struct_name, e))

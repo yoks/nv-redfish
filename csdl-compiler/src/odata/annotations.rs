@@ -17,6 +17,7 @@
 
 use crate::edmx::Action;
 use crate::edmx::Annotation;
+use crate::edmx::AnnotationRecord;
 use crate::edmx::ComplexType;
 use crate::edmx::EntityType;
 use crate::edmx::EnumMember;
@@ -55,6 +56,40 @@ pub type AdditionalProperties = TaggedType<bool, AdditionalPropertiesTag>;
 #[capability(inner_access, cloned)]
 pub enum AdditionalPropertiesTag {}
 
+/// Capabilities of Enity type
+#[derive(Debug, Clone, Copy)]
+pub struct Capability<'a> {
+    pub value: bool,
+    pub description: Option<DescriptionRef<'a>>,
+}
+
+/// Enitity type is insertable.
+pub type Insertable<'a> = TaggedType<Capability<'a>, InsertableTag>;
+#[doc(hidden)]
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Copy)]
+#[transparent(Debug)]
+#[capability(inner_access)]
+pub enum InsertableTag {}
+
+/// Enitity type is updatable.
+pub type Updatable<'a> = TaggedType<Capability<'a>, UpdatableTag>;
+#[doc(hidden)]
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Copy)]
+#[transparent(Debug)]
+#[capability(inner_access)]
+pub enum UpdatableTag {}
+
+/// Enitity type is deletable.
+pub type Deletable<'a> = TaggedType<Capability<'a>, DeletableTag>;
+#[doc(hidden)]
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Copy)]
+#[transparent(Debug)]
+#[capability(inner_access)]
+pub enum DeletableTag {}
+
 /// Permissions for accessing a resource.
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Permissions {
@@ -66,21 +101,30 @@ pub enum Permissions {
 
 trait IsODataNamespace {
     fn is_odata_namespace(&self) -> bool;
+    fn is_capabilities_namespace(&self) -> bool;
 }
 
 impl IsODataNamespace for Namespace {
     fn is_odata_namespace(&self) -> bool {
         self.ids.len() == 1 && self.ids[0].inner() == "OData"
     }
+    fn is_capabilities_namespace(&self) -> bool {
+        self.ids.len() == 1 && self.ids[0].inner() == "Capabilities"
+    }
 }
 
 pub trait ODataAnnotation {
     fn is_odata_annotation(&self, name: &str) -> bool;
+    fn is_capabilities_annotation(&self, name: &str) -> bool;
 }
 
 impl ODataAnnotation for Annotation {
     fn is_odata_annotation(&self, name: &str) -> bool {
         self.term.inner().namespace.is_odata_namespace() && self.term.inner().name.inner() == name
+    }
+    fn is_capabilities_annotation(&self, name: &str) -> bool {
+        self.term.inner().namespace.is_capabilities_namespace()
+            && self.term.inner().name.inner() == name
     }
 }
 
@@ -122,6 +166,60 @@ pub trait ODataAnnotations {
                 "Write" => Some(Permissions::Write),
                 _ => None,
             })
+    }
+
+    fn capabilities_insertable(&self) -> Option<Insertable<'_>> {
+        self.annotations()
+            .iter()
+            .find(|a| a.is_capabilities_annotation("InsertRestrictions"))
+            .and_then(|a| a.record.as_ref())
+            .and_then(|record| {
+                if record.property_value.property == "Insertable" {
+                    record.property_value.bool_value.map(|value| Capability {
+                        value,
+                        description: record.odata_description(),
+                    })
+                } else {
+                    None
+                }
+            })
+            .map(Insertable::new)
+    }
+
+    fn capabilities_updatable(&self) -> Option<Updatable<'_>> {
+        self.annotations()
+            .iter()
+            .find(|a| a.is_capabilities_annotation("UpdateRestrictions"))
+            .and_then(|a| a.record.as_ref())
+            .and_then(|record| {
+                if record.property_value.property == "Updatable" {
+                    record.property_value.bool_value.map(|value| Capability {
+                        value,
+                        description: record.odata_description(),
+                    })
+                } else {
+                    None
+                }
+            })
+            .map(Updatable::new)
+    }
+
+    fn capabilities_deletable(&self) -> Option<Deletable<'_>> {
+        self.annotations()
+            .iter()
+            .find(|a| a.is_capabilities_annotation("DeleteRestrictions"))
+            .and_then(|a| a.record.as_ref())
+            .and_then(|record| {
+                if record.property_value.property == "Deletable" {
+                    record.property_value.bool_value.map(|value| Capability {
+                        value,
+                        description: record.odata_description(),
+                    })
+                } else {
+                    None
+                }
+            })
+            .map(Deletable::new)
     }
 }
 
@@ -168,6 +266,12 @@ impl ODataAnnotations for Action {
 }
 
 impl ODataAnnotations for Parameter {
+    fn annotations(&self) -> &Vec<Annotation> {
+        &self.annotations
+    }
+}
+
+impl ODataAnnotations for AnnotationRecord {
     fn annotations(&self) -> &Vec<Annotation> {
         &self.annotations
     }

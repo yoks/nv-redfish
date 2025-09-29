@@ -83,6 +83,7 @@ impl<'a> StructDef<'a> {
 
     /// Generate rust code for the structure.
     pub fn generate_read(&self, tokens: &mut TokenStream, config: &Config) {
+        #[derive(PartialEq, Eq)]
         enum ImplOdataType {
             Root,
             Child,
@@ -168,7 +169,6 @@ impl<'a> StructDef<'a> {
                         #[inline]
                         fn etag(&self) -> &Option<ODataETag> { &self.#odata_etag }
                     }
-                    impl #top::Expandable for #name {}
                 });
             }
             ImplOdataType::Child => {
@@ -179,10 +179,13 @@ impl<'a> StructDef<'a> {
                         #[inline]
                         fn etag(&self) -> &Option<ODataETag> { self.base.etag() }
                     }
-                    impl #top::Expandable for #name {}
                 });
             }
             ImplOdataType::None => (),
+        }
+
+        if impl_odata_type != ImplOdataType::None {
+            self.generate_entity_type_traits(tokens, config);
         }
 
         if !actions.is_empty() {
@@ -235,7 +238,7 @@ impl<'a> StructDef<'a> {
         let name = self.name.for_update();
         tokens.extend([quote! {
             #[doc = #comment]
-            #[derive(Serialize, Debug)]
+            #[derive(Serialize, Debug, Default)]
             pub struct #name
         }]);
 
@@ -422,6 +425,20 @@ impl<'a> StructDef<'a> {
         }
         content.extend(quote! { #[serde(rename=#rename)] });
         content.extend(quote! { pub #name: Option<#top::Action<#typename, #ret_type>>, });
+    }
+
+    fn generate_entity_type_traits(&self, tokens: &mut TokenStream, config: &Config) {
+        let name = self.name;
+        let top = &config.top_module_alias;
+        tokens.extend(quote! {
+            impl #top::Expandable for #name {}
+        });
+        if self.odata.updatable.is_some_and(|v| v.inner().value) {
+            let update_name = self.name.for_update();
+            tokens.extend(quote! {
+                impl #top::Updatable<#update_name> for #name {}
+            });
+        }
     }
 
     fn generate_action_function(content: &mut TokenStream, a: &Action, config: &Config) {

@@ -98,6 +98,15 @@ pub fn prune_entity_type_inheritance<'a>(input: Compiled<'a>) -> Compiled<'a> {
                         if odata.long_description.is_none() {
                             odata.long_description = parent.odata.long_description;
                         }
+                        if odata.insertable.is_none() {
+                            odata.insertable = parent.odata.insertable;
+                        }
+                        if odata.updatable.is_none() {
+                            odata.updatable = parent.odata.updatable;
+                        }
+                        if odata.deletable.is_none() {
+                            odata.deletable = parent.odata.deletable;
+                        }
                     } else {
                         break;
                     }

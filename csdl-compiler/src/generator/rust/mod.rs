@@ -160,6 +160,7 @@ impl<'a> RustGenerator<'a> {
             use nv_redfish::{
                 EntityType,
                 Expandable,
+                Updatable,
                 Bmc,
                 Empty,
                 ActionError,
