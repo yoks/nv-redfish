@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::compiler::odata::MustHaveId;
 use crate::compiler::OData;
 use crate::compiler::QualifiedName;
-use crate::compiler::odata::MustHaveId;
 use crate::edmx::EnumMember as EdmxEnumMember;
 use crate::edmx::EnumMemberName;
 use crate::edmx::EnumUnderlyingType;

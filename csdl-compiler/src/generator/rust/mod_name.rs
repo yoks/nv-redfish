@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::edmx::attribute_values::SimpleIdentifier;
-use heck::AsSnakeCase;
+use crate::generator::casemungler;
 use proc_macro2::Ident;
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
@@ -46,7 +46,7 @@ impl ToTokens for ModName<'_> {
 
 impl Display for ModName<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        AsSnakeCase(self.0).fmt(f)
+        f.write_str(&casemungler::camel_to_snake(self.0.inner()))
     }
 }
 

@@ -16,10 +16,10 @@
 //! Types defined in 17 Attribute Values
 
 use crate::edmx::QualifiedTypeName;
-use serde::Deserialize;
-use serde::Deserializer;
 use serde::de::Error as DeError;
 use serde::de::Visitor;
+use serde::Deserialize;
+use serde::Deserializer;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;

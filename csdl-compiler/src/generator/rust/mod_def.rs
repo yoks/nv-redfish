@@ -20,6 +20,7 @@ use crate::compiler::EntityType;
 use crate::compiler::EnumType;
 use crate::compiler::IsCreatable;
 use crate::compiler::TypeDefinition;
+use crate::generator::rust::struct_def::GenerateType;
 use crate::generator::rust::Config;
 use crate::generator::rust::EnumDef;
 use crate::generator::rust::Error;
@@ -27,7 +28,6 @@ use crate::generator::rust::ModName;
 use crate::generator::rust::StructDef;
 use crate::generator::rust::TypeDef;
 use crate::generator::rust::TypeName;
-use crate::generator::rust::struct_def::GenerateType;
 use proc_macro2::Delimiter;
 use proc_macro2::Group;
 use proc_macro2::Ident;
@@ -37,8 +37,8 @@ use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use proc_macro2::TokenTree;
 use quote::quote;
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::iter::repeat_n;
 
 #[derive(Default, Debug)]

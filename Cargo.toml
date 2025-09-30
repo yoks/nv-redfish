@@ -22,7 +22,6 @@ documentation = "TBD"
 [workspace.dependencies]
 clap = { version = "4.5" }
 clap_derive = { version = "4.5" }
-heck = { version = "0.5" }
 http = {version = "1.3"}
 glob = { version = "0.3" }
 prettyplease = { version = "0.2" }
@@ -39,4 +38,5 @@ url = { version = "2.5" }
 # Dev
 tokio = "1"
 tokio-test = "0.4"
-wiremock = "0.6"
+# had to use 0.6.4 since it works with 2018 edition (2024 needs extra work) 
+wiremock = "0.6.4"

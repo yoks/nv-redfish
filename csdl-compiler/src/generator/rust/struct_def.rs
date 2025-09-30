@@ -24,19 +24,19 @@ use crate::compiler::Property;
 use crate::compiler::PropertyType;
 use crate::compiler::QualifiedName;
 use crate::compiler::TypeClass;
+use crate::generator::rust::doc::format_and_generate as doc_format_and_generate;
 use crate::generator::rust::ActionName;
 use crate::generator::rust::Config;
 use crate::generator::rust::Error;
 use crate::generator::rust::FullTypeName;
 use crate::generator::rust::StructFieldName;
 use crate::generator::rust::TypeName;
-use crate::generator::rust::doc::format_and_generate as doc_format_and_generate;
 use proc_macro2::Ident;
 use proc_macro2::Literal;
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
-use quote::ToTokens as _;
 use quote::quote;
+use quote::ToTokens as _;
 
 #[derive(Debug)]
 pub enum GenerateType {

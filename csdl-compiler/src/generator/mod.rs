@@ -15,3 +15,6 @@
 
 /// Generator of rust code.
 pub mod rust;
+
+/// manipulate strings to produce patterns suitable for different languages (e.g, `CamelCase` to `snake_case` conversion)
+pub mod casemungler;

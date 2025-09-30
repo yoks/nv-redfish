@@ -15,10 +15,10 @@
 
 use std::sync::Arc;
 
+use nv_redfish::http::ExpandQuery;
 use nv_redfish::Bmc;
 use nv_redfish::Expandable;
 use nv_redfish::ODataId;
-use nv_redfish::http::ExpandQuery;
 use redfish_std::redfish::service_root::ServiceRoot;
 use serde::Deserialize;
 use serde::Serialize;
@@ -547,7 +547,7 @@ async fn main() -> Result<(), Error> {
     let chassis = chassis_members.iter().next().unwrap().get(&bmc).await?;
 
     let all_devices = &chassis
-        .pc_ie_devices
+        .pcie_devices
         .as_ref()
         .unwrap()
         .get(&bmc)
@@ -557,7 +557,7 @@ async fn main() -> Result<(), Error> {
         let function_handles = &device
             .get(&bmc)
             .await?
-            .pc_ie_functions
+            .pcie_functions
             .as_ref()
             .unwrap()
             .get(&bmc)

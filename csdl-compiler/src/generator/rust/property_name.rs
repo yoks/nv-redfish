@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::edmx::PropertyName as EdmxPropertyName;
-use heck::AsSnakeCase;
+use crate::generator::casemungler;
 use proc_macro2::Ident;
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
@@ -59,8 +59,8 @@ impl ToTokens for StructFieldName<'_> {
 impl Display for StructFieldName<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            Self::Property(v) => AsSnakeCase(v.inner()).fmt(f),
-            Self::Parameter(v) => AsSnakeCase(v.inner()).fmt(f),
+            Self::Property(v) => f.write_str(&casemungler::camel_to_snake(v.inner())),
+            Self::Parameter(v) => f.write_str(&casemungler::camel_to_snake(v.inner())),
         }
     }
 }

@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use csdl_compiler::Error;
-use csdl_compiler::commands::Commands;
 use csdl_compiler::commands::process_command;
+use csdl_compiler::commands::Commands;
+use csdl_compiler::Error;
 use glob::glob;
 use std::env::var;
 use std::path::PathBuf;

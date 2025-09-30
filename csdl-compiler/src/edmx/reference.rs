@@ -15,9 +15,9 @@
 
 use serde::Deserialize;
 
-use crate::edmx::ValidateError;
 use crate::edmx::include::Include;
 use crate::edmx::include_annotations::IncludeAnnotations;
+use crate::edmx::ValidateError;
 
 /// 3.3 Element edmx:Reference
 #[derive(Debug, Deserialize)]

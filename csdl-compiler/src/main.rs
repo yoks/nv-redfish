@@ -14,9 +14,9 @@
 // limitations under the License.
 
 use clap::Parser;
-use csdl_compiler::Error;
-use csdl_compiler::commands::Commands;
 use csdl_compiler::commands::process_command;
+use csdl_compiler::commands::Commands;
+use csdl_compiler::Error;
 
 /// Compiler CLI.
 #[derive(Parser, Debug)]

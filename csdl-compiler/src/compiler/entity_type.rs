@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::compiler::odata::MustHaveId;
 use crate::compiler::Compiled;
 use crate::compiler::Context;
 use crate::compiler::Error;
@@ -24,9 +25,8 @@ use crate::compiler::PropertiesManipulation;
 use crate::compiler::Property;
 use crate::compiler::QualifiedName;
 use crate::compiler::Stack;
-use crate::compiler::odata::MustHaveId;
-use crate::edmx::EntityType as EdmxEntityType;
 use crate::edmx::entity_type::Key;
+use crate::edmx::EntityType as EdmxEntityType;
 
 #[derive(Debug)]
 pub struct EntityType<'a> {

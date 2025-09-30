@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use crate::compiler::Error as CompileError;
-use crate::edmx::ValidateError;
 use crate::edmx::attribute_values::Error as AttributeValuesError;
+use crate::edmx::ValidateError;
 use crate::generator::rust::Error as GenerateError;
 use std::error::Error as StdError;
 use std::fmt::Display;

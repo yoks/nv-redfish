@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::edmx::schema::DeSchema;
 use crate::edmx::Schema;
 use crate::edmx::ValidateError;
-use crate::edmx::schema::DeSchema;
 use serde::Deserialize;
 
 /// 3.2 Element edmx:DataServices

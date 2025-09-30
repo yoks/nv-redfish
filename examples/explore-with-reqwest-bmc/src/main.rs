@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use nv_redfish::Expandable;
-use nv_redfish::ODataId;
 use nv_redfish::bmc::BmcCredentials;
 use nv_redfish::http::BmcReqwestError;
 use nv_redfish::http::ExpandQuery;
 use nv_redfish::http::HttpBmc;
 use nv_redfish::http::ReqwestClient;
 use nv_redfish::http::ReqwestClientParams;
+use nv_redfish::Expandable;
+use nv_redfish::ODataId;
 use url::Url;
 
 #[tokio::main]
@@ -49,7 +49,7 @@ async fn main() -> Result<(), BmcReqwestError> {
     let chassis = chassis_members.iter().next().unwrap().get(&bmc).await?;
 
     let all_devices = &chassis
-        .pc_ie_devices
+        .pcie_devices
         .as_ref()
         .unwrap()
         .get(&bmc)
@@ -57,7 +57,7 @@ async fn main() -> Result<(), BmcReqwestError> {
         .members;
 
     for device in all_devices {
-        if let Some(nav_prop) = &device.get(&bmc).await?.pc_ie_functions {
+        if let Some(nav_prop) = &device.get(&bmc).await?.pcie_functions {
             let function_handles = nav_prop.get(&bmc).await?;
             for function_handle in &function_handles.members {
                 let _function = function_handle.get(&bmc).await?;

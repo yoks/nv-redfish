@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::edmx::ValidateError;
 use crate::edmx::data_services::DataServices;
 use crate::edmx::data_services::DeDataServices;
 use crate::edmx::reference::DeReference;
 use crate::edmx::reference::Reference;
+use crate::edmx::ValidateError;
 use serde::Deserialize;
 
 /// 3.1 Element edmx:Edmx

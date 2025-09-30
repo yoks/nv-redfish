@@ -24,7 +24,6 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::hash::Hash;
 
-
 /// A cache entry with reference bit for clock algorithm
 #[derive(Debug)]
 struct CacheEntry<K, V> {
@@ -101,7 +100,7 @@ impl<K: Clone> GhostList<K> {
         self.tail = Some(slot);
         self.entries[slot] = Some(new_node);
         self.size += 1;
-        
+
         Some((slot, evicted_key))
     }
 
@@ -358,7 +357,7 @@ where
             // Line 8: elseif ((|T1| + |T2| + |B1| + |B2| = 2c) and (x is not in B1 ∪ B2)) then
             else if !self.is_in_b1_or_b2(&key)
                 && (self.t1.len() + self.t2.len() + self.b1.len() + self.b2.len() == 2 * self.c)
-            {   
+            {
                 // Line 9: Discard the LRU page in B2
                 if let Some(discarded_key) = self.b2.remove_lru() {
                     self.index.remove(&discarded_key);
@@ -419,20 +418,20 @@ where
     }
 
     /// Line 5: replace() - exact implementation of pseudocode
-    fn replace(&mut self) -> Option<V>{
+    fn replace(&mut self) -> Option<V> {
         // Line 23: repeat
         loop {
             // Line 24: if (|T1| >= max(1, p)) then
             if self.t1.len() >= 1.max(self.p) {
                 if let Some(found) = self.try_replace_from_t1() {
-                    return Some(found)
+                    return Some(found);
                 } else {
                     self.t1.advance_hand();
                 }
             } else {
                 // Line 31: else
                 if let Some(found) = self.try_replace_from_t2() {
-                    return Some(found)
+                    return Some(found);
                 } else {
                     self.t2.advance_hand();
                 }
@@ -450,7 +449,8 @@ where
                 // Line 26: found = 1;
                 // Line 27: Demote the head page in T1 and make it the MRU page in B1
                 if let Some(entry) = self.t1.remove_head_page() {
-                    if let Some((b1_slot, evicted_key)) = self.b1.insert_at_tail(entry.key.clone()) {
+                    if let Some((b1_slot, evicted_key)) = self.b1.insert_at_tail(entry.key.clone())
+                    {
                         // Clean up evicted key from index if any
                         if let Some(evicted) = evicted_key {
                             self.index.remove(&evicted);
@@ -475,7 +475,7 @@ where
     }
 
     /// Try to replace from T2, returns true if replacement was successful
-    fn try_replace_from_t2(&mut self) -> Option<V>  {
+    fn try_replace_from_t2(&mut self) -> Option<V> {
         if let Some(head_entry) = self.t2.get_head_page() {
             // Line 32: if (the page reference bit of head page in T2 is 0), then
             // ref_bit == false
@@ -483,7 +483,8 @@ where
                 // Line 33: found = 1;
                 // Line 34: Demote the head page in T2 and make it the MRU page in B2
                 if let Some(entry) = self.t2.remove_head_page() {
-                    if let Some((b2_slot, evicted_key)) = self.b2.insert_at_tail(entry.key.clone()) {
+                    if let Some((b2_slot, evicted_key)) = self.b2.insert_at_tail(entry.key.clone())
+                    {
                         // Clean up evicted key from index if any
                         if let Some(evicted) = evicted_key {
                             self.index.remove(&evicted);
@@ -579,7 +580,7 @@ mod tests {
             assert_car_invariants(cache);
         }
     }
-    
+
     fn assert_car_invariants<K, V>(cache: &CarCache<K, V>)
     where
         K: Eq + std::hash::Hash + Clone,
@@ -935,31 +936,34 @@ mod tests {
     fn test_cache_adaptation_bounds() {
         let mut cache = CarCache::new(10);
         let mut p_values = Vec::new();
-        
+
         let working_set = (0..15).map(|i| format!("item_{}", i)).collect::<Vec<_>>();
-        
+
         for i in 0..8 {
             cache.put(working_set[i].clone(), i);
         }
-        
+
         for i in 0..4 {
             cache.get(&working_set[i]);
         }
-        
+
         p_values.push(cache.adaptation_parameter());
         for cycle in 0..3 {
             for (round, item) in working_set.iter().enumerate() {
                 cache.put(item.clone(), cycle * 100 + round);
-                
+
                 let p_after = cache.adaptation_parameter();
                 p_values.push(p_after);
 
                 assert!(
                     p_after <= cache.capacity(),
                     "Adaptation parameter {} exceeds capacity {} at cycle {} round {}",
-                    p_after, cache.capacity(), cycle, round
+                    p_after,
+                    cache.capacity(),
+                    cycle,
+                    round
                 );
-                
+
                 if round % 3 == 0 && round > 0 {
                     cache.get(&working_set[round - 1]);
                 }
@@ -967,27 +971,37 @@ mod tests {
         }
 
         for (i, &p) in p_values.iter().enumerate() {
-            assert!(p <= cache.capacity(), "p={} > c={} at step {}", p, cache.capacity(), i);
+            assert!(
+                p <= cache.capacity(),
+                "p={} > c={} at step {}",
+                p,
+                cache.capacity(),
+                i
+            );
         }
 
         let p_changed = p_values.iter().any(|&p| p != p_values[0]);
-        assert!(p_changed, "NOTE: Adaptation parameter remained at {} (may need different workload)", p_values[0]);
+        assert!(
+            p_changed,
+            "NOTE: Adaptation parameter remained at {} (may need different workload)",
+            p_values[0]
+        );
         assert_eq!(cache.adaptation_parameter(), 5);
     }
 
     #[test]
     fn test_put_return_values_eviction() {
         let mut cache = CarCache::new(3);
-        
+
         assert_eq!(cache.put("a", 1), None);
         assert_eq!(cache.put("b", 2), None);
         assert_eq!(cache.put("c", 3), None);
-        
+
         assert_eq!(cache.put("d", 4), Some(1));
         assert_eq!(cache.put("e", 5), Some(2));
-        
-        assert_eq!(cache.get(&"a"), None);  
-        assert_eq!(cache.get(&"b"), None); 
+
+        assert_eq!(cache.get(&"a"), None);
+        assert_eq!(cache.get(&"b"), None);
         assert_eq!(cache.get(&"c"), Some(&3));
         assert_eq!(cache.get(&"d"), Some(&4));
         assert_eq!(cache.get(&"e"), Some(&5));
@@ -996,17 +1010,16 @@ mod tests {
     #[test]
     fn test_put_return_values_t1_t2_eviction() {
         let mut cache = CarCache::new(4);
-        
+
         assert_eq!(cache.put("t1_a", 1), None);
         assert_eq!(cache.put("t1_b", 2), None);
-        
+
         cache.get(&"t1_a");
-        cache.get(&"t1_b"); 
-        
+        cache.get(&"t1_b");
+
         assert_eq!(cache.put("t1_c", 3), None);
         assert_eq!(cache.put("t1_d", 4), None);
-        
-                
+
         assert_eq!(cache.put("new1", 10), Some(3));
     }
 
@@ -1058,70 +1071,90 @@ mod tests {
     #[test]
     fn test_car_invariant_i6_directory_full_cache_full() {
         let mut cache = CarCache::new(6);
-        
+
         create_t1_t2_mix(&mut cache, "initial", 6);
-        
 
         for i in 6..15 {
             cache.put(format!("evict_{}", i), i);
             assert_car_invariants(&cache);
-            
+
             if i % 2 == 0 {
                 cache.get(&format!("evict_{}", i));
                 assert_car_invariants(&cache);
             }
         }
-        
+
         create_ghost_hits(&mut cache, "initial", 0..3, 1000);
-        
+
         let (t1_size, t2_size, _b1_size, _b2_size, total_dir) = verify_directory_state(&cache);
-        
+
         if total_dir >= cache.capacity() {
             assert_eq!(
-                t1_size + t2_size, 
+                t1_size + t2_size,
                 cache.capacity(),
-                "I6: When directory size {} ≥ c={}, cache should be full but |T1|+|T2|={}", 
-                total_dir, cache.capacity(), t1_size + t2_size
+                "I6: When directory size {} ≥ c={}, cache should be full but |T1|+|T2|={}",
+                total_dir,
+                cache.capacity(),
+                t1_size + t2_size
             );
         } else {
-            panic!("Test setup failed: Directory size {} should be ≥ c={}", total_dir, cache.capacity());
+            panic!(
+                "Test setup failed: Directory size {} should be ≥ c={}",
+                total_dir,
+                cache.capacity()
+            );
         }
     }
 
     #[test]
     fn test_car_invariant_i7_cache_remains_full() {
         let mut cache = CarCache::new(8);
-        
+
         for i in 0..8 {
             cache.put(format!("fill_{}", i), i);
             assert_car_invariants(&cache);
         }
-        
+
         assert_eq!(cache.len(), cache.capacity(), "Cache should be at capacity");
-        
+
         for round in 0..20 {
             cache.put(format!("new_{}", round), round + 100);
             assert_car_invariants(&cache);
-            assert_eq!(cache.len(), cache.capacity(), 
-                      "I7: Cache should remain full after adding new item in round {}", round);
+            assert_eq!(
+                cache.len(),
+                cache.capacity(),
+                "I7: Cache should remain full after adding new item in round {}",
+                round
+            );
 
             cache.get(&format!("new_{}", round));
             assert_car_invariants(&cache);
-            assert_eq!(cache.len(), cache.capacity(), 
-                      "I7: Cache should remain full after accessing item in round {}", round);
+            assert_eq!(
+                cache.len(),
+                cache.capacity(),
+                "I7: Cache should remain full after accessing item in round {}",
+                round
+            );
 
             cache.put(format!("new_{}", round), round + 200);
             assert_car_invariants(&cache);
-            assert_eq!(cache.len(), cache.capacity(), 
-                      "I7: Cache should remain full after updating item in round {}", round);
+            assert_eq!(
+                cache.len(),
+                cache.capacity(),
+                "I7: Cache should remain full after updating item in round {}",
+                round
+            );
 
             if round > 5 {
                 cache.put(format!("fill_{}", round % 8), round + 300);
                 assert_car_invariants(&cache);
-                assert_eq!(cache.len(), cache.capacity(), 
-                          "I7: Cache should remain full after B1/B2 hit in round {}", round);
+                assert_eq!(
+                    cache.len(),
+                    cache.capacity(),
+                    "I7: Cache should remain full after B1/B2 hit in round {}",
+                    round
+                );
             }
         }
     }
 }
-

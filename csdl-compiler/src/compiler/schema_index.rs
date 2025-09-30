@@ -158,25 +158,17 @@ mod test {
         .unwrap();
 
         let index = SchemaIndex::build(&schemas);
-        assert!(
-            index
-                .get(&Namespace::new(&"Schema.v1_1_0".parse().unwrap()))
-                .is_some()
-        );
-        assert!(
-            index
-                .get(&Namespace::new(&"Schema.v1_0_0".parse().unwrap()))
-                .is_some()
-        );
-        assert!(
-            index
-                .get(&Namespace::new(&"Schema.v1_2_0".parse().unwrap()))
-                .is_some()
-        );
-        assert!(
-            index
-                .get(&Namespace::new(&"Schema.v1_3_0".parse().unwrap()))
-                .is_none()
-        );
+        assert!(index
+            .get(&Namespace::new(&"Schema.v1_1_0".parse().unwrap()))
+            .is_some());
+        assert!(index
+            .get(&Namespace::new(&"Schema.v1_0_0".parse().unwrap()))
+            .is_some());
+        assert!(index
+            .get(&Namespace::new(&"Schema.v1_2_0".parse().unwrap()))
+            .is_some());
+        assert!(index
+            .get(&Namespace::new(&"Schema.v1_3_0".parse().unwrap()))
+            .is_none());
     }
 }

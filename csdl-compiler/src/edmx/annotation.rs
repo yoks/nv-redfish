@@ -15,13 +15,13 @@
 
 //! Deserialization and validation of Annotations
 
+use crate::edmx::attribute_values::Error as AttributeValuesError;
 use crate::edmx::EnumMemberName;
 use crate::edmx::QualifiedTypeName;
-use crate::edmx::attribute_values::Error as AttributeValuesError;
-use serde::Deserialize;
-use serde::Deserializer;
 use serde::de::Error as DeError;
 use serde::de::Visitor;
+use serde::Deserialize;
+use serde::Deserializer;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;

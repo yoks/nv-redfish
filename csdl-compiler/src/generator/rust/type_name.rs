@@ -13,10 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::edmx::attribute_values::SimpleIdentifier;
 use crate::edmx::ActionName as EdmxActionName;
 use crate::edmx::ParameterName;
-use crate::edmx::attribute_values::SimpleIdentifier;
-use heck::AsUpperCamelCase;
 use proc_macro2::Ident;
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
@@ -73,7 +72,8 @@ impl ToTokens for TypeName<'_> {
 impl Display for TypeName<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            Self::Qualified(v) => AsUpperCamelCase(v).fmt(f),
+            Self::Qualified(v) => f.write_str(v.inner()),
+
             Self::Action {
                 binding_name,
                 action_name,

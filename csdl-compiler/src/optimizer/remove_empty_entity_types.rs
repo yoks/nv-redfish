@@ -27,9 +27,9 @@ use crate::compiler::MapType as _;
 use crate::compiler::NavProperty;
 use crate::compiler::PropertiesManipulation as _;
 use crate::compiler::QualifiedName;
-use crate::optimizer::Replacements;
 use crate::optimizer::map_types_in_actions;
 use crate::optimizer::replace;
+use crate::optimizer::Replacements;
 
 pub fn remove_empty_entity_types<'a>(input: Compiled<'a>) -> Compiled<'a> {
     let et_replacements = collect_et_replacements(&input);

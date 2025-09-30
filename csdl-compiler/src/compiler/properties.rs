@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::compiler::ensure_type;
+use crate::compiler::redfish::RedfishProperty;
 use crate::compiler::Compiled;
 use crate::compiler::Context;
 use crate::compiler::EntityType;
@@ -23,13 +25,11 @@ use crate::compiler::OData;
 use crate::compiler::QualifiedName;
 use crate::compiler::Stack;
 use crate::compiler::TypeClass;
-use crate::compiler::ensure_type;
-use crate::compiler::redfish::RedfishProperty;
+use crate::edmx::property::Property as EdmxProperty;
+use crate::edmx::property::PropertyAttrs;
 use crate::edmx::NavigationProperty as EdmxNavigationProperty;
 use crate::edmx::PropertyName;
 use crate::edmx::TypeName;
-use crate::edmx::property::Property as EdmxProperty;
-use crate::edmx::property::PropertyAttrs;
 use tagged_types::TaggedType;
 
 /// Combination of all compiled properties and navigation properties.

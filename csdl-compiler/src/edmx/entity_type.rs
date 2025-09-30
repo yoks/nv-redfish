@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::edmx::property::DeNavigationProperty;
 use crate::edmx::Annotation;
 use crate::edmx::LocalTypeName;
 use crate::edmx::Property;
@@ -20,7 +21,6 @@ use crate::edmx::PropertyName;
 use crate::edmx::QualifiedTypeName;
 use crate::edmx::StructuralProperty;
 use crate::edmx::ValidateError;
-use crate::edmx::property::DeNavigationProperty;
 use serde::Deserialize;
 
 /// 8.1 Element edm:EntityType

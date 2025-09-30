@@ -16,18 +16,18 @@
 use crate::compiler::Namespace;
 use crate::edmx::ActionName as EdmxActionName;
 use crate::edmx::ParameterName;
+use crate::generator::casemungler;
 use crate::generator::rust::Config;
 use crate::generator::rust::ModName;
 use crate::generator::rust::TypeName;
-use heck::AsSnakeCase;
 use proc_macro2::Ident;
 use proc_macro2::Punct;
 use proc_macro2::Spacing;
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
+use quote::quote;
 use quote::ToTokens;
 use quote::TokenStreamExt as _;
-use quote::quote;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -58,7 +58,7 @@ impl ToTokens for ActionName<'_> {
 
 impl Display for ActionName<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        AsSnakeCase(self.0.inner()).fmt(f)
+        f.write_str(&casemungler::camel_to_snake(self.0.inner()))
     }
 }
 

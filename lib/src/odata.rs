@@ -31,7 +31,6 @@ impl ODataId {
     }
 }
 
-
 impl From<String> for ODataId {
     fn from(s: String) -> Self {
         ODataId(s)

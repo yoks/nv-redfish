@@ -20,9 +20,9 @@ use crate::generator::rust::TypeName;
 use proc_macro2::Punct;
 use proc_macro2::Spacing;
 use proc_macro2::TokenStream;
+use quote::quote;
 use quote::ToTokens;
 use quote::TokenStreamExt as _;
-use quote::quote;
 
 /// Fully quailified type name for generation of the rust code.
 ///
