@@ -31,17 +31,11 @@ use crate::generator::rust::FullTypeName;
 use crate::generator::rust::StructFieldName;
 use crate::generator::rust::TypeName;
 use crate::generator::rust::doc::format_and_generate as doc_format_and_generate;
-use proc_macro2::Delimiter;
-use proc_macro2::Group;
 use proc_macro2::Ident;
 use proc_macro2::Literal;
-use proc_macro2::Punct;
-use proc_macro2::Spacing;
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
-use proc_macro2::TokenTree;
 use quote::ToTokens as _;
-use quote::TokenStreamExt as _;
 use quote::quote;
 
 #[derive(Debug)]
@@ -163,26 +157,27 @@ impl<'a> StructDef<'a> {
             },
         ]);
 
+        let entity_type_impl = |fn_id_impl, fn_etag_impl| {
+            quote! {
+                impl #top::EntityType for #name {
+                    #[inline] fn id(&self) -> &ODataId { #fn_id_impl }
+                    #[inline] fn etag(&self) -> &Option<ODataETag> { #fn_etag_impl }
+                }
+            }
+        };
+
         match impl_odata_type {
             ImplOdataType::Root => {
-                tokens.extend(quote! {
-                    impl #top::EntityType for #name {
-                        #[inline]
-                        fn id(&self) -> &ODataId { &self.#odata_id }
-                        #[inline]
-                        fn etag(&self) -> &Option<ODataETag> { &self.#odata_etag }
-                    }
-                });
+                tokens.extend(entity_type_impl(
+                    quote! { &self.#odata_id },
+                    quote! { &self.#odata_etag },
+                ));
             }
             ImplOdataType::Child => {
-                tokens.extend(quote! {
-                    impl #top::EntityType for #name {
-                        #[inline]
-                        fn id(&self) -> &ODataId { self.base.id() }
-                        #[inline]
-                        fn etag(&self) -> &Option<ODataETag> { self.base.etag() }
-                    }
-                });
+                tokens.extend(entity_type_impl(
+                    quote! { self.base.id() },
+                    quote! { self.base.etag() },
+                ));
             }
             ImplOdataType::None => (),
         }
@@ -197,9 +192,8 @@ impl<'a> StructDef<'a> {
                 Self::generate_action_function(&mut content, a, config);
             }
             tokens.extend(quote! {
-                impl #name
+                impl #name { #content }
             });
-            tokens.append(TokenTree::Group(Group::new(Delimiter::Brace, content)));
         }
     }
 
@@ -212,40 +206,35 @@ impl<'a> StructDef<'a> {
             }
             let rename = Literal::string(p.name.inner().inner());
             let name = StructFieldName::new_property(p.name);
+            content.extend(quote! {
+                #[serde(rename=#rename)]
+            });
+
             let (class, ptype @ (PropertyType::One(v) | PropertyType::CollectionOf(v))) = &p.ptype;
-            let container = if matches!(ptype, PropertyType::One(_)) {
-                Ident::new("Option", Span::call_site())
-            } else {
-                Ident::new("Vec", Span::call_site())
-            };
-            content.extend([
-                quote! {
-                    #[serde(rename=#rename)]
-                    pub #name: #container
-                },
-                TokenTree::Punct(Punct::new('<', Spacing::Joint)).into(),
-            ]);
+            let mut full_type_name_tokens = TokenStream::new();
             if *class == TypeClass::ComplexType {
                 FullTypeName::new(*v, config)
                     .for_update()
-                    .to_tokens(&mut content);
+                    .to_tokens(&mut full_type_name_tokens);
             } else {
-                FullTypeName::new(*v, config).to_tokens(&mut content);
+                FullTypeName::new(*v, config).to_tokens(&mut full_type_name_tokens);
             }
-            content.extend([
-                TokenTree::Punct(Punct::new('>', Spacing::Joint)),
-                TokenTree::Punct(Punct::new(',', Spacing::Alone)),
-            ]);
+            match ptype {
+                PropertyType::One(_) => content.extend(quote! {
+                    pub #name: Option<#full_type_name_tokens>,
+                }),
+                PropertyType::CollectionOf(_) => content.extend(quote! {
+                    pub #name: Vec<#full_type_name_tokens>,
+                }),
+            }
         }
         let comment = format!(" Update struct corresponding to `{}`", self.name);
         let name = self.name.for_update();
         tokens.extend([quote! {
             #[doc = #comment]
             #[derive(Serialize, Debug, Default)]
-            pub struct #name
+            pub struct #name { #content }
         }]);
-
-        tokens.append(TokenTree::Group(Group::new(Delimiter::Brace, content)));
     }
 
     /// Generate rust code for the create structure.
@@ -311,19 +300,18 @@ impl<'a> StructDef<'a> {
             doc_format_and_generate(self.name, &self.odata),
             quote! {
                 #[derive(Serialize, Debug)]
-                pub struct #name
+                pub struct #name { #content }
             },
         ]);
-        tokens.append(TokenTree::Group(Group::new(Delimiter::Brace, content)));
     }
 
     fn generate_property(content: &mut TokenStream, p: &Property<'_>, config: &Config) {
         content.extend(doc_format_and_generate(p.name, &p.odata));
+        let name = StructFieldName::new_property(p.name);
+        let rename = Literal::string(p.name.inner().inner());
+        let ptype = FullTypeName::new(p.ptype.1.name(), config);
         match p.ptype.1 {
-            PropertyType::One(v) => {
-                let rename = Literal::string(p.name.inner().inner());
-                let name = StructFieldName::new_property(p.name);
-                let ptype = FullTypeName::new(v, config);
+            PropertyType::One(_) => {
                 content.extend(quote! { #[serde(rename=#rename)] });
                 if p.redfish.is_required.into_inner() {
                     content.extend(quote! { pub #name: #ptype,  });
@@ -331,10 +319,7 @@ impl<'a> StructDef<'a> {
                     content.extend(quote! { pub #name: Option<#ptype>, });
                 }
             }
-            PropertyType::CollectionOf(v) => {
-                let rename = Literal::string(p.name.inner().inner());
-                let name = StructFieldName::new_property(p.name);
-                let ptype = FullTypeName::new(v, config);
+            PropertyType::CollectionOf(_) => {
                 if p.redfish.is_required.into_inner() {
                     content.extend(quote! { #[serde(rename=#rename)] });
                 } else {
@@ -352,11 +337,11 @@ impl<'a> StructDef<'a> {
                     return;
                 }
                 content.extend(doc_format_and_generate(p.name, &p.odata));
+                let rename = Literal::string(p.name.inner().inner());
+                let name = StructFieldName::new_property(p.name);
+                let ptype = FullTypeName::new(p.ptype.name(), config);
                 match p.ptype {
-                    PropertyType::One(v) => {
-                        let rename = Literal::string(p.name.inner().inner());
-                        let name = StructFieldName::new_property(p.name);
-                        let ptype = FullTypeName::new(v, config);
+                    PropertyType::One(_) => {
                         content.extend(quote! { #[serde(rename=#rename)] });
                         if p.redfish.is_required.into_inner() {
                             content.extend(quote! { pub #name: NavProperty<#ptype>, });
@@ -364,10 +349,7 @@ impl<'a> StructDef<'a> {
                             content.extend(quote! { pub #name: Option<NavProperty<#ptype>>, });
                         }
                     }
-                    PropertyType::CollectionOf(v) => {
-                        let rename = Literal::string(p.name.inner().inner());
-                        let name = StructFieldName::new_property(p.name);
-                        let ptype = FullTypeName::new(v, config);
+                    PropertyType::CollectionOf(_) => {
                         if p.redfish.is_required.into_inner() {
                             content.extend(quote! { #[serde(rename=#rename)] });
                         } else {
@@ -398,14 +380,13 @@ impl<'a> StructDef<'a> {
 
     fn generate_action_parameter(content: &mut TokenStream, p: &Parameter<'_>, config: &Config) {
         content.extend(doc_format_and_generate(p.name, &p.odata));
+        let rename = Literal::string(p.name.inner().inner());
+        let name = StructFieldName::new_parameter(p.name);
         match p.ptype {
             ParameterType::Type {
                 ptype: ptype @ (PropertyType::One(v) | PropertyType::CollectionOf(v)),
                 class,
             } => {
-                let rename = Literal::string(p.name.inner().inner());
-                let name = StructFieldName::new_parameter(p.name);
-
                 let mut base_type = TokenStream::new();
                 if class == TypeClass::ComplexType {
                     FullTypeName::new(v, config)
@@ -445,15 +426,11 @@ impl<'a> StructDef<'a> {
             }
             ParameterType::Entity(PropertyType::One(_)) => {
                 let top = &config.top_module_alias;
-                let rename = Literal::string(p.name.inner().inner());
-                let name = StructFieldName::new_parameter(p.name);
                 content.extend(quote! { #[serde(rename=#rename)] });
                 content.extend(quote! { pub #name: Option<#top::Reference>, });
             }
             ParameterType::Entity(PropertyType::CollectionOf(_)) => {
                 let top = &config.top_module_alias;
-                let rename = Literal::string(p.name.inner().inner());
-                let name = StructFieldName::new_parameter(p.name);
                 content.extend(quote! { #[serde(rename=#rename, default)] });
                 content.extend(quote! { pub #name: Vec<#top::Reference>, });
             }
