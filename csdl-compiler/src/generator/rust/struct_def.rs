@@ -234,12 +234,13 @@ impl<'a> StructDef<'a> {
                 let full_type = FullTypeName::new(*v, config).for_update(Some(*class));
                 let prop_type = match p.ptype {
                     PropertyType::One(_) => quote! { Option<#full_type> },
-                    PropertyType::Collection(_) => quote! { Vec<#full_type> },
+                    PropertyType::Collection(_) => quote! { Option<Vec<#full_type>> },
                 };
                 let rename = Literal::string(p.name.inner().inner());
                 let name = StructFieldName::new_property(p.name);
                 Some(quote! {
                     #[serde(rename=#rename)]
+                    #[serde(skip_serializing_if = "Option::is_none")]
                     pub #name: #prop_type,
                 })
             } else {
@@ -262,22 +263,33 @@ impl<'a> StructDef<'a> {
             if p.odata.permissions_is_write() {
                 let (class, v) = &p.ptype.inner();
                 let full_type = FullTypeName::new(*v, config).for_update(Some(*class));
-                let prop_type = match p.ptype {
+                let (serde_opt, prop_type) = match p.ptype {
                     PropertyType::One(_) => {
                         if p.redfish.is_required_on_create.into_inner() {
-                            quote! { #full_type }
+                            (quote! {}, quote! { #full_type })
                         } else {
-                            quote! { Option<#full_type> }
+                            (
+                                quote! {#[serde(skip_serializing_if = "Option::is_none")]},
+                                quote! { Option<#full_type> },
+                            )
                         }
                     }
                     PropertyType::Collection(_) => {
-                        quote! { Vec<#full_type> }
+                        if p.redfish.is_required_on_create.into_inner() {
+                            (quote! {}, quote! { Vec<#full_type> })
+                        } else {
+                            (
+                                quote! {#[serde(skip_serializing_if = "Option::is_none")]},
+                                quote! { Option<Vec<#full_type>> },
+                            )
+                        }
                     }
                 };
                 let rename = Literal::string(p.name.inner().inner());
                 let name = StructFieldName::new_property(p.name);
                 Some(quote! {
                     #[serde(rename=#rename)]
+                    #serde_opt
                     pub #name: #prop_type,
                 })
             } else {
@@ -350,7 +362,7 @@ impl<'a> StructDef<'a> {
         match cardinality {
             OneOrCollection::One(_) => quote! { #[serde(rename=#rename)] },
             OneOrCollection::Collection(_) => {
-                if optional.is_some_and(|v| v) {
+                if optional.is_none_or(|v| v) {
                     quote! { #[serde(rename=#rename, default)] }
                 } else {
                     quote! { #[serde(rename=#rename)] }
@@ -367,7 +379,7 @@ impl<'a> StructDef<'a> {
     ) -> TokenStream {
         match cardinality {
             OneOrCollection::One(_) => {
-                if optional.is_some_and(|v| v) {
+                if optional.is_none_or(|v| v) {
                     quote! { Option<#ftype> }
                 } else {
                     quote! { #ftype }

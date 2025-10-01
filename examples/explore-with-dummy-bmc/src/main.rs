@@ -15,10 +15,15 @@
 
 use std::sync::Arc;
 
-use nv_redfish::http::ExpandQuery;
+use nv_redfish::ActionError;
 use nv_redfish::Bmc;
 use nv_redfish::Expandable;
 use nv_redfish::ODataId;
+use nv_redfish::Updatable;
+use nv_redfish::http::ExpandQuery;
+use redfish_oem_contoso::redfish::contoso_turboencabulator_service::ContosoTurboencabulatorServiceUpdate;
+use redfish_oem_contoso::redfish::contoso_turboencabulator_service::TurboencabulatorMode;
+use redfish_std::redfish::resource::ResetType;
 use redfish_std::redfish::service_root::ServiceRoot;
 use serde::Deserialize;
 use serde::Serialize;
@@ -29,7 +34,10 @@ pub enum Error {
     NotFound,
     NetworkError,
     AuthError,
+    NotSupported,
+    CannotFillOem(serde_json::Error),
     ParseError(serde_json::Error),
+    ExpectedField(&'static str),
 }
 
 #[derive(Debug, Default)]
@@ -55,6 +63,12 @@ impl MockBmc {
                       "UUID": "12345678-1234-1234-1234-123456789012",
                       "Chassis": {"@odata.id": "/redfish/v1/Chassis"},
                       "Systems": {"@odata.id": "/redfish/v1/Systems"},
+                      "SessionService": {"@odata.id": "/redfish/v1/SessionService"},
+                      "Managers": {"@odata.id": "/redfish/v1/Managers"},
+                      "Tasks": { "@odata.id": "/redfish/v1/TaskService"},
+                      "EventService": {"@odata.id": "/redfish/v1/EventService"},
+                      "Registries": {"@odata.id": "/redfish/v1/Registries"},
+                      "JsonSchemas": {"@odata.id": "/redfish/v1/JsonSchemas"},
                       "Links": {
                          "Sessions": {"@odata.id": "/redfish/v1/SessionService/Sessions"}
                       },
@@ -75,28 +89,22 @@ impl MockBmc {
                       "Members": [
                           {
                               "@odata.id": "/redfish/v1/Chassis/1"
-                          },
-                          {
-                              "@odata.id": "/redfish/v1/Chassis/2"
                           }
                       ]
                 }"#.to_string()
             },
             "/redfish/v1/Chassis/1" => {
-                let chassis_id = "1";
-                format!(r#"{{
-                   "@odata.id": "/redfish/v1/Chassis/{chassis_id}",
-                   "Id": "{chassis_id}",
-                   "Name": "Chassis {chassis_id}",
+                r#"{
+                   "@odata.id": "/redfish/v1/Chassis/1",
+                   "Id": "1",
+                   "Name": "Chassis 1",
                    "ChassisType": "Rack",
                    "Manufacturer": "NVIDIA",
                    "Model": "DGX-H100",
-                   "SerialNumber": "ABC123-{chassis_id}",
-                   "PCIeDevices": {{
-                       "@odata.id": "/redfish/v1/Chassis/{chassis_id}/PCIeDevices"
-                   }},
-                   "Status": {{"State": "Enabled", "Health": "OK"}}
-                }}"#)
+                   "SerialNumber": "ABC123-1",
+                   "PCIeDevices": { "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices" },
+                   "Status": {"State": "Enabled", "Health": "OK"}
+                }"#.to_string()
             },
             "/redfish/v1/Chassis/1/PCIeDevices" => {
                 r#"{
@@ -114,10 +122,9 @@ impl MockBmc {
             },
             "/redfish/v1/Chassis/1/PCIeDevices/0-24" => {
                 r#"{
-                     "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-24",
+                     "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/0-24",
                      "Id": "0-24",
-                     "Links": {
-                     },
+                     "Links": {},
                      "Manufacturer": "Intel Corporation",
                      "Model": null,
                      "Name": "Sapphire Rapids SATA AHCI Controller",
@@ -131,7 +138,7 @@ impl MockBmc {
                          "HealthRollup": "OK"
                      },
                      "PCIeFunctions": {
-                         "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-24/PCIeFunctions"
+                         "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/0-24/PCIeFunctions"
                      }
                 }"#.to_string()
             },
@@ -139,15 +146,14 @@ impl MockBmc {
                 r##"{
                     "@odata.context": "/redfish/v1/$metadata#PCIeDevice.PCIeDevice",
                     "@odata.etag": "\"1754525527\"",
-                    "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-25",
+                    "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/0-25",
                     "@odata.type": "#PCIeDevice.v1_14_0.PCIeDevice",
                     "AssetTag": null,
                     "Description": "Sapphire Rapids SATA AHCI Controller",
                     "DeviceType": "SingleFunction",
                     "FirmwareVersion": "",
                     "Id": "0-25",
-                    "Links": {
-                    },
+                    "Links": {},
                     "Manufacturer": "Intel Corporation",
                     "Model": null,
                     "Name": "Sapphire Rapids SATA AHCI Controller",
@@ -161,29 +167,29 @@ impl MockBmc {
                         "HealthRollup": "OK"
                     },
                     "PCIeFunctions": {
-                        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-24/PCIeFunctions"
+                        "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/0-24/PCIeFunctions"
                     }
                 }"##.to_string()
             },
-            "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-24/PCIeFunctions" => {
+            "/redfish/v1/Chassis/1/PCIeDevices/0-24/PCIeFunctions" => {
                 r#"{
-                    "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-24/PCIeFunctions",
+                    "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/0-24/PCIeFunctions",
                     "Description": "Collection of PCIeFunctions",
                     "Members": [
                         {
-                            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-24/PCIeFunctions/0-24-0"
+                            "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/0-24/PCIeFunctions/0-24-0"
                         }
                     ],
                     "Members@odata.count": 1,
                     "Name": "PCIeFunction Collection"
                 }"#.to_string()
             },
-            "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-24/PCIeFunctions/0-24-0" => {
+            "/redfish/v1/Chassis/1/PCIeDevices/0-24/PCIeFunctions/0-24-0" => {
                 r#"
                 {
                     "@odata.context": "/redfish/v1/$metadata#PCIeFunction.PCIeFunction",
                     "@odata.etag": "\"1754525529\"",
-                    "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-24/PCIeFunctions/0-24-0",
+                    "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/0-24/PCIeFunctions/0-24-0",
                     "ClassCode": "0x010601",
                     "Description": "Sapphire Rapids SATA AHCI Controller",
                     "DeviceClass": "MassStorageController",
@@ -192,8 +198,7 @@ impl MockBmc {
                     "FunctionId": 0,
                     "FunctionType": "Physical",
                     "Id": "0-24-0",
-                    "Links": {
-                    },
+                    "Links": {},
                     "Name": "Sapphire Rapids SATA AHCI Controller",
                     "RevisionId": "0x11",
                     "Status": {
@@ -213,29 +218,29 @@ impl MockBmc {
                     "Description": "Collection of Computer Systems",
                     "Members": [
                         {
-                            "@odata.id": "/redfish/v1/Systems/System.Embedded.1"
+                            "@odata.id": "/redfish/v1/Systems/1"
                         }
                     ],
                     "Members@odata.count": 1,
                     "Name": "Computer System Collection"
                 }"#.to_string()
             },
-            "/redfish/v1/Systems/System.Embedded.1" => {
+            "/redfish/v1/Systems/1" => {
                 r##"{
                     "@Redfish.Settings": {
                         "@odata.context": "/redfish/v1/$metadata#Settings.Settings",
                         "SettingsObject": {
-                            "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Settings"
+                            "@odata.id": "/redfish/v1/Systems/1/Settings"
                         },
                         "SupportedApplyTimes": [
                             "OnReset"
                         ]
                     },
                     "@odata.context": "/redfish/v1/$metadata#ComputerSystem.ComputerSystem",
-                    "@odata.id": "/redfish/v1/Systems/System.Embedded.1",
+                    "@odata.id": "/redfish/v1/Systems/1",
                     "Actions": {
                         "#ComputerSystem.Reset": {
-                            "target": "/redfish/v1/Systems/System.Embedded.1/Actions/ComputerSystem.Reset",
+                            "target": "/redfish/v1/Systems/1/Actions/ComputerSystem.Reset",
                             "ResetType@Redfish.AllowableValues": [
                                 "On",
                                 "ForceOff",
@@ -250,7 +255,7 @@ impl MockBmc {
                     },
                     "AssetTag": "",
                     "Bios": {
-                        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Bios"
+                        "@odata.id": "/redfish/v1/Systems/1/Bios"
                     },
                     "BiosVersion": "2.5.4",
                     "BootProgress": {
@@ -258,10 +263,10 @@ impl MockBmc {
                     },
                     "Boot": {
                         "BootOptions": {
-                            "@odata.id": "/redfish/v1/Systems/System.Embedded.1/BootOptions"
+                            "@odata.id": "/redfish/v1/Systems/1/BootOptions"
                         },
                         "Certificates": {
-                            "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Boot/Certificates"
+                            "@odata.id": "/redfish/v1/Systems/1/Boot/Certificates"
                         },
                         "BootOrder": [
                             "Boot0000",
@@ -288,7 +293,7 @@ impl MockBmc {
                     },
                     "Description": "Computer System which represents a machine (physical or virtual) and the local resources such as memory, cpu and other devices that can be accessed from that machine.",
                     "EthernetInterfaces": {
-                        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/EthernetInterfaces"
+                        "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces"
                     },
                     "GraphicalConsole": {
                         "ConnectTypesSupported": [
@@ -308,54 +313,15 @@ impl MockBmc {
                     },
                     "HostingRoles": [],
                     "HostingRoles@odata.count": 0,
-                    "Id": "System.Embedded.1",
+                    "Id": "1",
                     "IndicatorLED": "Lit",
                     "IndicatorLED@Redfish.Deprecated": "Please migrate to use LocationIndicatorActive property",
-                    "Links": {
-                        "Chassis": [
-                            {
-                                "@odata.id": "/redfish/v1/Chassis/System.Embedded.1"
-                            }
-                        ],
-                        "Chassis@odata.count": 1,
-                        "CooledBy": [
-                            {
-                                "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Thermal#/Fans/0"
-                            },
-                            {
-                                "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Thermal#/Fans/1"
-                            }
-                        ],
-                        "CooledBy@odata.count": 12,
-                        "ManagedBy": [
-                            {
-                                "@odata.id": "/redfish/v1/Managers/iDRAC.Embedded.1"
-                            }
-                        ],
-                        "ManagedBy@odata.count": 1,
-                        "Oem": {
-                        },
-                        "PoweredBy": [
-                            {
-                                "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Power#/PowerSupplies/0"
-                            },
-                            {
-                                "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Power#/PowerSupplies/1"
-                            }
-                        ],
-                        "PoweredBy@odata.count": 2,
-                        "TrustedComponents": [
-                            {
-                                "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/TrustedComponents/TPM"
-                            }
-                        ],
-                        "TrustedComponents@odata.count": 1
-                    },
+                    "Links": {},
                     "LastResetTime": "2025-06-16T19:47:38-05:00",
                     "LocationIndicatorActive": false,
                     "Manufacturer": "Dell Inc.",
                     "Memory": {
-                        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Memory"
+                        "@odata.id": "/redfish/v1/Systems/1/Memory"
                     },
                     "MemorySummary": {
                         "MemoryMirroring": "System",
@@ -370,29 +336,15 @@ impl MockBmc {
                     "Model": "PowerEdge R760",
                     "Name": "System",
                     "NetworkInterfaces": {
-                        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/NetworkInterfaces"
+                        "@odata.id": "/redfish/v1/Systems/1/NetworkInterfaces"
                     },
                     "Oem": {
                     },
-                    "PCIeDevices": [
-                        {
-                            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-24"
-                        },
-                        {
-                            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/3-0"
-                        }
-                    ],
+                    "PCIeDevices": [],
                     "PCIeDevices@odata.count": 9,
-                    "PCIeFunctions": [
-                        {
-                            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/0-24/PCIeFunctions/0-24-0"
-                        },
-                        {
-                            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/3-0/PCIeFunctions/3-0-0"
-                        }
-                    ],
+                    "PCIeFunctions": [],
                     "PCIeFunctions@odata.count": 12,
-                    "PartNumber": "0C9W19A03",
+                    "PartNumber": "ABC123-1-1",
                     "PowerState": "On",
                     "ProcessorSummary": {
                         "Count": 2,
@@ -407,24 +359,18 @@ impl MockBmc {
                         "Status@Redfish.Deprecated": "Please migrate to use Status in the individual Processor resources",
                         "ThreadingEnabled": true
                     },
-                    "Processors": {
-                        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Processors"
-                    },
+                    "Processors": { "@odata.id": "/redfish/v1/Systems/1/Processors" },
                     "SKU": "5D68144",
-                    "SecureBoot": {
-                        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/SecureBoot"
-                    },
-                    "SerialNumber": "MXWSJ0045G00VJ",
-                    "SimpleStorage": {
-                        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/SimpleStorage"
-                    },
+                    "SecureBoot": { "@odata.id": "/redfish/v1/Systems/1/SecureBoot" },
+                    "SerialNumber": "ABC123-1",
+                    "SimpleStorage": { "@odata.id": "/redfish/v1/Systems/1/SimpleStorage" },
                     "Status": {
                         "Health": "OK",
                         "HealthRollup": "OK",
                         "State": "Enabled"
                     },
                     "Storage": {
-                        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage"
+                        "@odata.id": "/redfish/v1/Systems/1/Storage"
                     },
                     "SystemType": "Physical",
                     "TrustedModules": [
@@ -439,7 +385,7 @@ impl MockBmc {
                     "TrustedModules@odata.count": 1,
                     "UUID": "4c4c4544-0044-3610-8038-b5c04f313434",
                     "VirtualMedia": {
-                        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/VirtualMedia"
+                        "@odata.id": "/redfish/v1/Systems/1/VirtualMedia"
                     },
                     "VirtualMediaConfig": {
                         "ServiceEnabled": true
@@ -482,7 +428,7 @@ impl Bmc for MockBmc {
         &self,
         id: &ODataId,
     ) -> Result<Arc<T>, Self::Error> {
-        println!("BMC GET {id}");
+        // println!("BMC GET {id}");
         // In real implementation: async HTTP GET request and JSON deserialization
         let mock_json = self.get_mock_json_for_uri(&id.to_string());
         let result: T = serde_json::from_str(&mock_json).map_err(Error::ParseError)?;
@@ -491,10 +437,15 @@ impl Bmc for MockBmc {
 
     async fn update<V: Sync + Send + Serialize>(
         &self,
-        _id: &ODataId,
-        _v: &V,
+        id: &ODataId,
+        update: &V,
     ) -> Result<(), Self::Error> {
-        todo!("unimplimented")
+        println!(
+            "BMC Update {}: {}",
+            id,
+            serde_json::to_string(update).expect("serializable")
+        );
+        Ok(())
     }
 
     async fn create<
@@ -520,7 +471,19 @@ impl Bmc for MockBmc {
         _action: &nv_redfish::Action<T, R>,
         _params: &T,
     ) -> Result<R, Self::Error> {
-        todo!()
+        //println!(
+        //    "BMC Action {}: {}",
+        //    action.target,
+        //    serde_json::to_string(params).expect("serializable")
+        //);
+        let result: R = serde_json::from_str("").map_err(Error::ParseError)?;
+        Ok(result)
+    }
+}
+
+impl ActionError for Error {
+    fn not_supported() -> Self {
+        Error::NotSupported
     }
 }
 
@@ -536,66 +499,132 @@ async fn main() -> Result<(), Error> {
 
     let service_root = bmc.get_service_root().await?;
 
-    let chassis_members = &service_root
+    let chassis = &service_root
         .chassis
         .as_ref()
-        .unwrap()
+        .ok_or(Error::ExpectedField("chassis"))?
         .get(&bmc)
-        .await?
-        .members;
+        .await?;
 
-    let chassis = chassis_members.iter().next().unwrap().get(&bmc).await?;
+    println!("Discoveried chassis:");
+    for m in &chassis.members {
+        println!("  {}", m.id());
+    }
 
-    let all_devices = &chassis
-        .pcie_devices
-        .as_ref()
-        .unwrap()
-        .get(&bmc)
-        .await?
-        .members;
-    for device in all_devices {
-        let function_handles = &device
-            .get(&bmc)
-            .await?
-            .pcie_functions
+    for chassis in &chassis.members {
+        let chassis = chassis.get(&bmc).await?;
+        println!("Chassis: {} (id: {})", chassis.base.name, chassis.base.id);
+        println!(
+            "  Model: {}",
+            chassis.model.as_ref().unwrap_or(&"unknown".to_string())
+        );
+        let pcie_devices = chassis
+            .pcie_devices
             .as_ref()
-            .unwrap()
+            .ok_or(Error::ExpectedField("pcie_devices"))?
             .get(&bmc)
-            .await?
-            .members;
-        for function_handle in function_handles {
-            let _function = function_handle.get(&bmc).await?;
+            .await?;
+        for pcie_device in &pcie_devices.members {
+            let pcie_device = pcie_device.get(&bmc).await?;
+            println!(
+                "  PCI Device: {} (id: {})",
+                pcie_device.base.name, pcie_device.base.id
+            );
+            let pcie_functions = pcie_device
+                .pcie_functions
+                .as_ref()
+                .ok_or(Error::ExpectedField("pcie_functions"))?
+                .get(&bmc)
+                .await?;
+            for pcie_function in &pcie_functions.members {
+                let pcie_function = pcie_function.get(&bmc).await?;
+                println!(
+                    "    Function: {} (id: {})",
+                    pcie_function.base.name, pcie_function.base.id
+                );
+            }
         }
     }
 
     let systems = &service_root
         .systems
         .as_ref()
-        .unwrap()
+        .ok_or(Error::ExpectedField("systems"))?
         .get(&bmc)
-        .await?
-        .members;
-    println!("{:#?}", systems.iter().next().unwrap().get(&bmc).await?);
+        .await?;
+    let system = systems
+        .members
+        .first()
+        .ok_or(Error::ExpectedField("first system"))?
+        .get(&bmc)
+        .await?;
 
+    println!("System {} (id: {}):", system.base.name, system.base.id);
+    println!(
+        "  BIOS Version: {}",
+        system
+            .bios_version
+            .as_ref()
+            .unwrap_or(&"unknown".to_string())
+    );
+
+    println!("Performing system reset...");
+    system
+        .actions
+        .as_ref()
+        .ok_or(Error::ExpectedField("actions"))?
+        .reset(&bmc, Some(ResetType::ForceRestart))
+        .await?;
+    println!("  Ok!");
+
+    println!("Browse OEM extension:");
     // Oem:
     let contoso_oem: Constoso = serde_json::from_value(
         service_root
             .base
             .oem
             .as_ref()
-            .unwrap()
+            .ok_or(Error::ExpectedField("oem"))?
             .additional_properties
             .clone(),
     )
-    .unwrap();
+    .map_err(Error::CannotFillOem)?;
 
     let turboencabulator_service = contoso_oem
         .oem_root
         .turboencabulator_service
-        .unwrap()
+        .ok_or(Error::ExpectedField("turboencabulator_service"))?
         .get(&bmc)
         .await?;
-    println!("{:#?}", turboencabulator_service);
+
+    println!("  Turboencabulator service:");
+    println!(
+        "    service enabled: {}",
+        turboencabulator_service
+            .service_enabled
+            .as_ref()
+            .map(ToString::to_string)
+            .unwrap_or("unknown".to_string())
+    );
+    println!(
+        "    will government buy: {}",
+        turboencabulator_service
+            .will_government_buy
+            .as_ref()
+            .map(ToString::to_string)
+            .unwrap_or("unknown".to_string())
+    );
+    println!(
+        "    mode: {:?}",
+        turboencabulator_service.turboencabulator_mode
+    );
+
+    let update = ContosoTurboencabulatorServiceUpdate {
+        turboencabulator_mode: Some(TurboencabulatorMode::Turbo),
+        service_enabled: None,
+        status: None,
+    };
+    turboencabulator_service.update(&bmc, &update).await?;
 
     Ok(())
 }
