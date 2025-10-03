@@ -35,7 +35,19 @@ where
         .await
 }
 
-pub fn expect_root(service_name: &str, service_id: &str) -> Expect {
+pub fn expect_root() -> Expect {
+    let root_id = ODataId::service_root();
+    let data_type = "ServiceRoot.v1_0_0.ServiceRoot";
+    Expect::get(
+        root_id.clone(),
+        json!({
+            ODATA_ID: &root_id,
+            ODATA_TYPE: &data_type,
+        }),
+    )
+}
+
+pub fn expect_root_srv(service_name: &str, service_id: &str) -> Expect {
     let root_id = ODataId::service_root();
     let data_type = "ServiceRoot.v1_0_0.ServiceRoot";
     Expect::get(

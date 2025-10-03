@@ -16,13 +16,16 @@
 use nv_redfish::EntityType;
 use nv_redfish::NavProperty;
 use nv_redfish::ODataId;
+use nv_redfish::Updatable;
 use nv_redfish_tests::Bmc;
 use nv_redfish_tests::Error;
 use nv_redfish_tests::Expect;
 use nv_redfish_tests::ODATA_ID;
 use nv_redfish_tests::ODATA_TYPE;
 use nv_redfish_tests::base::expect_root;
+use nv_redfish_tests::base::expect_root_srv;
 use nv_redfish_tests::base::get_service_root;
+use nv_redfish_tests::base::redfish::service_root::ServiceRootUpdate;
 use nv_redfish_tests::json_merge;
 
 use serde_json::json;
@@ -64,12 +67,7 @@ async fn optional_nullable_property_test() -> Result<(), Error> {
     });
     bmc.expect(Expect::get(
         root_id.clone(),
-        json_merge([
-            &root_json,
-            &json!({
-                property_name: null,
-            }),
-        ]),
+        json_merge([&root_json, &json!({ property_name: null })]),
     ));
     let service_root = get_service_root(&bmc).await.map_err(Error::Bmc)?;
     assert_eq!(service_root.optional_nullable, Some(None));
@@ -77,12 +75,7 @@ async fn optional_nullable_property_test() -> Result<(), Error> {
     let value = "Value".to_string();
     bmc.expect(Expect::get(
         root_id.clone(),
-        json_merge([
-            &root_json,
-            &json!({
-                property_name: &value,
-            }),
-        ]),
+        json_merge([&root_json, &json!({ property_name: &value })]),
     ));
     let service_root = get_service_root(&bmc).await.map_err(Error::Bmc)?;
     assert_eq!(service_root.optional_nullable, Some(Some(value)));
@@ -102,7 +95,7 @@ async fn required_non_nullable_property_test() -> Result<(), Error> {
     let service_id = format!("{root_id}/{service_name}");
     let service_data_type = format!("ServiceRoot.v1_0_0.{service_name}");
 
-    bmc.expect(expect_root(service_name, &service_id));
+    bmc.expect(expect_root_srv(service_name, &service_id));
     let service_root = get_service_root(&bmc).await.map_err(Error::Bmc)?;
     assert!(matches!(
         service_root.test_required_service.as_ref(),
@@ -140,7 +133,8 @@ async fn required_nullable_property_test() -> Result<(), Error> {
     let service_name = "TestRequiredNullableService";
     let service_id = format!("{root_id}/{service_name}");
     let service_data_type = "ServiceRoot.v1_0_0.{service_name}";
-    bmc.expect(expect_root(service_name, &service_id));
+    let property_name = "RequiredNullable";
+    bmc.expect(expect_root_srv(service_name, &service_id));
     let service_root = get_service_root(&bmc).await.map_err(Error::Bmc)?;
 
     assert!(matches!(
@@ -155,12 +149,7 @@ async fn required_nullable_property_test() -> Result<(), Error> {
 
     bmc.expect(Expect::get(
         &service_id,
-        json_merge([
-            &service_tpl,
-            &json!({
-                "RequiredNullable": null,
-            }),
-        ]),
+        json_merge([&service_tpl, &json!({ property_name: null })]),
     ));
     let service = service_root
         .test_required_nullable_service
@@ -174,12 +163,7 @@ async fn required_nullable_property_test() -> Result<(), Error> {
     let value = "SomeValue".to_string();
     bmc.expect(Expect::get(
         service_id.clone(),
-        json_merge([
-            &service_tpl,
-            &json!({
-                "RequiredNullable": &value,
-            }),
-        ]),
+        json_merge([&service_tpl, &json!({ property_name: &value })]),
     ));
     let service = service.refresh(&bmc).await.map_err(Error::Bmc)?;
     assert_eq!(service.required_nullable, Some(value));
@@ -187,4 +171,119 @@ async fn required_nullable_property_test() -> Result<(), Error> {
     bmc.expect(Expect::get(service_id.clone(), &service_tpl));
     assert!(service.refresh(&bmc).await.map_err(Error::Bmc).is_err());
     Ok(())
+}
+
+// Check that nullable optional property is represent by
+// Option<Option<T>> and implementation can distinguish `"field:
+// null"` from absense of `field`.
+#[test]
+async fn required_collection_property_test() -> Result<(), Error> {
+    let bmc = Bmc::default();
+    let root_id = ODataId::service_root();
+    let service_name = "TestRequiredCollectionService";
+    let service_id = format!("{root_id}/{service_name}");
+    let service_data_type = "ServiceRoot.v1_0_0.{service_name}";
+    let property_name = "RequiredCollection";
+    bmc.expect(expect_root_srv(service_name, &service_id));
+    let service_root = get_service_root(&bmc).await.map_err(Error::Bmc)?;
+
+    assert!(matches!(
+        service_root.test_required_collection_service.as_ref(),
+        Some(NavProperty::Reference(_))
+    ));
+
+    let service_tpl = json!({
+        ODATA_ID: &service_id,
+        ODATA_TYPE: &service_data_type,
+    });
+
+    let empty = Vec::<String>::new();
+    bmc.expect(Expect::get(
+        &service_id,
+        json_merge([&service_tpl, &json!({ property_name: empty })]),
+    ));
+    let service = service_root
+        .test_required_collection_service
+        .as_ref()
+        .ok_or(Error::ExpectedProperty("test_nullable_required_service"))?
+        .get(&bmc)
+        .await
+        .map_err(Error::Bmc)?;
+    assert_eq!(service.required_collection, empty);
+
+    let value = vec!["SomeValue1".to_string(), "SomeValue2".to_string()];
+    bmc.expect(Expect::get(
+        service_id.clone(),
+        json_merge([&service_tpl, &json!({ property_name: value })]),
+    ));
+    let service = service.refresh(&bmc).await.map_err(Error::Bmc)?;
+    assert_eq!(service.required_collection, value);
+
+    Ok(())
+}
+
+// Check that creation of update for property.
+#[test]
+async fn update_property_test() -> Result<(), Error> {
+    let bmc = Bmc::default();
+    let data_type = "ServiceRoot.v1_0_0.ServiceRoot";
+    let updatable_name = "Updatable";
+    let write_only_name = "WriteOnly";
+    let root_id = ODataId::service_root();
+    let root_json = json!({
+        ODATA_ID: &root_id,
+        ODATA_TYPE: &data_type,
+    });
+    bmc.expect(expect_root());
+    let service_root = get_service_root(&bmc).await.map_err(Error::Bmc)?;
+    assert_eq!(service_root.updatable, None);
+
+    let value = "Value".to_string();
+    bmc.expect(Expect::update(
+        root_id.clone(),
+        json!({ updatable_name: &value }),
+        &json_merge([&root_json, &json!({ updatable_name: &value })]),
+    ));
+    let service_root = service_root
+        .update(
+            &bmc,
+            &ServiceRootUpdate {
+                // Here we actually checks that update struct doesn't include:
+                // 1. read-only fields (like redfish_version)
+                // 2. fields of read-only complex types (like read_only_complex)
+                //
+                // If this code compiles then check passed.
+                updatable: Some(value.clone()),
+                write_only: None,
+            },
+        )
+        .await
+        .map_err(Error::Bmc)?;
+    assert_eq!(service_root.updatable, Some(value));
+
+    // Update write only:
+    let value = "Value".to_string();
+    bmc.expect(Expect::update(
+        root_id.clone(),
+        json!({ write_only_name: &value }),
+        &json_merge([&root_json, &json!({})]),
+    ));
+    service_root
+        .update(
+            &bmc,
+            &ServiceRootUpdate {
+                updatable: None,
+                write_only: Some(value.clone()),
+            },
+        )
+        .await
+        .map_err(Error::Bmc)?;
+    Ok(())
+}
+
+// Check that write only is not generated in read structures.
+#[test]
+async fn no_write_only_in_read_struct() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compile-fails/no-write-only-in-read.rs");
 }

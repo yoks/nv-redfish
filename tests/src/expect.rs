@@ -26,12 +26,25 @@ pub enum Expect {
         id: ODataId,
         response: serde_json::Value,
     },
+    /// Expectation of get of secific URL
+    Update {
+        id: ODataId,
+        request: serde_json::Value,
+        response: serde_json::Value,
+    },
 }
 
 impl Expect {
     pub fn get(uri: impl Display, response: impl Display) -> Self {
         Expect::Get {
             id: uri.to_string().into(),
+            response: serde_json::from_str(&response.to_string()).expect("invalid json"),
+        }
+    }
+    pub fn update(uri: impl Display, request: impl Display, response: impl Display) -> Self {
+        Expect::Update {
+            id: uri.to_string().into(),
+            request: serde_json::from_str(&request.to_string()).expect("invalid json"),
             response: serde_json::from_str(&response.to_string()).expect("invalid json"),
         }
     }

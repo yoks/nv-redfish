@@ -33,6 +33,7 @@ pub enum Error {
     NothingIsExpected,
     BadResponseJson(JsonError),
     UnexpectedGet(ODataId, Expect),
+    UnexpectedUpdate(ODataId, String, Expect),
 }
 
 impl Error {
@@ -96,10 +97,31 @@ impl NvRedfishBmc for Bmc {
         R: Sync + Send + Sized + for<'a> serde::Deserialize<'a>,
     >(
         &self,
-        _id: &ODataId,
-        _update: &V,
+        in_id: &ODataId,
+        update: &V,
     ) -> Result<R, Self::Error> {
-        todo!("unimplimented")
+        let expect = self
+            .expect
+            .lock()
+            .map_err(Error::mutex_lock)?
+            .pop_front()
+            .ok_or(Error::NothingIsExpected)?;
+        let in_request = serde_json::to_value(update).expect("json serializable");
+        match expect {
+            Expect::Update {
+                id,
+                request,
+                response,
+            } if id == *in_id && request == in_request => {
+                let result: R = serde_json::from_value(response).map_err(Error::BadResponseJson)?;
+                Ok(result)
+            }
+            _ => Err(Error::UnexpectedUpdate(
+                in_id.clone(),
+                in_request.to_string(),
+                expect,
+            )),
+        }
     }
 
     async fn create<
