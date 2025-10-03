@@ -22,9 +22,15 @@ use serde::Serialize;
 use std::marker::PhantomData;
 
 /// Type for `target` field of Action.
-#[derive(Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct ActionTarget(String);
+
+impl ActionTarget {
+    pub fn new(v: String) -> Self {
+        Self(v)
+    }
+}
 
 impl Display for ActionTarget {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {

@@ -63,6 +63,9 @@
           <Annotation Term="OData.Permissions" EnumMember="OData.Permission/Read"/>
         </NavigationProperty>
 
+        <NavigationProperty Name="TestCollection" Nullable="false" Type="ServiceRoot.v1_0_0.TestCollection"/>
+
+        <NavigationProperty Name="TestActionsService" Nullable="false" Type="ServiceRoot.v1_0_0.TestActionsService"/>
       </EntityType>
 
       <EntityType Name="TestRequiredService">
@@ -104,6 +107,41 @@
           <Annotation Term="OData.Permissions" EnumMember="OData.Permission/Read"/>
         </Property>
       </ComplexType>
+
+      <!-- Typical collection EntityType in Redfish -->
+      <EntityType Name="TestCollection">
+        <Annotation Term="Capabilities.InsertRestrictions">
+          <Record><PropertyValue Property="Insertable" Bool="true"/></Record>
+        </Annotation>
+        <Annotation Term="Capabilities.UpdateRestrictions">
+          <Record><PropertyValue Property="Updatable" Bool="false"/></Record>
+        </Annotation>
+        <Annotation Term="Capabilities.DeleteRestrictions">
+          <Record><PropertyValue Property="Deletable" Bool="false"/></Record>
+        </Annotation>
+        <NavigationProperty Name="Members" Type="Collection(ServiceRoot.v1_0_0.TestCollectionMember)">
+          <Annotation Term="OData.Permissions" EnumMember="OData.Permission/Read"/>
+          <Annotation Term="OData.AutoExpandReferences"/>
+          <Annotation Term="Redfish.Required"/>
+        </NavigationProperty>
+      </EntityType>
+
+      <EntityType Name="TestCollectionMember"/>
+
+      <!-- Typical actions in Redfish -->
+      <EntityType Name="TestActionsService">
+        <Property Name="Actions" Type="ServiceRoot.v1_0_0.TestActionsServiceActions" Nullable="false"/>
+      </EntityType>
+
+      <ComplexType Name="TestActionsServiceActions"/>
+      <Action Name="TestAction" IsBound="true">
+        <Parameter Name="TestActionsService" Type="ServiceRoot.v1_0_0.TestActionsServiceActions"/>
+        <Parameter Name="ActionType" Type="ServiceRoot.v1_0_0.ActionType" Nullable="false"/>
+      </Action>
+      <EnumType Name="ActionType">
+        <Member Name="Option1"/>
+        <Member Name="Option2"/>
+      </EnumType>
 
     </Schema>
   </edmx:DataServices>

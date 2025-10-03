@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use nv_redfish::Creatable;
 use nv_redfish::EntityType;
 use nv_redfish::NavProperty;
 use nv_redfish::ODataId;
@@ -25,7 +26,9 @@ use nv_redfish_tests::ODATA_TYPE;
 use nv_redfish_tests::base::expect_root;
 use nv_redfish_tests::base::expect_root_srv;
 use nv_redfish_tests::base::get_service_root;
+use nv_redfish_tests::base::redfish::service_root::ActionType;
 use nv_redfish_tests::base::redfish::service_root::ServiceRootUpdate;
+use nv_redfish_tests::base::redfish::service_root::TestCollectionMemberCreate;
 use nv_redfish_tests::json_merge;
 
 use serde_json::json;
@@ -132,7 +135,7 @@ async fn required_nullable_property_test() -> Result<(), Error> {
     let root_id = ODataId::service_root();
     let service_name = "TestRequiredNullableService";
     let service_id = format!("{root_id}/{service_name}");
-    let service_data_type = "ServiceRoot.v1_0_0.{service_name}";
+    let service_data_type = format!("ServiceRoot.v1_0_0.{service_name}");
     let property_name = "RequiredNullable";
     bmc.expect(expect_root_srv(service_name, &service_id));
     let service_root = get_service_root(&bmc).await.map_err(Error::Bmc)?;
@@ -182,7 +185,7 @@ async fn required_collection_property_test() -> Result<(), Error> {
     let root_id = ODataId::service_root();
     let service_name = "TestRequiredCollectionService";
     let service_id = format!("{root_id}/{service_name}");
-    let service_data_type = "ServiceRoot.v1_0_0.{service_name}";
+    let service_data_type = format!("ServiceRoot.v1_0_0.{service_name}");
     let property_name = "RequiredCollection";
     bmc.expect(expect_root_srv(service_name, &service_id));
     let service_root = get_service_root(&bmc).await.map_err(Error::Bmc)?;
@@ -222,7 +225,7 @@ async fn required_collection_property_test() -> Result<(), Error> {
     Ok(())
 }
 
-// Check that creation of update for property.
+// Check updatable for properties.
 #[test]
 async fn update_property_test() -> Result<(), Error> {
     let bmc = Bmc::default();
@@ -286,4 +289,118 @@ async fn update_property_test() -> Result<(), Error> {
 async fn no_write_only_in_read_struct() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compile-fails/no-write-only-in-read.rs");
+}
+
+// Check that collection provides create method.
+#[test]
+async fn create_collection_member_test() -> Result<(), Error> {
+    let bmc = Bmc::default();
+    let root_id = ODataId::service_root();
+    let collection_name = "TestCollection";
+    let collection_id = format!("{root_id}/{collection_name}");
+    let collection_data_type = format!("ServiceRoot.v1_0_0.{collection_name}");
+    bmc.expect(expect_root_srv(collection_name, &collection_id));
+    let service_root = get_service_root(&bmc).await.map_err(Error::Bmc)?;
+
+    assert!(matches!(
+        service_root.test_collection.as_ref(),
+        Some(NavProperty::Reference(_))
+    ));
+
+    let collection_tpl = json!({
+        ODATA_ID: &collection_id,
+        ODATA_TYPE: &collection_data_type,
+    });
+    bmc.expect(Expect::get(
+        &collection_id,
+        json_merge([&collection_tpl, &json!({ "Members": [] })]),
+    ));
+    let collection = service_root
+        .test_collection
+        .as_ref()
+        .ok_or(Error::ExpectedProperty("test_collection"))?
+        .get(&bmc)
+        .await
+        .map_err(Error::Bmc)?;
+
+    let collection_member_id = format!("{root_id}/{collection_name}/1");
+    let collection_member_data_type = format!("ServiceRoot.v1_0_0.TestCollectionMember");
+    let collection_member_tpl = json!({
+        ODATA_ID: &collection_member_id,
+        ODATA_TYPE: &collection_member_data_type,
+    });
+    bmc.expect(Expect::create(
+        &collection_id,
+        json!({}),
+        collection_member_tpl,
+    ));
+    let member = collection
+        .create(&bmc, &TestCollectionMemberCreate {})
+        .await
+        .map_err(Error::Bmc)?;
+    assert_eq!(member.id().to_string(), collection_member_id);
+    Ok(())
+}
+
+// Check that actions method.
+#[test]
+async fn action_method_test() -> Result<(), Error> {
+    let bmc = Bmc::default();
+    let root_id = ODataId::service_root();
+    let service_name = "TestActionsService";
+    let service_id = format!("{root_id}/{service_name}");
+    let service_data_type = format!("ServiceRoot.v1_0_0.{service_name}");
+    let action_field = format!("#{service_name}.TestAction");
+    let action_target = format!("{root_id}/{service_name}/Actions/{service_name}.TestAction");
+    bmc.expect(expect_root_srv(service_name, &service_id));
+    let service_root = get_service_root(&bmc).await.map_err(Error::Bmc)?;
+
+    assert!(matches!(
+        service_root.test_actions_service.as_ref(),
+        Some(NavProperty::Reference(_))
+    ));
+
+    let service_tpl = json!({
+        ODATA_ID: &service_id,
+        ODATA_TYPE: &service_data_type,
+    });
+    bmc.expect(Expect::get(
+        &service_id,
+        json_merge([
+            &service_tpl,
+            &json!({
+                "Actions": {
+                    action_field: {
+                        "target": action_target
+                    }
+                }
+            }),
+        ]),
+    ));
+    let service = service_root
+        .test_actions_service
+        .as_ref()
+        .ok_or(Error::ExpectedProperty("test_actions_service"))?
+        .get(&bmc)
+        .await
+        .map_err(Error::Bmc)?;
+
+    let service_actions = service
+        .actions
+        .as_ref()
+        .ok_or(Error::ExpectedProperty("actions"))?;
+
+    bmc.expect(Expect::action(
+        &action_target,
+        &json!({
+            "ActionType": "Option1"
+        }),
+        &json!({}),
+    ));
+    service_actions
+        .test_action(&bmc, Some(ActionType::Option1))
+        .await
+        .map_err(Error::Bmc)?;
+
+    Ok(())
 }

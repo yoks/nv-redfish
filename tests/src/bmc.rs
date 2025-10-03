@@ -18,6 +18,7 @@ use nv_redfish::ActionError;
 use nv_redfish::Bmc as NvRedfishBmc;
 use nv_redfish::Expandable;
 use nv_redfish::ODataId;
+use nv_redfish::action::ActionTarget;
 use nv_redfish::http::ExpandQuery;
 use serde::Serialize;
 use serde_json::Error as JsonError;
@@ -34,6 +35,8 @@ pub enum Error {
     BadResponseJson(JsonError),
     UnexpectedGet(ODataId, Expect),
     UnexpectedUpdate(ODataId, String, Expect),
+    UnexpectedCreate(ODataId, String, Expect),
+    UnexpectedAction(ActionTarget, String, Expect),
 }
 
 impl Error {
@@ -129,10 +132,31 @@ impl NvRedfishBmc for Bmc {
         R: Sync + Send + Sized + for<'a> serde::Deserialize<'a>,
     >(
         &self,
-        _id: &ODataId,
-        _create: &V,
+        in_id: &ODataId,
+        create: &V,
     ) -> Result<R, Self::Error> {
-        todo!("unimplimented")
+        let expect = self
+            .expect
+            .lock()
+            .map_err(Error::mutex_lock)?
+            .pop_front()
+            .ok_or(Error::NothingIsExpected)?;
+        let in_request = serde_json::to_value(create).expect("json serializable");
+        match expect {
+            Expect::Create {
+                id,
+                request,
+                response,
+            } if id == *in_id && request == in_request => {
+                let result: R = serde_json::from_value(response).map_err(Error::BadResponseJson)?;
+                Ok(result)
+            }
+            _ => Err(Error::UnexpectedCreate(
+                in_id.clone(),
+                in_request.to_string(),
+                expect,
+            )),
+        }
     }
 
     async fn delete(&self, _id: &ODataId) -> Result<(), Self::Error> {
@@ -144,10 +168,31 @@ impl NvRedfishBmc for Bmc {
         R: Send + Sync + Sized + for<'a> serde::Deserialize<'a>,
     >(
         &self,
-        _action: &nv_redfish::Action<T, R>,
-        _params: &T,
+        action: &nv_redfish::Action<T, R>,
+        params: &T,
     ) -> Result<R, Self::Error> {
-        todo!("unimplimented")
+        let expect = self
+            .expect
+            .lock()
+            .map_err(Error::mutex_lock)?
+            .pop_front()
+            .ok_or(Error::NothingIsExpected)?;
+        let in_request = serde_json::to_value(params).expect("json serializable");
+        match expect {
+            Expect::Action {
+                target,
+                request,
+                response,
+            } if target == action.target && request == in_request => {
+                let result: R = serde_json::from_value(response).map_err(Error::BadResponseJson)?;
+                Ok(result)
+            }
+            _ => Err(Error::UnexpectedAction(
+                action.target.clone(),
+                in_request.to_string(),
+                expect,
+            )),
+        }
     }
 }
 
