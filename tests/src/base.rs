@@ -21,6 +21,7 @@ use crate::Expect;
 use crate::ODATA_ID;
 use crate::ODATA_TYPE;
 use nv_redfish::Bmc as NvRedfishBmc;
+use nv_redfish::NavProperty;
 use nv_redfish::ODataId;
 use redfish::service_root::ServiceRoot;
 use serde_json::json;
@@ -30,9 +31,13 @@ pub async fn get_service_root<Bmc>(bmc: &Bmc) -> Result<Arc<ServiceRoot>, Bmc::E
 where
     Bmc: NvRedfishBmc,
 {
-    nv_redfish::NavProperty::<ServiceRoot>::new_reference(ODataId::service_root())
+    NavProperty::<ServiceRoot>::new_reference(ODataId::service_root())
         .get(bmc)
         .await
+}
+
+pub fn nav_service_root() -> NavProperty<ServiceRoot> {
+    NavProperty::<ServiceRoot>::new_reference(ODataId::service_root())
 }
 
 pub fn expect_root() -> Expect {

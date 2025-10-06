@@ -163,7 +163,7 @@ impl<'a> RustGenerator<'a> {
 
             #[allow(unused_imports)]
             use nv_redfish::{
-                EntityType,
+                EntityTypeRef,
                 Expandable,
                 Updatable,
                 Deletable,

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use nv_redfish::Creatable;
-use nv_redfish::EntityType;
+use nv_redfish::EntityTypeRef;
 use nv_redfish::NavProperty;
 use nv_redfish::ODataId;
 use nv_redfish::Updatable;
@@ -26,6 +26,7 @@ use nv_redfish_tests::ODATA_TYPE;
 use nv_redfish_tests::base::expect_root;
 use nv_redfish_tests::base::expect_root_srv;
 use nv_redfish_tests::base::get_service_root;
+use nv_redfish_tests::base::nav_service_root;
 use nv_redfish_tests::base::redfish::service_root::ActionType;
 use nv_redfish_tests::base::redfish::service_root::ServiceRootUpdate;
 use nv_redfish_tests::base::redfish::service_root::TestCollectionMemberCreate;
@@ -290,6 +291,47 @@ async fn update_property_test() -> Result<(), Error> {
         )
         .await
         .map_err(Error::Bmc)?;
+    Ok(())
+}
+
+// Check updatable for navigation property.
+#[test]
+async fn update_using_nav_property_test() -> Result<(), Error> {
+    let bmc = Bmc::default();
+    let data_type = "ServiceRoot.v1_0_0.ServiceRoot";
+    let updatable_name = "Updatable";
+    let root_id = ODataId::service_root();
+    let root_json = json!({
+        ODATA_ID: &root_id,
+        ODATA_TYPE: &data_type,
+    });
+    bmc.expect(expect_root());
+    let nav_service_root = nav_service_root();
+    let value = "Value".to_string();
+    bmc.expect(Expect::update(
+        root_id.clone(),
+        json!({ updatable_name: &value }),
+        &json_merge([&root_json, &json!({ updatable_name: &value })]),
+    ));
+    let nav_service_root = nav_service_root
+        .update(
+            &bmc,
+            &ServiceRootUpdate {
+                updatable: Some(value.clone()),
+                updatable_guid: None,
+                write_only: None,
+            },
+        )
+        .await
+        .map_err(Error::Bmc)?;
+    assert_eq!(
+        nav_service_root
+            .get(&bmc)
+            .await
+            .expect("no requests created")
+            .updatable,
+        Some(value)
+    );
     Ok(())
 }
 

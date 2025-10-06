@@ -63,14 +63,15 @@ pub use serde_json::Value as AdditionalProperties;
 #[doc(inline)]
 pub use uuid::Uuid as EdmGuid;
 
-/// Entity type trait that is implemented by CSDL compiler for all
-/// generated entity types.
-pub trait EntityType {
+/// Entity type reference trait that is implemented by CSDL compiler
+/// for all generated entity types and for all `NavProperty<T>` where
+/// T struct for entity type.
+pub trait EntityTypeRef {
     /// Value of `@odata.id` field of the Entity.
     fn id(&self) -> &ODataId;
 
     /// Value of `@odata.etag` field of the Entity.
-    fn etag(&self) -> &Option<ODataETag>;
+    fn etag(&self) -> Option<&ODataETag>;
 
     /// Update entity using `update` as payload.
     fn refresh<B: Bmc>(&self, bmc: &B) -> impl Future<Output = Result<Arc<Self>, B::Error>> + Send
@@ -81,7 +82,7 @@ pub trait EntityType {
     }
 }
 
-pub trait Expandable: EntityType + Sized + for<'a> Deserialize<'a> {
+pub trait Expandable: EntityTypeRef + Sized + for<'a> Deserialize<'a> {
     /// Expand entity type.
     fn expand<B: Bmc>(
         &self,
@@ -109,7 +110,7 @@ impl<'de> Deserialize<'de> for Empty {
 /// This trait is assigned to entity types that are marked as
 /// updatable in CSDL specification.
 pub trait Creatable<V: Sync + Send + Serialize, R: Sync + Send + Sized + for<'de> Deserialize<'de>>:
-    EntityType + Sized
+    EntityTypeRef + Sized
 {
     /// Create entity type `create` as payload.
     fn create<B: Bmc>(
@@ -123,7 +124,7 @@ pub trait Creatable<V: Sync + Send + Serialize, R: Sync + Send + Sized + for<'de
 
 /// This trait is assigned to entity types that are marked as
 /// updatable in CSDL specification.
-pub trait Updatable<V: Sync + Send + Serialize>: EntityType + Sized
+pub trait Updatable<V: Sync + Send + Serialize>: EntityTypeRef + Sized
 where
     Self: Sync + Send + Sized + for<'de> Deserialize<'de>,
 {
@@ -139,7 +140,7 @@ where
 
 /// This trait is assigned to entity types that are marked as
 /// deletable in CSDL specification.
-pub trait Deletable: EntityType + Sized {
+pub trait Deletable: EntityTypeRef + Sized {
     /// Delete current entity.
     fn delete<B: Bmc>(&self, bmc: &B) -> impl Future<Output = Result<(), B::Error>> + Send {
         bmc.delete(self.id())

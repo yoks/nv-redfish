@@ -16,16 +16,16 @@
 #[cfg(feature = "reqwest")]
 mod cache_integration_tests {
     use nv_redfish::{
+        Bmc, EntityTypeRef, ODataETag, ODataId,
         bmc::BmcCredentials,
         http::{BmcReqwestError, HttpBmc, ReqwestClient},
-        Bmc, EntityType, ODataETag, ODataId,
     };
     use serde::{Deserialize, Serialize};
     use std::sync::Arc;
     use url::Url;
     use wiremock::{
-        matchers::{header, method, path},
         Mock, MockServer, ResponseTemplate,
+        matchers::{header, method, path},
     };
 
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -38,13 +38,13 @@ mod cache_integration_tests {
         value: i32,
     }
 
-    impl EntityType for TestResource {
+    impl EntityTypeRef for TestResource {
         fn id(&self) -> &ODataId {
             &self.id
         }
 
-        fn etag(&self) -> &Option<ODataETag> {
-            &self.etag
+        fn etag(&self) -> Option<&ODataETag> {
+            self.etag.as_ref()
         }
     }
 

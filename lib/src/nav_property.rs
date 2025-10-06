@@ -13,14 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use crate::Bmc;
-use crate::EntityType;
+use crate::Creatable;
+use crate::Deletable;
+use crate::EntityTypeRef;
+use crate::Expandable;
+use crate::ODataETag;
 use crate::ODataId;
+use crate::Updatable;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
+use std::sync::Arc;
 
 /// Reference varian of the navigation property (only `@odata.id`
 /// property specified).
@@ -51,7 +55,7 @@ where
 /// generated code are wrapped with this type.
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
-pub enum NavProperty<T: EntityType> {
+pub enum NavProperty<T: EntityTypeRef> {
     /// Expanded property variant (content included into the
     /// response).
     Expanded(Expanded<T>),
@@ -60,13 +64,39 @@ pub enum NavProperty<T: EntityType> {
     Reference(Reference),
 }
 
-impl<T: EntityType> NavProperty<T> {
+impl<T: EntityTypeRef> EntityTypeRef for NavProperty<T> {
+    fn id(&self) -> &ODataId {
+        match self {
+            Self::Expanded(v) => v.0.id(),
+            Self::Reference(r) => &r.odata_id,
+        }
+    }
+
+    fn etag(&self) -> Option<&ODataETag> {
+        match self {
+            Self::Expanded(v) => v.0.etag(),
+            Self::Reference(_) => None,
+        }
+    }
+}
+
+impl<C, R, T: Creatable<C, R>> Creatable<C, R> for NavProperty<T>
+where
+    C: Sync + Send + Sized + Serialize,
+    R: Sync + Send + Sized + for<'de> Deserialize<'de>,
+{
+}
+impl<U, T: Updatable<U>> Updatable<U> for NavProperty<T> where U: Sync + Send + Sized + Serialize {}
+impl<T: Deletable> Deletable for NavProperty<T> {}
+impl<T: Expandable> Expandable for NavProperty<T> {}
+
+impl<T: EntityTypeRef> NavProperty<T> {
     pub fn new_reference(odata_id: ODataId) -> Self {
         Self::Reference(Reference { odata_id })
     }
 }
 
-impl<T: EntityType> NavProperty<T> {
+impl<T: EntityTypeRef> NavProperty<T> {
     /// Extract identifier from navigation property.
     pub fn id(&self) -> &ODataId {
         match self {
@@ -76,7 +106,7 @@ impl<T: EntityType> NavProperty<T> {
     }
 }
 
-impl<T: EntityType + Sized + for<'a> Deserialize<'a> + 'static + Send + Sync> NavProperty<T> {
+impl<T: EntityTypeRef + Sized + for<'a> Deserialize<'a> + 'static + Send + Sync> NavProperty<T> {
     /// Get property
     pub async fn get<B: Bmc>(&self, bmc: &B) -> Result<Arc<T>, B::Error> {
         match self {

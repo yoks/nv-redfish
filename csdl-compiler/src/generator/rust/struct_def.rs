@@ -154,17 +154,18 @@ impl<'a> StructDef<'a> {
         // Additional function that are implemented for type:
         let entity_type_impl = |fn_id_impl, fn_etag_impl| {
             quote! {
-                impl #top::EntityType for #name {
+                impl #top::EntityTypeRef for #name {
                     #[inline] fn id(&self) -> &ODataId { #fn_id_impl }
-                    #[inline] fn etag(&self) -> &Option<ODataETag> { #fn_etag_impl }
+                    #[inline] fn etag(&self) -> Option<&ODataETag> { #fn_etag_impl }
                 }
             }
         };
 
         tokens.extend(match impl_odata_type {
-            ImplOdataType::Root => {
-                entity_type_impl(quote! { &self.#odata_id }, quote! { &self.#odata_etag })
-            }
+            ImplOdataType::Root => entity_type_impl(
+                quote! { &self.#odata_id },
+                quote! { self.#odata_etag.as_ref() },
+            ),
             ImplOdataType::Child => {
                 entity_type_impl(quote! { self.base.id() }, quote! { self.base.etag() })
             }

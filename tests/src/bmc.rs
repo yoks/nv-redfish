@@ -76,7 +76,7 @@ impl NvRedfishBmc for Bmc {
         todo!("unimplimented")
     }
 
-    async fn get<T: nv_redfish::EntityType + Sized + for<'a> serde::Deserialize<'a>>(
+    async fn get<T: nv_redfish::EntityTypeRef + Sized + for<'a> serde::Deserialize<'a>>(
         &self,
         in_id: &ODataId,
     ) -> Result<Arc<T>, Self::Error> {

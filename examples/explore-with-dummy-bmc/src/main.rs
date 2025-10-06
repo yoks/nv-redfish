@@ -16,7 +16,7 @@
 use nv_redfish::ActionError;
 use nv_redfish::Bmc;
 use nv_redfish::Creatable;
-use nv_redfish::EntityType;
+use nv_redfish::EntityTypeRef;
 use nv_redfish::Expandable;
 use nv_redfish::ODataId;
 use nv_redfish::Updatable;
@@ -464,7 +464,7 @@ impl Bmc for MockBmc {
         todo!("unimplimented")
     }
 
-    async fn get<T: nv_redfish::EntityType + Sized + for<'a> serde::Deserialize<'a>>(
+    async fn get<T: nv_redfish::EntityTypeRef + Sized + for<'a> serde::Deserialize<'a>>(
         &self,
         id: &ODataId,
     ) -> Result<Arc<T>, Self::Error> {

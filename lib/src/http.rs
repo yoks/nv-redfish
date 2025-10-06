@@ -22,7 +22,8 @@ use std::{
 use url::Url;
 
 use crate::{
-    Bmc, EntityType, Expandable, ODataETag, ODataId, bmc::BmcCredentials, cache::TypeErasedCarCache,
+    Bmc, EntityTypeRef, Expandable, ODataETag, ODataId, bmc::BmcCredentials,
+    cache::TypeErasedCarCache,
 };
 
 /// Builder for Redfish `$expand` query parameters according to DSP0266 specification.
@@ -402,7 +403,7 @@ where
 {
     type Error = C::Error;
 
-    async fn get<T: EntityType + Sized + for<'de> Deserialize<'de> + 'static + Send + Sync>(
+    async fn get<T: EntityTypeRef + Sized + for<'de> Deserialize<'de> + 'static + Send + Sync>(
         &self,
         id: &ODataId,
     ) -> Result<Arc<T>, Self::Error> {

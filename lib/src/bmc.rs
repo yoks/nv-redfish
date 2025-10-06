@@ -19,7 +19,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::Action;
-use crate::EntityType;
+use crate::EntityTypeRef;
 use crate::Expandable;
 use crate::ODataId;
 use crate::http::ExpandQuery;
@@ -39,7 +39,7 @@ pub trait Bmc {
         query: ExpandQuery,
     ) -> impl Future<Output = Result<Arc<T>, Self::Error>> + Send;
 
-    fn get<T: EntityType + Sized + for<'a> Deserialize<'a> + 'static + Send + Sync>(
+    fn get<T: EntityTypeRef + Sized + for<'a> Deserialize<'a> + 'static + Send + Sync>(
         &self,
         id: &ODataId,
     ) -> impl Future<Output = Result<Arc<T>, Self::Error>> + Send;
