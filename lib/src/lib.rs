@@ -142,7 +142,7 @@ where
 /// deletable in CSDL specification.
 pub trait Deletable: EntityTypeRef + Sized {
     /// Delete current entity.
-    fn delete<B: Bmc>(&self, bmc: &B) -> impl Future<Output = Result<(), B::Error>> + Send {
+    fn delete<B: Bmc>(&self, bmc: &B) -> impl Future<Output = Result<Empty, B::Error>> + Send {
         bmc.delete(self.id())
     }
 }

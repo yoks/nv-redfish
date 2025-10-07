@@ -16,6 +16,7 @@
 use nv_redfish::ActionError;
 use nv_redfish::Bmc;
 use nv_redfish::Creatable;
+use nv_redfish::Empty;
 use nv_redfish::EntityTypeRef;
 use nv_redfish::Expandable;
 use nv_redfish::ODataId;
@@ -511,7 +512,7 @@ impl Bmc for MockBmc {
         Ok(result)
     }
 
-    async fn delete(&self, _id: &ODataId) -> Result<(), Self::Error> {
+    async fn delete(&self, _id: &ODataId) -> Result<Empty, Self::Error> {
         todo!("unimplimented")
     }
 

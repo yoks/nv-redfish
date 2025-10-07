@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::HashMap,
     future::Future,
@@ -21,6 +20,8 @@ use std::{
 };
 use url::Url;
 
+#[cfg(feature = "reqwest")]
+use crate::Empty;
 use crate::{
     Bmc, EntityTypeRef, Expandable, ODataETag, ODataId, bmc::BmcCredentials,
     cache::TypeErasedCarCache,
@@ -307,6 +308,24 @@ pub trait HttpClient: Send + Sync {
     where
         B: Serialize + Sync,
         T: DeserializeOwned + Send;
+
+    /// Perform an HTTP PATCH request.
+    fn patch<B, T>(
+        &self,
+        url: Url,
+        body: &B,
+        credentials: &BmcCredentials,
+    ) -> impl Future<Output = Result<T, Self::Error>> + Send
+    where
+        B: Serialize + Sync,
+        T: DeserializeOwned + Send;
+
+    /// Perform an HTTP DELETE request.
+    fn delete(
+        &self,
+        url: Url,
+        credentials: &BmcCredentials,
+    ) -> impl Future<Output = Result<Empty, Self::Error>> + Send;
 }
 
 /// HTTP-based BMC implementation that wraps an [`HttpClient`].
@@ -338,7 +357,7 @@ pub trait HttpClient: Send + Sync {
 /// ```
 pub struct HttpBmc<C: HttpClient> {
     client: C,
-    redfish_endpoint: Url,
+    redfish_endpoint: RedfishEndpoint,
     credentials: BmcCredentials,
     cache: RwLock<TypeErasedCarCache<ODataId>>,
     etags: RwLock<HashMap<ODataId, ODataETag>>,
@@ -375,11 +394,52 @@ where
     pub fn new(client: C, redfish_endpoint: Url, credentials: BmcCredentials) -> Self {
         Self {
             client,
-            redfish_endpoint,
+            redfish_endpoint: RedfishEndpoint::from(redfish_endpoint),
             credentials,
             cache: RwLock::new(TypeErasedCarCache::new(1000)),
             etags: RwLock::new(HashMap::new()),
         }
+    }
+}
+
+/// A tagged type representing a Redfish endpoint URL.
+/// 
+/// Provides convenient conversion methods to build endpoint URLs from ODataId paths.
+#[derive(Debug, Clone)]
+pub struct RedfishEndpoint {
+    base_url: Url,
+}
+
+impl RedfishEndpoint {
+    /// Create a new RedfishEndpoint from a base URL
+    pub fn new(base_url: Url) -> Self {
+        Self { base_url }
+    }
+
+    /// Convert a path to a full Redfish endpoint URL
+    pub fn with_path(&self, path: &str) -> Url {
+        let mut url = self.base_url.clone();
+        url.set_path(path);
+        url
+    }
+
+    /// Convert a path to a full Redfish endpoint URL with query parameters
+    pub fn with_path_and_query(&self, path: &str, query: &str) -> Url {
+        let mut url = self.with_path(path);
+        url.set_query(Some(query));
+        url
+    }
+}
+
+impl From<Url> for RedfishEndpoint {
+    fn from(url: Url) -> Self {
+        Self::new(url)
+    }
+}
+
+impl From<&RedfishEndpoint> for Url {
+    fn from(endpoint: &RedfishEndpoint) -> Self {
+        endpoint.base_url.clone()
     }
 }
 
@@ -407,8 +467,7 @@ where
         &self,
         id: &ODataId,
     ) -> Result<Arc<T>, Self::Error> {
-        let mut endpoint_url = self.redfish_endpoint.clone();
-        endpoint_url.set_path(&id.to_string());
+        let endpoint_url = self.redfish_endpoint.with_path(&id.to_string());
 
         let etag: Option<ODataETag> = {
             let etags = self
@@ -464,9 +523,7 @@ where
         id: &ODataId,
         query: ExpandQuery,
     ) -> Result<Arc<T>, Self::Error> {
-        let mut endpoint_url = self.redfish_endpoint.clone();
-        endpoint_url.set_path(&id.to_string());
-        endpoint_url.set_query(Some(&query.to_query_string()));
+        let endpoint_url = self.redfish_endpoint.with_path_and_query(&id.to_string(), &query.to_query_string());
 
         self.client
             .get::<T>(endpoint_url, &self.credentials, None)
@@ -476,22 +533,25 @@ where
 
     async fn create<V: Sync + Send + Serialize, R: Sync + Send + for<'de> Deserialize<'de>>(
         &self,
-        _id: &ODataId,
-        _v: &V,
+        id: &ODataId,
+        v: &V,
     ) -> Result<R, Self::Error> {
-        todo!()
+        let endpoint_url = self.redfish_endpoint.with_path(&id.to_string());
+        self.client.post(endpoint_url, v, &self.credentials).await
     }
 
     async fn update<V: Sync + Send + Serialize, R: Sync + Send + for<'de> Deserialize<'de>>(
         &self,
-        _id: &ODataId,
-        _v: &V,
+        id: &ODataId,
+        v: &V,
     ) -> Result<R, Self::Error> {
-        todo!()
+        let endpoint_url = self.redfish_endpoint.with_path(&id.to_string());
+        self.client.patch(endpoint_url, v, &self.credentials).await
     }
 
-    async fn delete(&self, _id: &ODataId) -> Result<(), Self::Error> {
-        todo!()
+    async fn delete(&self, id: &ODataId) -> Result<Empty, Self::Error> {
+        let endpoint_url = self.redfish_endpoint.with_path(&id.to_string());
+        self.client.delete(endpoint_url, &self.credentials).await
     }
 
     async fn action<
@@ -502,9 +562,7 @@ where
         action: &crate::Action<T, R>,
         params: &T,
     ) -> Result<R, Self::Error> {
-        let mut endpoint_url = self.redfish_endpoint.clone();
-        endpoint_url.set_path(&action.target.to_string());
-
+        let endpoint_url = self.redfish_endpoint.with_path(&action.target.to_string());
         self.client
             .post(endpoint_url, params, &self.credentials)
             .await
@@ -753,6 +811,42 @@ impl ReqwestClient {
 }
 
 #[cfg(feature = "reqwest")]
+impl ReqwestClient {
+    async fn handle_response<T>(&self, response: reqwest::Response) -> Result<T, BmcReqwestError>
+    where
+        T: DeserializeOwned,
+    {
+        if !response.status().is_success() {
+            return Err(BmcReqwestError::InvalidResponse(Box::new(response)));
+        }
+
+        response.json().await.map_err(BmcReqwestError::ReqwestError)
+    }
+
+    async fn send_json_request<B, T>(
+        &self,
+        method: reqwest::Method,
+        url: Url,
+        body: &B,
+        credentials: &BmcCredentials,
+    ) -> Result<T, BmcReqwestError>
+    where
+        B: Serialize,
+        T: DeserializeOwned,
+    {
+        let response = self
+            .client
+            .request(method, url)
+            .basic_auth(&credentials.username, Some(credentials.password()))
+            .json(body)
+            .send()
+            .await?;
+
+        self.handle_response(response).await
+    }
+}
+
+#[cfg(feature = "reqwest")]
 impl HttpClient for ReqwestClient {
     type Error = BmcReqwestError;
 
@@ -775,18 +869,7 @@ impl HttpClient for ReqwestClient {
         }
 
         let response = request.send().await?;
-        let status = response.status();
-
-        if !status.is_success() {
-            return Err(BmcReqwestError::InvalidResponse(Box::new(response)));
-        }
-
-        let data = response
-            .json()
-            .await
-            .map_err(BmcReqwestError::ReqwestError)?;
-
-        Ok(data)
+        self.handle_response(response).await
     }
 
     async fn post<B, T>(
@@ -799,19 +882,31 @@ impl HttpClient for ReqwestClient {
         B: Serialize,
         T: DeserializeOwned,
     {
+        self.send_json_request(reqwest::Method::POST, url, body, credentials).await
+    }
+
+    async fn patch<B, T>(
+        &self,
+        url: Url,
+        body: &B,
+        credentials: &BmcCredentials,
+    ) -> Result<T, Self::Error>
+    where
+        B: Serialize + Sync,
+        T: DeserializeOwned + Send,
+    {
+        self.send_json_request(reqwest::Method::PATCH, url, body, credentials).await
+    }
+
+    async fn delete(&self, url: Url, credentials: &BmcCredentials) -> Result<Empty, Self::Error> {
         let response = self
             .client
-            .post(url)
+            .delete(url)
             .basic_auth(&credentials.username, Some(credentials.password()))
-            .json(body)
             .send()
             .await?;
 
-        if !response.status().is_success() {
-            return Err(BmcReqwestError::InvalidResponse(Box::new(response)));
-        }
-
-        response.json().await.map_err(BmcReqwestError::ReqwestError)
+        self.handle_response(response).await
     }
 }
 

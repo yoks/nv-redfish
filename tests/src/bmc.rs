@@ -16,6 +16,7 @@
 use crate::Expect;
 use nv_redfish::ActionError;
 use nv_redfish::Bmc as NvRedfishBmc;
+use nv_redfish::Empty;
 use nv_redfish::Expandable;
 use nv_redfish::ODataId;
 use nv_redfish::action::ActionTarget;
@@ -159,7 +160,7 @@ impl NvRedfishBmc for Bmc {
         }
     }
 
-    async fn delete(&self, _id: &ODataId) -> Result<(), Self::Error> {
+    async fn delete(&self, _id: &ODataId) -> Result<Empty, Self::Error> {
         todo!("unimplimented")
     }
 

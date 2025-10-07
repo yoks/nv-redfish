@@ -56,7 +56,7 @@ pub trait Bmc {
         query: &V,
     ) -> impl Future<Output = Result<R, Self::Error>> + Send;
 
-    fn delete(&self, id: &ODataId) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    fn delete(&self, id: &ODataId) -> impl Future<Output = Result<crate::Empty, Self::Error>> + Send;
 
     fn action<T: Send + Sync + Serialize, R: Send + Sync + Sized + for<'a> Deserialize<'a>>(
         &self,

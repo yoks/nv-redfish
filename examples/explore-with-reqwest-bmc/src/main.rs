@@ -13,14 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use nv_redfish::Expandable;
-use nv_redfish::ODataId;
 use nv_redfish::bmc::BmcCredentials;
 use nv_redfish::http::BmcReqwestError;
 use nv_redfish::http::ExpandQuery;
 use nv_redfish::http::HttpBmc;
 use nv_redfish::http::ReqwestClient;
 use nv_redfish::http::ReqwestClientParams;
+use nv_redfish::Creatable;
+use nv_redfish::Deletable;
+use nv_redfish::EntityTypeRef;
+use nv_redfish::Expandable;
+use nv_redfish::ODataId;
+use redfish_std::redfish::manager_account::ManagerAccountCreate;
 use url::Url;
 
 #[tokio::main]
@@ -122,6 +126,48 @@ async fn main() -> Result<(), BmcReqwestError> {
             },
         )
         .await?;
+
+    // Crud operations
+    let account = ac
+        .accounts
+        .as_ref()
+        .expect("no accounts")
+        .create(
+            &bmc,
+            &ManagerAccountCreate {
+                password: "secret_password".into(),
+                user_name: "Administrator".into(),
+                role_id: "admin".into(),
+                locked: None,
+                enabled: None,
+                password_change_required: None,
+                snmp: None,
+                account_types: None,
+                oem_account_types: None,
+                password_expiration: None,
+                strict_account_types: None,
+                account_expiration: None,
+                email_address: None,
+                phone_number: None,
+                one_time_passcode_delivery_address: None,
+            },
+        )
+        .await?;
+    println!("{account:?}");
+
+    let acc = nv_redfish::NavProperty::<
+        redfish_std::redfish::manager_account::ManagerAccount,
+    >::new_reference(account.id().clone())
+    .get(&bmc)
+    .await?;
+
+    acc.delete(&bmc).await?;
+
+    let _ = nv_redfish::NavProperty::<
+        redfish_std::redfish::manager_account::ManagerAccount,
+    >::new_reference(account.id().clone())
+    .get(&bmc)
+    .await?;
 
     Ok(())
 }
