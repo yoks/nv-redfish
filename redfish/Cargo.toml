@@ -1,0 +1,21 @@
+[package]
+name = "nv-redfish"
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+edition.workspace = true
+keywords.workspace = true
+categories.workspace = true
+documentation.workspace = true
+
+[features]
+default = ["accounts", "events"]
+accounts = []
+events = []
+
+[dependencies]
+nv-redfish-core = { workspace = true }
+
+[build-dependencies]
+csdl-compiler = { workspace = true }

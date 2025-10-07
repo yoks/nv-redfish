@@ -1,6 +1,7 @@
 [workspace]
 members = [
    "core",
+   "redfish",
    "csdl-compiler",
    "examples/redfish-std",
    "examples/redfish-oem-contoso",

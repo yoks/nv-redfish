@@ -958,6 +958,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "nv-redfish"
+version = "0.1.0"
+dependencies = [
+ "csdl-compiler",
+ "nv-redfish-core",
+]
+
+[[package]]
 name = "nv-redfish-core"
 version = "0.1.0"
 dependencies = [
