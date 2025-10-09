@@ -188,7 +188,7 @@ where
         bmc: &B,
         update: &V,
     ) -> impl Future<Output = Result<Self, B::Error>> + Send {
-        bmc.update::<V, Self>(self.id(), update)
+        bmc.update::<V, Self>(self.id(), self.etag(), update)
     }
 }
 

@@ -322,6 +322,7 @@ pub trait HttpClient: Send + Sync {
     fn patch<B, T>(
         &self,
         url: Url,
+        etag: Option<&ODataETag>,
         body: &B,
         credentials: &BmcCredentials,
     ) -> impl Future<Output = Result<T, Self::Error>> + Send
@@ -558,10 +559,13 @@ where
     async fn update<V: Sync + Send + Serialize, R: Sync + Send + for<'de> Deserialize<'de>>(
         &self,
         id: &ODataId,
+        etag: Option<&ODataETag>,
         v: &V,
     ) -> Result<R, Self::Error> {
         let endpoint_url = self.redfish_endpoint.with_path(&id.to_string());
-        self.client.patch(endpoint_url, v, &self.credentials).await
+        self.client
+            .patch(endpoint_url, etag, v, &self.credentials)
+            .await
     }
 
     async fn delete(&self, id: &ODataId) -> Result<Empty, Self::Error> {
@@ -917,6 +921,7 @@ impl HttpClient for ReqwestClient {
     async fn patch<B, T>(
         &self,
         url: Url,
+        _etag: Option<&ODataETag>,
         body: &B,
         credentials: &BmcCredentials,
     ) -> Result<T, Self::Error>

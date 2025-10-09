@@ -57,6 +57,7 @@ use crate::Action;
 use crate::Empty;
 use crate::EntityTypeRef;
 use crate::Expandable;
+use crate::ODataETag;
 use crate::ODataId;
 use std::error::Error as StdError;
 use std::fmt;
@@ -103,6 +104,7 @@ pub trait Bmc: Send + Sync {
     fn update<V: Sync + Send + Serialize, R: Send + Sync + Sized + for<'a> Deserialize<'a>>(
         &self,
         id: &ODataId,
+        etag: Option<&ODataETag>,
         query: &V,
     ) -> impl Future<Output = Result<R, Self::Error>> + Send;
 

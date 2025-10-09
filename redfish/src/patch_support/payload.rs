@@ -38,6 +38,7 @@ where
         if let Some(patch_fn) = self.patch() {
             Updator {
                 id: self.entity_ref().id(),
+                etag: self.entity_ref().etag(),
             }
             .update(self.bmc(), update, patch_fn.as_ref())
             .await
@@ -74,6 +75,7 @@ impl Payload {
 
 struct Updator<'a> {
     id: &'a ODataId,
+    etag: Option<&'a ODataETag>,
 }
 
 impl EntityTypeRef for Updator<'_> {
@@ -81,7 +83,7 @@ impl EntityTypeRef for Updator<'_> {
         self.id
     }
     fn etag(&self) -> Option<&ODataETag> {
-        None
+        self.etag
     }
 }
 
@@ -93,7 +95,7 @@ impl Updator<'_> {
         U: Serialize + Send + Sync,
         F: Fn(JsonValue) -> JsonValue + Sync + Send,
     {
-        bmc.update::<U, Payload>(self.id(), update)
+        bmc.update::<U, Payload>(self.id(), self.etag(), update)
             .await
             .map_err(Error::Bmc)?
             .to_target(patch_fn)

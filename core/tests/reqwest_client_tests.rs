@@ -149,7 +149,7 @@ mod reqwest_client_tests {
 
         let resource_id = create_odata_id(resource_path);
         let result = bmc
-            .update::<UpdateRequest, TestResource>(&resource_id, &update_request)
+            .update::<UpdateRequest, TestResource>(&resource_id, None, &update_request)
             .await;
 
         assert!(result.is_ok());

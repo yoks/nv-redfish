@@ -20,6 +20,7 @@ use nv_redfish_core::ActionError;
 use nv_redfish_core::Bmc as NvRedfishBmc;
 use nv_redfish_core::Empty;
 use nv_redfish_core::Expandable;
+use nv_redfish_core::ODataETag;
 use nv_redfish_core::ODataId;
 use serde::Serialize;
 use serde_json::Error as JsonError;
@@ -158,6 +159,7 @@ impl NvRedfishBmc for Bmc {
     >(
         &self,
         in_id: &ODataId,
+        _etag: Option<&ODataETag>,
         update: &V,
     ) -> Result<R, Self::Error> {
         let expect = self

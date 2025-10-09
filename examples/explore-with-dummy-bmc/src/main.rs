@@ -21,6 +21,7 @@ use nv_redfish_core::Empty;
 use nv_redfish_core::EntityTypeRef;
 use nv_redfish_core::Expandable;
 use nv_redfish_core::NavProperty;
+use nv_redfish_core::ODataETag;
 use nv_redfish_core::ODataId;
 use nv_redfish_core::Updatable;
 use redfish_oem_contoso::redfish::contoso_turboencabulator_service::ContosoTurboencabulatorServiceUpdate;
@@ -502,6 +503,7 @@ impl Bmc for MockBmc {
     >(
         &self,
         id: &ODataId,
+        _etag: Option<&ODataETag>,
         update: &V,
     ) -> Result<R, Self::Error> {
         println!(
