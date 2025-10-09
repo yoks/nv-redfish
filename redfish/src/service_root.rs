@@ -22,6 +22,8 @@ use std::sync::Arc;
 
 #[cfg(feature = "accounts")]
 use crate::accounts::AccountService;
+#[cfg(feature = "accounts")]
+use crate::accounts::SlotDefinedConfig as SlotDefinedUserAccountsConfig;
 
 /// Represents `ServiceRoot` in the BMC model.
 pub struct ServiceRoot<B: Bmc> {
@@ -83,5 +85,23 @@ impl<B: Bmc> ServiceRoot<B> {
     #[cfg(feature = "accounts")]
     pub(crate) fn bug_no_account_type_in_accounts(&self) -> bool {
         self.root.vendor.as_ref().is_some_and(|v| v == "HPE")
+    }
+
+    // In some implementations BMC cannot create / delete Redfish
+    // accounts but have pre-created accounts (slots). Workflow is as
+    // following: to "create" new account user should update
+    // precreated account with new parameters and enable it. To delete
+    // account user should just disable it.
+    #[cfg(feature = "accounts")]
+    pub(crate) fn slot_defined_user_accounts(&self) -> Option<SlotDefinedUserAccountsConfig> {
+        if self.root.vendor.as_ref().is_some_and(|v| v == "Dell") {
+            Some(SlotDefinedUserAccountsConfig {
+                min_slot: Some(3),
+                hide_disabled: true,
+                disable_account_on_delete: true,
+            })
+        } else {
+            None
+        }
     }
 }

@@ -18,8 +18,10 @@
 use nv_redfish::accounts::AccountCollection;
 use nv_redfish::accounts::AccountService;
 use nv_redfish::accounts::AccountTypes;
+use nv_redfish::accounts::ManagerAccountCreate;
 use nv_redfish::ServiceRoot;
 use nv_redfish_core::ODataId;
+use nv_redfish_tests::json_merge;
 use nv_redfish_tests::Bmc;
 use nv_redfish_tests::Expect;
 use nv_redfish_tests::ODATA_ID;
@@ -169,4 +171,175 @@ async fn get_account_collection(
         }),
     ));
     Ok(account_service.accounts().await?)
+}
+
+fn slot_member(accounts_id: &str, id: u32, enabled: bool, user_name: &str) -> JsonValue {
+    json!({
+        ODATA_ID: format!("{accounts_id}/{id}"),
+        ODATA_TYPE: MANAGER_ACCOUNT_DATA_TYPE,
+        "Id": id.to_string(),
+        "Name": "User Account",
+        "Enabled": enabled,
+        "AccountTypes": [],
+        "UserName": user_name,
+    })
+}
+
+// Create account (standard vendor): request includes required fields, response
+// provides `AccountTypes: []` without patching.
+#[test]
+async fn create_account_standard() -> Result<(), Box<dyn StdError>> {
+    let bmc = Arc::new(Bmc::default());
+    let root_id = ODataId::service_root();
+    let account_service = get_account_service(bmc.clone(), &root_id, "Contoso").await?;
+    let accounts = get_account_collection(bmc.clone(), &account_service, json!([])).await?;
+    let accounts_id = format!("{}/Accounts", account_service.odata_id());
+    let maccount_id = format!("{accounts_id}/1");
+    let create_req =
+        ManagerAccountCreate::builder("password".into(), "user".into(), "Operator".into()).build();
+    let create_json = serde_json::to_value(&create_req).unwrap();
+    bmc.expect(Expect::create(
+        &accounts_id,
+        create_json,
+        json!({
+            ODATA_ID: maccount_id,
+            ODATA_TYPE: MANAGER_ACCOUNT_DATA_TYPE,
+            "Id": "1",
+            "Name": "User Account",
+            "UserName": "user",
+            "RoleId": "Operator",
+            "AccountTypes": []
+        }),
+    ));
+    let account = accounts.create_account(create_req).await?;
+    let account = account.raw();
+    assert_eq!(account.user_name, Some("user".into()));
+    assert_eq!(account.role_id, Some("Operator".into()));
+    assert_eq!(account.base.id, "1");
+    assert_eq!(account.base.name, "User Account");
+    assert!(account.account_types.is_empty());
+    Ok(())
+}
+
+// Create account (HPE-like vendor): response omits `AccountTypes`, expect
+// defaulting to `[Redfish]` via read patching.
+#[test]
+async fn create_account_hpe_patched() -> Result<(), Box<dyn StdError>> {
+    let bmc = Arc::new(Bmc::default());
+    let root_id = ODataId::service_root();
+    let account_service = get_account_service(bmc.clone(), &root_id, "HPE").await?;
+    let accounts = get_account_collection(bmc.clone(), &account_service, json!([])).await?;
+    let accounts_id = format!("{}/Accounts", account_service.odata_id());
+    let maccount_id = format!("{accounts_id}/1");
+    let create_req =
+        ManagerAccountCreate::builder("password".into(), "user".into(), "Operator".into()).build();
+    let create_json = serde_json::to_value(&create_req).unwrap();
+    bmc.expect(Expect::create(
+        &accounts_id,
+        create_json,
+        json!({
+            ODATA_ID: maccount_id,
+            ODATA_TYPE: MANAGER_ACCOUNT_DATA_TYPE,
+            "Id": "1",
+            "Name": "User Account",
+            "UserName": "user",
+            "RoleId": "Operator"
+        }),
+    ));
+    let account = accounts.create_account(create_req).await?;
+    let account = account.raw();
+    assert_eq!(account.user_name, Some("user".into()));
+    assert_eq!(account.account_types, vec![AccountTypes::Redfish]);
+    Ok(())
+}
+
+// Create account (Dell slot-defined): choose first disabled slot with id >= min_slot (3).
+#[test]
+async fn create_account_dell_slot_defined_first_available() -> Result<(), Box<dyn StdError>> {
+    let bmc = Arc::new(Bmc::default());
+    let root_id = ODataId::service_root();
+    let account_service = get_account_service(bmc.clone(), &root_id, "Dell").await?;
+
+    let accounts_id = format!("{}/Accounts", account_service.odata_id());
+    let members = json!([
+        slot_member(&accounts_id, 1, true, "root"), // below min_slot, enabled
+        slot_member(&accounts_id, 2, false, ""),    // below min_slot, disabled (must be skipped)
+        slot_member(&accounts_id, 3, false, ""),    // first eligible slot
+        slot_member(&accounts_id, 4, false, ""),
+    ]);
+    let accounts = get_account_collection(bmc.clone(), &account_service, members).await?;
+
+    // Expect update on slot 3 with create params + enable.
+    let update_req = nv_redfish::accounts::ManagerAccountUpdate::builder()
+        .with_user_name("user".into())
+        .with_password("password".into())
+        .with_role_id("Operator".into())
+        .with_enabled(true)
+        .build();
+    let update_json = serde_json::to_value(&update_req).unwrap();
+    let maccount_id = format!("{accounts_id}/3");
+    bmc.expect(Expect::update(
+        &maccount_id,
+        update_json,
+        json_merge([
+            &slot_member(&accounts_id, 3, true, "user"),
+            &json! {{"RoleId": "Operator"}},
+        ]),
+    ));
+
+    let create_req =
+        ManagerAccountCreate::builder("password".into(), "user".into(), "Operator".into()).build();
+    let account = accounts.create_account(create_req).await?;
+    let account = account.raw();
+    assert_eq!(account.base.id, "3");
+    assert_eq!(account.user_name, Some("user".into()));
+    assert_eq!(account.role_id, Some("Operator".into()));
+    assert_eq!(account.enabled, Some(true));
+    Ok(())
+}
+
+// Create account (Dell slot-defined): error when no disabled slot id >= min_slot is available.
+#[test]
+async fn create_account_dell_slot_defined_no_slot_available() -> Result<(), Box<dyn StdError>> {
+    let bmc = Arc::new(Bmc::default());
+    let root_id = ODataId::service_root();
+    let account_service = get_account_service(bmc.clone(), &root_id, "Dell").await?;
+
+    let accounts_id = format!("{}/Accounts", account_service.odata_id());
+    // All eligible (>=3) are enabled; no disabled slots available.
+    let members = json!([
+        slot_member(&accounts_id, 1, false, ""),
+        slot_member(&accounts_id, 2, false, ""),
+        slot_member(&accounts_id, 3, true, "root"),
+        slot_member(&accounts_id, 4, true, "other"),
+    ]);
+    let accounts = get_account_collection(bmc.clone(), &account_service, members).await?;
+
+    let create_req =
+        ManagerAccountCreate::builder("password".into(), "user".into(), "Operator".into()).build();
+    assert!(accounts.create_account(create_req).await.is_err());
+    Ok(())
+}
+
+// List accounts (Dell slot-defined): disabled accounts are hidden.
+#[test]
+async fn list_dell_accounts_hide_disabled() -> Result<(), Box<dyn StdError>> {
+    let bmc = Arc::new(Bmc::default());
+    let root_id = ODataId::service_root();
+    let account_service = get_account_service(bmc.clone(), &root_id, "Dell").await?;
+
+    let accounts_id = format!("{}/Accounts", account_service.odata_id());
+    let members = json!([
+        slot_member(&accounts_id, 1, true, "root"),
+        slot_member(&accounts_id, 3, false, ""),
+        slot_member(&accounts_id, 4, true, "other"),
+    ]);
+    let accounts = get_account_collection(bmc.clone(), &account_service, members).await?;
+    let data = accounts.all_accounts_data().await?;
+    let ids: Vec<_> = data
+        .into_iter()
+        .map(|a| a.raw().as_ref().base.id.clone())
+        .collect();
+    assert_eq!(ids, vec!["1", "4"]);
+    Ok(())
 }

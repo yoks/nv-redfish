@@ -28,6 +28,10 @@ pub enum Error<B: Bmc> {
     /// Account service is not supported by the BMC.
     #[cfg(feature = "accounts")]
     AccountServiceNotSupported,
+    /// No available account slot found. This error happens for
+    /// `slot_defined_user_accounts` feature.
+    #[cfg(feature = "accounts")]
+    AccountSlotNotAvailable,
     /// JSON parse error.
     Json(JsonError),
 }
@@ -40,6 +44,10 @@ impl<B: Bmc> Display for Error<B> {
             #[cfg(feature = "accounts")]
             Self::AccountServiceNotSupported => {
                 write!(f, "Account service is not supported by system")
+            }
+            #[cfg(feature = "accounts")]
+            Self::AccountSlotNotAvailable => {
+                write!(f, "Free account slot is not found")
             }
         }
     }
