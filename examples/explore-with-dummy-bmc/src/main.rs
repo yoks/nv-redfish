@@ -694,10 +694,9 @@ async fn main() -> Result<(), Error> {
         turboencabulator_service.turboencabulator_mode
     );
 
-    let update = ContosoTurboencabulatorServiceUpdate {
-        turboencabulator_mode: Some(TurboencabulatorMode::Turbo),
-        service_enabled: None,
-    };
+    let update = ContosoTurboencabulatorServiceUpdate::builder()
+        .with_turboencabulator_mode(TurboencabulatorMode::Turbo);
+
     let updated = turboencabulator_service.update(&bmc, &update).await?;
     let _ = updated.refresh(&bmc).await?;
 
@@ -715,23 +714,12 @@ async fn main() -> Result<(), Error> {
         .await?
         .create(
             &bmc,
-            &ManagerAccountCreate {
-                password: "secret_password".into(),
-                user_name: "Administrator".into(),
-                role_id: "admin".into(),
-                locked: None,
-                enabled: None,
-                password_change_required: None,
-                snmp: None,
-                account_types: None,
-                oem_account_types: None,
-                password_expiration: None,
-                strict_account_types: None,
-                account_expiration: None,
-                email_address: None,
-                phone_number: None,
-                one_time_passcode_delivery_address: None,
-            },
+            &ManagerAccountCreate::builder(
+                "secret_password".into(),
+                "Administrator".into(),
+                "admin".into(),
+            )
+            .build(),
         )
         .await?;
     println!("  Ok!");

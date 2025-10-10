@@ -182,6 +182,7 @@ impl<B: Bmc + Sync + Send> AccountCollection<B> {
                 }
                 // Build an update based on the create request:
                 let update = ManagerAccountUpdate {
+                    base: None,
                     user_name: Some(create.user_name),
                     password: Some(create.password),
                     role_id: Some(create.role_id),
@@ -197,6 +198,7 @@ impl<B: Bmc + Sync + Send> AccountCollection<B> {
                     phone_number: create.phone_number,
                     snmp: create.snmp,
                     strict_account_types: create.strict_account_types,
+                    actions: create.actions,
                 };
 
                 let account = Account::new(

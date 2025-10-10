@@ -29,6 +29,8 @@ use toml::de::Error as TomlError;
 #[derive(Deserialize, Debug)]
 pub struct FeaturesManifest {
     pub features: Vec<Feature>,
+    #[serde(rename = "oem-features")]
+    pub oem_features: Vec<OemFeature>,
 }
 
 impl FeaturesManifest {
@@ -45,7 +47,7 @@ impl FeaturesManifest {
         toml::from_str(&content).map_err(Error::Toml)
     }
 
-    /// All features that defined in manifest.
+    /// All standard-features that defined in manifest.
     #[must_use]
     pub fn all_features(&self) -> Vec<&String> {
         self.features.iter().map(|f| &f.name).collect()
@@ -67,12 +69,75 @@ impl FeaturesManifest {
                 (files, patterns)
             })
     }
+
+    /// Collect all vendors that are defined by the manifest.
+    #[must_use]
+    pub fn all_vendors(&self) -> Vec<&String> {
+        self.oem_features.iter().map(|f| &f.vendor).collect()
+    }
+
+    /// All vendor-specific features defined in the manifest.
+    #[must_use]
+    pub fn all_vendor_features(&self, vendor: &String) -> Vec<&String> {
+        self.oem_features
+            .iter()
+            .filter_map(|f| {
+                if f.vendor == *vendor {
+                    Some(&f.name)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Collect CSDLs and patterns to be compiled.
+    #[must_use]
+    pub fn collect_vendor_features<'a>(
+        &'a self,
+        features: &[&String],
+    ) -> (
+        Vec<&'a String>, // root csdl
+        Vec<&'a String>, // resolve csdl
+        Vec<&'a EntityTypeFilterPattern>,
+    ) {
+        self.oem_features.iter().fold(
+            (Vec::new(), Vec::new(), Vec::new()),
+            |(mut root, mut resolve, mut patterns), f| {
+                if features.contains(&&f.name) {
+                    root.extend(f.oem_csdl_files.iter());
+                    resolve.extend(f.csdl_files.iter());
+                    patterns.extend(f.patterns.iter());
+                }
+                (root, resolve, patterns)
+            },
+        )
+    }
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Feature {
     pub name: String,
     pub csdl_files: Vec<String>,
+    pub patterns: Vec<EntityTypeFilterPattern>,
+}
+
+/// OEM-specific feature.
+#[derive(Deserialize, Debug)]
+pub struct OemFeature {
+    /// Name of the feature.
+    pub name: String,
+    /// Vendor name.
+    pub vendor: String,
+    /// CSDL files provided by vendor that need to be compiled for the
+    /// feature.
+    pub oem_csdl_files: Vec<String>,
+    /// CSDL files from standard that provide types for vendor CSDL
+    /// files.
+    pub csdl_files: Vec<String>,
+    /// Pattern of entity types that need to be resolved during the
+    /// compilation.
+    #[serde(default)]
     pub patterns: Vec<EntityTypeFilterPattern>,
 }
 

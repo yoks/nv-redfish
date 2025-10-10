@@ -134,23 +134,12 @@ async fn main() -> Result<(), BmcReqwestError> {
         .expect("no accounts")
         .create(
             &bmc,
-            &ManagerAccountCreate {
-                password: "secret_password".into(),
-                user_name: "Administrator".into(),
-                role_id: "admin".into(),
-                locked: None,
-                enabled: None,
-                password_change_required: None,
-                snmp: None,
-                account_types: None,
-                oem_account_types: None,
-                password_expiration: None,
-                strict_account_types: None,
-                account_expiration: None,
-                email_address: None,
-                phone_number: None,
-                one_time_passcode_delivery_address: None,
-            },
+            &ManagerAccountCreate::builder(
+                "secret_password".into(),
+                "Administrator".into(),
+                "admin".into(),
+            )
+            .build(),
         )
         .await?;
     println!("{account:?}");

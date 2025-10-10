@@ -64,11 +64,18 @@
 )]
 #![deny(missing_docs)]
 
+#[cfg(feature = "accounts")]
 pub(crate) mod patch_support;
 pub(crate) mod schema;
 
+/// Lenovo OEM support.
+#[cfg(feature = "lenovo")]
+pub(crate) mod schema_oem_lenovo;
+
 /// Errors defined by the crate.
 pub mod error;
+/// Supported vendors.
+pub mod vendor;
 
 /// Service Root implementation.
 pub mod service_root;
@@ -82,6 +89,7 @@ pub mod events;
 
 #[doc(inline)]
 pub use error::Error;
-
 #[doc(inline)]
 pub use service_root::ServiceRoot;
+#[doc(inline)]
+pub use vendor::Vendor;

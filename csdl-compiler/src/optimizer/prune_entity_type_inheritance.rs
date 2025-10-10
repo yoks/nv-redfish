@@ -119,6 +119,7 @@ pub fn prune_entity_type_inheritance<'a>(input: Compiled<'a>) -> Compiled<'a> {
                         key: v.key,
                         properties: Properties::rev_join(properties),
                         odata,
+                        is_abstract: v.is_abstract,
                     },
                 )
             })

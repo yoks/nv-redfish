@@ -27,6 +27,7 @@ use crate::compiler::QualifiedName;
 use crate::compiler::Stack;
 use crate::edmx::entity_type::Key;
 use crate::edmx::EntityType as EdmxEntityType;
+use crate::IsAbstract;
 
 #[derive(Debug)]
 pub struct EntityType<'a> {
@@ -35,6 +36,7 @@ pub struct EntityType<'a> {
     pub key: Option<&'a Key>,
     pub properties: Properties<'a>,
     pub odata: OData<'a>,
+    pub is_abstract: IsAbstract,
 }
 
 impl<'a> EntityType<'a> {
@@ -71,6 +73,7 @@ impl<'a> EntityType<'a> {
             key: schema_entity_type.key.as_ref(),
             properties,
             odata: OData::new(MustHaveId::new(true), schema_entity_type),
+            is_abstract: schema_entity_type.is_abstract,
         };
         Ok(stack
             .merge(compiled)

@@ -249,7 +249,7 @@ impl<'a> ModDef<'a> {
                 builder
             };
             let mut gen_types = vec![GenerateType::Read];
-            if t.odata.updatable.is_some_and(|v| v.inner().value) {
+            if t.odata.updatable.is_some_and(|v| v.inner().value) || t.is_abstract.into_inner() {
                 gen_types.push(GenerateType::Update);
             }
             if creatable.into_inner() {

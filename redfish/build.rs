@@ -19,12 +19,17 @@ use csdl_compiler::commands::DEFAULT_ROOT;
 use csdl_compiler::features_manifest::FeaturesManifest;
 use std::env::var;
 use std::error::Error as StdError;
+use std::fs::File;
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn StdError>> {
     let features_manifest = PathBuf::from("features.toml");
     let manifest = FeaturesManifest::read(&features_manifest)?;
     println!("cargo:rerun-if-changed={}", features_manifest.display());
+
+    // ================================================================================
+    // Compile standard DMTF schema
+
     // Collect features that is defined by configuration
     let target_features = manifest
         .all_features()
@@ -69,5 +74,59 @@ fn main() -> Result<(), Box<dyn StdError>> {
             .cloned()
             .collect(),
     })?;
+
+    // ================================================================================
+    // Compile OEM-specific schemas
+
+    let vendors = manifest
+        .all_vendors()
+        .into_iter()
+        .filter(|v| var(format!("CARGO_FEATURE_{}", v.to_uppercase())).is_ok())
+        .collect::<Vec<_>>();
+
+    for v in vendors {
+        let features = manifest
+            .all_vendor_features(v)
+            .into_iter()
+            .filter(|v| {
+                var(format!(
+                    "CARGO_FEATURE_{}",
+                    v.to_uppercase().replace('-', "_")
+                ))
+                .is_ok()
+            })
+            .collect::<Vec<_>>();
+
+        let output = out_dir.join(format!("oem-{v}.rs"));
+        if features.is_empty() {
+            // Just create empty output file:
+            File::create(output)?;
+            continue;
+        }
+
+        let (root_csdls, resolve_csdls, patterns) = manifest.collect_vendor_features(&features);
+        let oem_schema_path = "../oem";
+
+        let root_csdls = root_csdls
+            .iter()
+            .map(|f| format!("{oem_schema_path}/{v}/{f}"))
+            .collect::<Vec<_>>();
+
+        let resolve_csdls = resolve_csdls
+            .iter()
+            .map(|f| format!("{schema_path}/{f}"))
+            .collect::<Vec<_>>();
+
+        for f in root_csdls.iter().chain(resolve_csdls.iter()) {
+            println!("cargo:rerun-if-changed={f}");
+        }
+
+        process_command(&Commands::CompileOem {
+            output,
+            root_csdls,
+            resolve_csdls,
+            entity_type_patterns: patterns.into_iter().cloned().collect(),
+        })?;
+    }
     Ok(())
 }

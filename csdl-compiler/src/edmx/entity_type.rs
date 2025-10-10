@@ -21,6 +21,7 @@ use crate::edmx::PropertyName;
 use crate::edmx::QualifiedTypeName;
 use crate::edmx::StructuralProperty;
 use crate::edmx::ValidateError;
+use crate::IsAbstract;
 use serde::Deserialize;
 
 /// 8.1 Element edm:EntityType
@@ -34,7 +35,7 @@ pub struct DeEntityType {
     pub base_type: Option<QualifiedTypeName>,
     /// 8.1.3 Attribute `Abstract`
     #[serde(rename = "@Abstract")]
-    pub r#abstract: Option<bool>,
+    pub r#abstract: Option<IsAbstract>,
     /// 8.1.4 Attribute `OpenType`
     #[serde(rename = "@OpenType")]
     pub open_type: Option<bool>,
@@ -83,6 +84,7 @@ pub struct EntityType {
     pub key: Option<Key>,
     pub properties: Vec<Property>,
     pub annotations: Vec<Annotation>,
+    pub is_abstract: IsAbstract,
 }
 
 impl DeEntityType {
@@ -122,6 +124,7 @@ impl DeEntityType {
             base_type: self.base_type,
             properties,
             annotations,
+            is_abstract: self.r#abstract.unwrap_or(IsAbstract::new(false)),
         })
     }
 }

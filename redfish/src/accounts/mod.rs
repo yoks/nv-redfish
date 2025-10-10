@@ -33,6 +33,9 @@
 mod account;
 /// Collection of accounts.
 mod collection;
+/// Password policy.
+#[cfg(feature = "lenovo")]
+mod password_policy;
 
 use crate::patch_support::JsonValue;
 use crate::patch_support::ReadPatchFn;
@@ -52,6 +55,10 @@ pub use crate::schema::redfish::manager_account::ManagerAccountCreate;
 pub use crate::schema::redfish::manager_account::ManagerAccountUpdate;
 #[doc(inline)]
 pub use account::Account;
+#[doc(inline)]
+#[cfg(feature = "lenovo")]
+pub use password_policy::never_expire_policy as never_expire_password_policy;
+
 #[doc(inline)]
 pub(crate) use account::Config as AccountConfig;
 #[doc(inline)]

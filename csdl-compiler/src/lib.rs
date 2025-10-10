@@ -92,6 +92,14 @@ pub type IsRequiredOnCreate = TaggedType<bool, IsRequiredOnCreateTag>;
 #[capability(inner_access)]
 pub enum IsRequiredOnCreateTag {}
 
+/// Type is abastract.
+pub type IsAbstract = TaggedType<bool, IsAbstractTag>;
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Copy)]
+#[transparent(Display, Debug, Deserialize)]
+#[capability(inner_access)]
+pub enum IsAbstractTag {}
+
 #[cfg(test)]
 mod test {
     use super::edmx::attribute_values::SimpleIdentifier;

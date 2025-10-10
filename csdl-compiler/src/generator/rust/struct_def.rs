@@ -234,6 +234,26 @@ impl<'a> StructDef<'a> {
     }
 
     fn generate_update(&self, tokens: &mut TokenStream, config: &Config) {
+        let (base, base_impl) = self.base.map_or_else(
+            || (quote! {}, quote! {}),
+            |base| {
+                let typename = FullTypeName::new(base, config).for_update(None);
+                (
+                    quote! {
+                        #[serde(flatten)]
+                        pub base: Option<#typename>,
+                    },
+                    quote! {
+                       #[must_use]
+                       pub fn with_base(mut self, v: #typename) -> Self {
+                           self.base = Some(v);
+                           self
+                       }
+                    },
+                )
+            },
+        );
+
         let properties = self
             .properties
             .properties
@@ -257,6 +277,20 @@ impl<'a> StructDef<'a> {
             })
             .collect::<Vec<_>>();
 
+        let additional_properties = if self.odata.additional_properties.is_some_and(|v| *v.inner())
+        {
+            let top = &config.top_module_alias;
+            // If additional_properties are explicitly set then we add
+            // placeholder with serde_json::Value to
+            // serde_json. Actually, it is almost always Oem.
+            quote! {
+                #[serde(flatten)]
+                pub additional_properties: #top::AdditionalProperties,
+            }
+        } else {
+            TokenStream::new()
+        };
+
         let properties_content = properties.iter().map(|(rename, name, prop_type)| {
             quote! {
                 #[serde(rename=#rename)]
@@ -271,7 +305,7 @@ impl<'a> StructDef<'a> {
         tokens.extend(quote! {
             #[doc = #comment]
             #[derive(Serialize, Default, Debug)]
-            pub struct #name { #content }
+            pub struct #name { #base #content #additional_properties }
         });
 
         let properties_impl = properties.iter().map(|(_, name, prop_type)| {
@@ -298,6 +332,7 @@ impl<'a> StructDef<'a> {
                 pub const fn build(self) -> Self {
                     self
                 }
+                #base_impl
                 #content
             }
         });

@@ -203,14 +203,20 @@ impl TypeInfo {
                 // go through all complex type and collect new type
                 // info because type info depends on other type infos
                 // recursively).
-                if ct.properties.is_empty()
-                    || ct.properties.properties.iter().all(|p| {
-                        p.odata.permissions.is_some_and(|v| v == Permissions::Read)
-                            || *p
-                                .ptype
-                                .map(|v| v.0.permissions.is_some_and(|v| v == Permissions::Read))
-                                .inner()
-                    })
+                if ct
+                    .odata
+                    .additional_properties
+                    .is_none_or(|v| !v.into_inner())
+                    && (ct.properties.is_empty()
+                        || ct.properties.properties.iter().all(|p| {
+                            p.odata.permissions.is_some_and(|v| v == Permissions::Read)
+                                || *p
+                                    .ptype
+                                    .map(|v| {
+                                        v.0.permissions.is_some_and(|v| v == Permissions::Read)
+                                    })
+                                    .inner()
+                        }))
                 {
                     Some(Permissions::Read)
                 } else {
