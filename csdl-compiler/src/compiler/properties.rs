@@ -203,20 +203,21 @@ impl TypeInfo {
                 // go through all complex type and collect new type
                 // info because type info depends on other type infos
                 // recursively).
-                if ct
-                    .odata
-                    .additional_properties
-                    .is_none_or(|v| !v.into_inner())
-                    && (ct.properties.is_empty()
-                        || ct.properties.properties.iter().all(|p| {
-                            p.odata.permissions.is_some_and(|v| v == Permissions::Read)
-                                || *p
-                                    .ptype
-                                    .map(|v| {
-                                        v.0.permissions.is_some_and(|v| v == Permissions::Read)
-                                    })
-                                    .inner()
-                        }))
+                if ct.odata.additional_properties.is_none_or(|v| {
+                    // OemActions check is redfish-specific
+                    // hack. Schema doesn't give clue if additional
+                    // properties are read-only or not. Here we assume
+                    // that any OemActions complex types additional
+                    // properties are readonly just by name.
+                    !v.into_inner() || ct.name.name.inner().as_str() == "OemActions"
+                }) && (ct.properties.is_empty()
+                    || ct.properties.properties.iter().all(|p| {
+                        p.odata.permissions.is_some_and(|v| v == Permissions::Read)
+                            || *p
+                                .ptype
+                                .map(|v| v.0.permissions.is_some_and(|v| v == Permissions::Read))
+                                .inner()
+                    }))
                 {
                     Some(Permissions::Read)
                 } else {
