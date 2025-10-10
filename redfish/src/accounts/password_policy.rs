@@ -46,10 +46,14 @@ pub fn never_expire_policy(vendor: &Vendor) -> Option<AccountServiceUpdate> {
         // https://github.com/dell/iDRAC-Redfish-Scripting/issues/295
         #[cfg(feature = "oem-dell")]
         Vendor::Dell => None,
-        #[cfg(feature = "oem-nvidia-viking")]
-        Vendor::NvidiaViking => Some(never_expire_policy_nvidia_viking()),
+        #[cfg(feature = "oem-ami")]
+        Vendor::AMI => Some(never_expire_policy_ami()),
         #[cfg(feature = "oem-nvidia-gbx00")]
         Vendor::NvidiaGbx00 => Some(never_expire_policy_nvidia_gbx00()),
+        // Bluefield 2 and Bluefield 3 say that account properties are
+        // read-only.
+        #[cfg(feature = "oem-nvidia-dpu")]
+        Vendor::NvidiaDPU => None,
     }
 }
 
@@ -120,8 +124,8 @@ fn never_expire_policy_supermicro() -> AccountServiceUpdate {
         .build()
 }
 
-#[cfg(feature = "oem-nvidia-viking")]
-fn never_expire_policy_nvidia_viking() -> AccountServiceUpdate {
+#[cfg(feature = "oem-ami")]
+fn never_expire_policy_ami() -> AccountServiceUpdate {
     // Setting to (0,0,0,false,0) causes account lockout. So set them
     // to less harmful values
     AccountServiceUpdate::builder()

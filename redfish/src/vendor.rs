@@ -29,10 +29,13 @@ pub enum Vendor {
     /// Support Dell systems.
     #[cfg(feature = "oem-dell")]
     Dell,
-    /// Support NVIDIA Viking (H100) systems.
-    #[cfg(feature = "oem-nvidia-viking")]
-    NvidiaViking,
+    /// Support NVIDIA Viking DGX H100
+    #[cfg(feature = "oem-ami")]
+    AMI,
     /// Support NVIDIA GB200 / GB300 systems.
     #[cfg(feature = "oem-nvidia-gbx00")]
     NvidiaGbx00,
+    /// Support NVIDIA DPUs
+    #[cfg(feature = "oem-nvidia-dpu")]
+    NvidiaDPU,
 }

@@ -19,8 +19,9 @@ oem-lenovo = []
 oem-hpe = []
 oem-supermicro = []
 oem-dell = []
-oem-nvidia-viking = []
+oem-ami = []
 oem-nvidia-gbx00 = []
+oem-nvidia-dpu = []
 
 [dependencies]
 nv-redfish-core = { workspace = true }
