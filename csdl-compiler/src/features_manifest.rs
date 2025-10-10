@@ -95,6 +95,7 @@ impl FeaturesManifest {
     #[must_use]
     pub fn collect_vendor_features<'a>(
         &'a self,
+        vendor: &String,
         features: &[&String],
     ) -> (
         Vec<&'a String>, // root csdl
@@ -104,7 +105,7 @@ impl FeaturesManifest {
         self.oem_features.iter().fold(
             (Vec::new(), Vec::new(), Vec::new()),
             |(mut root, mut resolve, mut patterns), f| {
-                if features.contains(&&f.name) {
+                if f.vendor == *vendor && features.contains(&&f.name) {
                     root.extend(f.oem_csdl_files.iter());
                     resolve.extend(f.csdl_files.iter());
                     patterns.extend(f.patterns.iter());

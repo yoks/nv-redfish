@@ -34,7 +34,8 @@ mod account;
 /// Collection of accounts.
 mod collection;
 /// Password policy.
-#[cfg(feature = "lenovo")]
+#[cfg(feature = "oem-lenovo")]
+#[cfg(feature = "oem-hpe")]
 mod password_policy;
 
 use crate::patch_support::JsonValue;
@@ -56,7 +57,8 @@ pub use crate::schema::redfish::manager_account::ManagerAccountUpdate;
 #[doc(inline)]
 pub use account::Account;
 #[doc(inline)]
-#[cfg(feature = "lenovo")]
+#[cfg(feature = "oem-lenovo")]
+#[cfg(feature = "oem-hpe")]
 pub use password_policy::never_expire_policy as never_expire_password_policy;
 
 #[doc(inline)]

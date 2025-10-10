@@ -68,8 +68,11 @@
 pub(crate) mod patch_support;
 pub(crate) mod schema;
 
+/// HPE OEM support.
+#[cfg(feature = "oem-hpe")]
+pub(crate) mod schema_oem_hpe;
 /// Lenovo OEM support.
-#[cfg(feature = "lenovo")]
+#[cfg(feature = "oem-lenovo")]
 pub(crate) mod schema_oem_lenovo;
 
 /// Errors defined by the crate.

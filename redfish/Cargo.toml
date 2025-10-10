@@ -14,8 +14,9 @@ default = ["accounts", "events"]
 accounts = []
 events = []
 
-# Lenovo OEM features support
-lenovo = []
+# OEM features support
+oem-lenovo = []
+oem-hpe = []
 
 [dependencies]
 nv-redfish-core = { workspace = true }

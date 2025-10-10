@@ -81,7 +81,7 @@ fn main() -> Result<(), Box<dyn StdError>> {
     let vendors = manifest
         .all_vendors()
         .into_iter()
-        .filter(|v| var(format!("CARGO_FEATURE_{}", v.to_uppercase())).is_ok())
+        .filter(|v| var(format!("CARGO_FEATURE_OEM_{}", v.to_uppercase())).is_ok())
         .collect::<Vec<_>>();
 
     for v in vendors {
@@ -104,7 +104,7 @@ fn main() -> Result<(), Box<dyn StdError>> {
             continue;
         }
 
-        let (root_csdls, resolve_csdls, patterns) = manifest.collect_vendor_features(&features);
+        let (root_csdls, resolve_csdls, patterns) = manifest.collect_vendor_features(v, &features);
         let oem_schema_path = "../oem";
 
         let root_csdls = root_csdls

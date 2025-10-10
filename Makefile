@@ -20,10 +20,15 @@ redfish-schemas-dep = schemas/.dep-redfish
 swordfish-schemas-dep = schemas/.dep-swordfish
 
 all: $(redfish-schemas-dep) $(swordfish-schemas-dep) 
-	cargo build
+	cargo build --all-features
+	cargo build --features oem-hpe,accounts,events
+	cargo build --features accounts
+	cargo build --features events
+	cargo build --features ""
 	cargo test -- --no-capture
-	cargo clippy
+	cargo clippy --all-features
 	cargo doc
+	cargo build
 
 clean:
 	rm -rf $(schema-dir)
