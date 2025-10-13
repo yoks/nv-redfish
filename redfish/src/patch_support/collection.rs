@@ -140,6 +140,9 @@ impl Collection {
                 odata_id: self.base.base.odata_id.clone(),
                 odata_etag: self.base.base.odata_etag.clone(),
                 odata_type: self.base.base.odata_type.clone(),
+                // Don't support `@Redfish.Settings` for patched
+                // collection...
+                redfish_settings: None,
             },
             description: self.base.description.clone(),
             name: self.base.name.clone(),

@@ -56,7 +56,7 @@ impl EnumDef<'_> {
         tokens.extend([
             doc_format_and_generate(self.name, &self.compiled.odata),
             quote! {
-                #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+                #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
                 #[allow(clippy::enum_variant_names)]
                 pub enum #name
             },

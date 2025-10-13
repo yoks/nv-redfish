@@ -200,3 +200,10 @@ pub trait Deletable: EntityTypeRef + Sized {
         bmc.delete(self.id())
     }
 }
+
+/// This trait is assigned to updatable entity types to support
+/// @Redfish.Settings workflow.
+pub trait RedfishSettings<E: EntityTypeRef>: Sized {
+    /// Reference to the enity type object.
+    fn settings_object(&self) -> Option<NavProperty<E>>;
+}

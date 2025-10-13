@@ -48,11 +48,27 @@ use std::sync::Arc;
 
 /// Reference variant of the navigation property (only `@odata.id`
 /// property is specified).
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct Reference {
     #[serde(rename = "@odata.id")]
     odata_id: ODataId,
+}
+
+impl<T: EntityTypeRef> From<&NavProperty<T>> for Reference {
+    fn from(v: &NavProperty<T>) -> Self {
+        Self {
+            odata_id: v.id().clone(),
+        }
+    }
+}
+
+impl From<&Self> for Reference {
+    fn from(v: &Self) -> Self {
+        Self {
+            odata_id: v.odata_id.clone(),
+        }
+    }
 }
 
 /// Container struct for the expanded property variant.
@@ -117,6 +133,12 @@ impl<T: EntityTypeRef> NavProperty<T> {
     #[must_use]
     pub const fn new_reference(odata_id: ODataId) -> Self {
         Self::Reference(Reference { odata_id })
+    }
+
+    /// Downcast to descendant type `D`.
+    #[must_use]
+    pub fn downcast<D: EntityTypeRef>(&self) -> NavProperty<D> {
+        NavProperty::<D>::new_reference(self.id().clone())
     }
 }
 

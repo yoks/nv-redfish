@@ -61,10 +61,11 @@ pub struct StructDef<'a> {
     odata: OData<'a>,
     generate: Vec<GenerateType>,
     create_type: Option<QualifiedName<'a>>,
+    need_redfish_settings: bool,
 }
 
-#[derive(PartialEq, Eq)]
-enum ImplOdataType {
+#[derive(PartialEq, Eq, Clone, Copy)]
+enum ImplType {
     Root,
     Child,
     None,
@@ -94,7 +95,7 @@ impl<'a> StructDef<'a> {
         let mut content = TokenStream::new();
         let odata_id = Ident::new("odata_id", Span::call_site());
         let odata_etag = Ident::new("odata_etag", Span::call_site());
-        let (base_props, impl_odata_type) = self.base_type(&odata_id, &odata_etag, config);
+        let (base_props, impl_type) = self.base_type(&odata_id, &odata_etag, config);
 
         // Properties token streams:
         let properties_iter = self.properties.properties.iter().filter_map(|p| {
@@ -161,19 +162,19 @@ impl<'a> StructDef<'a> {
             }
         };
 
-        tokens.extend(match impl_odata_type {
-            ImplOdataType::Root => entity_type_impl(
+        tokens.extend(match impl_type {
+            ImplType::Root => entity_type_impl(
                 quote! { &self.#odata_id },
                 quote! { self.#odata_etag.as_ref() },
             ),
-            ImplOdataType::Child => {
+            ImplType::Child => {
                 entity_type_impl(quote! { self.base.id() }, quote! { self.base.etag() })
             }
-            ImplOdataType::None => TokenStream::new(),
+            ImplType::None => TokenStream::new(),
         });
 
-        if impl_odata_type != ImplOdataType::None {
-            self.generate_entity_type_traits(tokens, config);
+        if impl_type != ImplType::None {
+            self.generate_entity_type_traits(tokens, impl_type, config);
         }
 
         if !actions.is_empty() {
@@ -192,10 +193,11 @@ impl<'a> StructDef<'a> {
         odata_id: &Ident,
         odata_etag: &Ident,
         config: &Config,
-    ) -> (TokenStream, ImplOdataType) {
+    ) -> (TokenStream, ImplType) {
         self.base.map_or_else(
             || {
                 if *self.odata.must_have_id.inner() {
+                    let top = &config.top_module_alias;
                     // MustHaveId only for the root elements in type hierarchy. This requirements by code
                     // generation. Generator needs to add @odata.id field to the struct.
                     // If we will add odata.id on each level it may break deserialization.
@@ -207,11 +209,13 @@ impl<'a> StructDef<'a> {
                             pub #odata_etag: Option<ODataETag>,
                             #[serde(rename="@odata.type")]
                             pub odata_type: String,
+                            #[serde(rename = "@Redfish.Settings")]
+                            pub redfish_settings: Option<#top::settings::Settings>,
                         },
-                        ImplOdataType::Root,
+                        ImplType::Root,
                     )
                 } else {
-                    (TokenStream::new(), ImplOdataType::None)
+                    (TokenStream::new(), ImplType::None)
                 }
             },
             |base| {
@@ -224,9 +228,9 @@ impl<'a> StructDef<'a> {
                         pub #base_pname: #typename,
                     },
                     if *self.odata.must_have_id.inner() {
-                        ImplOdataType::Child
+                        ImplType::Child
                     } else {
-                        ImplOdataType::None
+                        ImplType::None
                     },
                 )
             },
@@ -630,17 +634,43 @@ impl<'a> StructDef<'a> {
         }
     }
 
-    fn generate_entity_type_traits(&self, tokens: &mut TokenStream, config: &Config) {
+    fn generate_entity_type_traits(
+        &self,
+        tokens: &mut TokenStream,
+        impl_type: ImplType,
+        config: &Config,
+    ) {
         let name = self.name;
         let top = &config.top_module_alias;
         tokens.extend(quote! {
             impl #top::Expandable for #name {}
         });
+        let fn_settings_impl = match impl_type {
+            ImplType::Root => {
+                quote! {
+                    self.redfish_settings
+                        .as_ref()
+                        .and_then(|s| s.settings_object.as_ref())
+                        .map(|r| NavProperty::Reference(r.into()))
+                }
+            }
+            ImplType::Child => {
+                quote! { self.base.settings_object().map(|s| s.downcast::<Self>()) }
+            }
+            ImplType::None => TokenStream::new(),
+        };
 
+        let update_name = self.name.for_update(None);
         if self.odata.updatable.is_some_and(|v| v.inner().value) {
-            let update_name = self.name.for_update(None);
             tokens.extend(quote! {
                 impl #top::Updatable<#update_name> for #name {}
+            });
+        }
+        if self.need_redfish_settings {
+            tokens.extend(quote! {
+                impl #top::RedfishSettings<Self> for #name {
+                    #[inline] fn settings_object(&self) -> Option<NavProperty<Self>> { #fn_settings_impl }
+                }
             });
         }
 
@@ -747,6 +777,7 @@ impl<'a> StructDefBuilder<'a> {
             odata,
             generate: vec![GenerateType::Read],
             create_type: None,
+            need_redfish_settings: false,
         })
     }
 
@@ -789,6 +820,13 @@ impl<'a> StructDefBuilder<'a> {
     #[must_use]
     pub fn with_generate_type(mut self, generate: Vec<GenerateType>) -> Self {
         self.0.generate = generate;
+        self
+    }
+
+    /// Generation of `RedfishSettings` trait implementation.
+    #[must_use]
+    pub const fn with_redfish_settings(mut self) -> Self {
+        self.0.need_redfish_settings = true;
         self
     }
 

@@ -150,7 +150,11 @@
     </Schema>
 
     <Schema xmlns="http://docs.oasis-open.org/odata/ns/edm" Namespace="Settings">
-      <ComplexType Name="Settings"/>
+      <ComplexType Name="Settings">
+        <NavigationProperty Name="SettingsObject" Type="Resource.Resource" Nullable="false">
+          <Annotation Term="OData.Permissions" EnumMember="OData.Permission/Read"/>
+        </NavigationProperty>
+      </ComplexType>
     </Schema>
   </edmx:DataServices>
 </edmx:Edmx>

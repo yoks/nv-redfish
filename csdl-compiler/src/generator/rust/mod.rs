@@ -168,6 +168,7 @@ impl<'a> RustGenerator<'a> {
                 Updatable,
                 Deletable,
                 Creatable,
+                RedfishSettings,
                 Bmc,
                 Empty,
                 ActionError,

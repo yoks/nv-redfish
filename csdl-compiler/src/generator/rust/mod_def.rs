@@ -249,9 +249,14 @@ impl<'a> ModDef<'a> {
                 builder
             };
             let mut gen_types = vec![GenerateType::Read];
-            if t.odata.updatable.is_some_and(|v| v.inner().value) || t.is_abstract.into_inner() {
+            let need_redfish_settings = if t.odata.updatable.is_some_and(|v| v.inner().value)
+                || t.is_abstract.into_inner()
+            {
                 gen_types.push(GenerateType::Update);
-            }
+                true
+            } else {
+                false
+            };
             if creatable.into_inner() {
                 gen_types.push(GenerateType::Create);
             }
@@ -259,6 +264,11 @@ impl<'a> ModDef<'a> {
             // defined by Members property.
             let builder = if let Some(mt) = t.insertable_member_type() {
                 builder.with_create(mt)
+            } else {
+                builder
+            };
+            let builder = if need_redfish_settings {
+                builder.with_redfish_settings()
             } else {
                 builder
             };
