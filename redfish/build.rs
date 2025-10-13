@@ -27,6 +27,17 @@ fn main() -> Result<(), Box<dyn StdError>> {
     let manifest = FeaturesManifest::read(&features_manifest)?;
     println!("cargo:rerun-if-changed={}", features_manifest.display());
 
+    let redfish_csdl = vec![
+        "Settings_v1.xml",
+        "Message_v1.xml",
+        "Resource_v1.xml",
+        "ResolutionStep_v1.xml",
+        "ActionInfo_v1.xml",
+    ]
+    .into_iter()
+    .map(Into::into)
+    .collect::<Vec<String>>();
+
     // ================================================================================
     // Compile standard DMTF schema
 
@@ -40,22 +51,19 @@ fn main() -> Result<(), Box<dyn StdError>> {
     let out_dir = PathBuf::from(var("OUT_DIR").unwrap());
     let output = out_dir.join("redfish.rs");
     let schema_path = "../schemas/redfish-csdl";
-    let service_root = vec![
-        "Resource_v1.xml",
-        "ResolutionStep_v1.xml",
-        "ServiceRoot_v1.xml",
-    ]
-    .into_iter()
-    .map(Into::into)
-    .collect::<Vec<String>>();
+    let service_root = vec!["ServiceRoot_v1.xml"]
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<String>>();
     let service_root_pattens = vec!["ServiceRoot.*.*"]
         .into_iter()
         .map(|v| v.parse())
         .collect::<Result<Vec<_>, _>>()
         .expect("must be successfuly parsed");
     let (features_csdls, features_patterns) = manifest.collect(&target_features);
-    let csdls = service_root
+    let csdls = redfish_csdl
         .iter()
+        .chain(service_root.iter())
         .chain(features_csdls)
         .map(|f| format!("{schema_path}/{f}"))
         .collect::<Vec<_>>();
@@ -112,8 +120,9 @@ fn main() -> Result<(), Box<dyn StdError>> {
             .map(|f| format!("{oem_schema_path}/{v}/{f}"))
             .collect::<Vec<_>>();
 
-        let resolve_csdls = resolve_csdls
+        let resolve_csdls = redfish_csdl
             .iter()
+            .chain(resolve_csdls.into_iter())
             .map(|f| format!("{schema_path}/{f}"))
             .collect::<Vec<_>>();
 

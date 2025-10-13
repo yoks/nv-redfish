@@ -148,5 +148,9 @@
       </EnumType>
 
     </Schema>
+
+    <Schema xmlns="http://docs.oasis-open.org/odata/ns/edm" Namespace="Settings">
+      <ComplexType Name="Settings"/>
+    </Schema>
   </edmx:DataServices>
 </edmx:Edmx>

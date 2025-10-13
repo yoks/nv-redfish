@@ -123,9 +123,13 @@ use stack::Stack;
 /// Type class needed for property attributes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TypeClass {
+    /// Simple type like `Edm.String`, `Edm.Int64` etc.
     SimpleType,
+    /// Enumeration type.
     EnumType,
+    /// Type definition.
     TypeDefinition,
+    /// Complex type.
     ComplexType,
 }
 
@@ -293,6 +297,10 @@ impl SchemaBundle {
         let stack = root_set.complex_types.iter().try_fold(stack, |cstack, t| {
             ensure_type(*t, ctx, &cstack).map(|(compiled, _)| cstack.merge(compiled))
         })?;
+        // Compile type for @Redfish.Settings
+        let (name, _) = ctx.schema_index.redfish_settings_type()?;
+        let (compiled, _) = ensure_type(name, ctx, &stack)?;
+        let stack = stack.merge(compiled);
         // Compile actions for all extracted types
         self.edmx_docs
             .iter()
@@ -402,6 +410,9 @@ mod test {
                    <Singleton Name="Service" Type="ServiceRoot.ServiceRoot"/>
                  </EntityContainer>
                  <EntityType Name="ServiceRoot" BaseType="ServiceRoot.ServiceRoot"/>
+               </Schema>
+               <Schema Namespace="Settings">
+                 <ComplexType Name="Settings"/>
                </Schema>
              </edmx:DataServices>
            </edmx:Edmx>"#;

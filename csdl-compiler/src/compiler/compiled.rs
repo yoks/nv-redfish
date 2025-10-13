@@ -25,10 +25,12 @@ use std::collections::HashSet;
 use std::iter::once as iter_once;
 use tagged_types::TaggedType;
 
+/// Action name to compiled action map.
 pub type ActionsMap<'a> = HashMap<&'a ActionName, Action<'a>>;
+/// All actions that belongs to the type defined by the name.
 pub type TypeActions<'a> = HashMap<QualifiedName<'a>, ActionsMap<'a>>;
 
-/// Flag that type is creatable
+/// Flag that type is creatable.
 pub type IsCreatable = TaggedType<bool, IsCreatableTag>;
 #[doc(hidden)]
 #[derive(tagged_types::Tag)]

@@ -198,6 +198,7 @@ impl<B: Bmc + Sync + Send> AccountCollection<B> {
                     phone_number: create.phone_number,
                     snmp: create.snmp,
                     strict_account_types: create.strict_account_types,
+                    mfa_bypass: create.mfa_bypass,
                 };
 
                 let account = Account::new(

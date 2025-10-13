@@ -28,6 +28,7 @@ use std::fs::File;
 use std::io::Read as _;
 use std::path::PathBuf;
 
+/// Default root singleton that should be compiled.
 pub const DEFAULT_ROOT: &str = "Service";
 
 /// Compiler highlevel commands.

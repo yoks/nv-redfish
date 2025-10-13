@@ -78,6 +78,7 @@ pub enum IsNullableTag {}
 
 /// Attribute is required.
 pub type IsRequired = TaggedType<bool, IsRequiredTag>;
+#[doc(hidden)]
 #[derive(tagged_types::Tag)]
 #[implement(Clone, Copy)]
 #[transparent(Display, Debug)]
@@ -86,6 +87,7 @@ pub enum IsRequiredTag {}
 
 /// Attribute is required when object is created.
 pub type IsRequiredOnCreate = TaggedType<bool, IsRequiredOnCreateTag>;
+#[doc(hidden)]
 #[derive(tagged_types::Tag)]
 #[implement(Clone, Copy)]
 #[transparent(Display, Debug)]
@@ -94,6 +96,7 @@ pub enum IsRequiredOnCreateTag {}
 
 /// Type is abastract.
 pub type IsAbstract = TaggedType<bool, IsAbstractTag>;
+#[doc(hidden)]
 #[derive(tagged_types::Tag)]
 #[implement(Clone, Copy)]
 #[transparent(Display, Debug, Deserialize)]

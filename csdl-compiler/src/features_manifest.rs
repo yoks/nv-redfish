@@ -13,6 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Features manifest.
+//!
+//! This module defines file format for features manifiest. Features
+//! manifest can be used in build script to define features what CSDL
+//! and part of schemas should be compiled.
+
 use crate::compiler::EntityTypeFilterPattern;
 use serde::Deserialize;
 use std::error::Error as StdError;

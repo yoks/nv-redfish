@@ -360,17 +360,15 @@ impl<'a> ModDef<'a> {
             content.extend([
                 Self::generate_ref_to_top_module(self.depth, config),
                 quote! {
-                    #[allow(unused_imports)]
                     use serde::{Serialize, Deserialize};
-                    #[allow(unused_imports)]
                     use #top::{NavProperty, ODataId, ODataETag, de_optional_nullable, de_required_nullable};
-                    #[allow(unused_imports)]
                     use #top::ActionError as _;
                 },
             ]);
             generate(&mut content);
             tokens.extend([
                 quote! {
+                    #[allow(unused_imports)]
                     pub mod #name
                 },
                 TokenTree::Group(Group::new(Delimiter::Brace, content)).into(),
@@ -394,7 +392,6 @@ impl<'a> ModDef<'a> {
         .collect::<Vec<_>>();
         let mut ts = TokenStream::new();
         ts.extend(quote! {
-            #[allow(unused_imports)]
             use super
         });
         ts.extend(supers);

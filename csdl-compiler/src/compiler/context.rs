@@ -37,8 +37,11 @@ use std::str::FromStr;
 /// Note: compilation `Stack` that represents "mutable" state of the
 /// compilation.
 pub struct Context<'a> {
+    /// Loaded schema search index.
     pub schema_index: SchemaIndex<'a>,
+    /// Configuation of the compilation.
     pub config: Config,
+    /// Set of root entities that must be compiled.
     pub root_set_entities: HashSet<QualifiedName<'a>>,
 }
 

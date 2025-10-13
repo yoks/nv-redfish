@@ -30,6 +30,8 @@ pub enum Error<'a> {
     NotBoundAction,
     NoBindingParameterForAction,
     EntityTypeNotFound(QualifiedName<'a>),
+    ComplexTypeNotFound(QualifiedName<'a>),
+    SettingsTypeNotFound,
     EntityType(QualifiedName<'a>, Box<Error<'a>>),
     TypeNotFound(QualifiedName<'a>),
     TypeDefinitionOfNotPrimitiveType(QualifiedName<'a>),
@@ -48,6 +50,11 @@ impl Display for Error<'_> {
         match self {
             Self::Unimplemented => writeln!(f, "unimplemented"),
             Self::EntityTypeNotFound(v) => writeln!(f, "entity type not found: {v}"),
+            Self::ComplexTypeNotFound(v) => writeln!(f, "complex type not found: {v}"),
+            Self::SettingsTypeNotFound => writeln!(
+                f,
+                "cannot find type for redfish settings (Settings.Settings)"
+            ),
             Self::NotBoundAction => {
                 write!(f, "unbound action is not supported")
             }
