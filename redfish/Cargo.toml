@@ -15,13 +15,13 @@ accounts = []
 events = []
 
 # OEM features support
-oem-lenovo = []
-oem-hpe = []
-oem-supermicro = []
-oem-dell = []
-oem-ami = []
-oem-nvidia-gbx00 = []
-oem-nvidia-dpu = []
+oem-lenovo = ["oem"]
+oem-hpe = ["oem"]
+oem-supermicro = ["oem"]
+oem-dell = ["oem"]
+oem-ami = ["oem"]
+oem-nvidia = ["oem"]
+oem = []
 
 [dependencies]
 nv-redfish-core = { workspace = true }

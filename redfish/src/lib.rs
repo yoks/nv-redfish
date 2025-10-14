@@ -68,20 +68,15 @@
 pub(crate) mod patch_support;
 pub(crate) mod schema;
 
-/// HPE OEM support.
-#[cfg(feature = "oem-hpe")]
-pub(crate) mod schema_oem_hpe;
-/// Lenovo OEM support.
-#[cfg(feature = "oem-lenovo")]
-pub(crate) mod schema_oem_lenovo;
-
 /// Errors defined by the crate.
 pub mod error;
-/// Supported vendors.
-pub mod vendor;
 
 /// Service Root implementation.
 pub mod service_root;
+
+/// Individual OEM support.
+#[cfg(feature = "oem")]
+pub mod oem;
 
 /// Accounts Service.
 #[cfg(feature = "accounts")]
@@ -94,5 +89,3 @@ pub mod events;
 pub use error::Error;
 #[doc(inline)]
 pub use service_root::ServiceRoot;
-#[doc(inline)]
-pub use vendor::Vendor;

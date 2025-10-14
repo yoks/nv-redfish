@@ -33,10 +33,6 @@
 mod account;
 /// Collection of accounts.
 mod collection;
-/// Password policy.
-#[cfg(feature = "oem-lenovo")]
-#[cfg(feature = "oem-hpe")]
-mod password_policy;
 
 use crate::patch_support::JsonValue;
 use crate::patch_support::ReadPatchFn;
@@ -56,15 +52,6 @@ pub use crate::schema::redfish::manager_account::ManagerAccountCreate;
 pub use crate::schema::redfish::manager_account::ManagerAccountUpdate;
 #[doc(inline)]
 pub use account::Account;
-#[cfg(feature = "oem-lenovo")]
-#[cfg(feature = "oem-hpe")]
-#[cfg(feature = "oem-supermicro")]
-#[cfg(feature = "oem-dell")]
-#[cfg(feature = "oem-ami")]
-#[cfg(feature = "oem-nvidia-gbx00")]
-#[cfg(feature = "oem-nvidia-dpu")]
-#[doc(inline)]
-pub use password_policy::best_bmaas_policy as best_bmaas_password_policy;
 
 #[doc(inline)]
 pub(crate) use account::Config as AccountConfig;

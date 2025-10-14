@@ -13,29 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Supported vendors.
+//! This file defines product / product lines that are managed in the
+//! same way.
 
-/// All supported vendors defined by features.
-pub enum Vendor {
-    /// Support Lenovo systems.
-    #[cfg(feature = "oem-lenovo")]
-    Lenovo,
-    /// Support HPE systems.
-    #[cfg(feature = "oem-hpe")]
-    Hpe,
-    /// Support Supermicro systems.
-    #[cfg(feature = "oem-supermicro")]
-    Supermicro,
-    /// Support Dell systems.
-    #[cfg(feature = "oem-dell")]
-    Dell,
-    /// Support NVIDIA Viking DGX H100
-    #[cfg(feature = "oem-ami")]
-    AMI,
-    /// Support NVIDIA GB200 / GB300 systems.
-    #[cfg(feature = "oem-nvidia-gbx00")]
-    NvidiaGbx00,
-    /// Support NVIDIA DPUs
-    #[cfg(feature = "oem-nvidia-dpu")]
-    NvidiaDPU,
+/// Lenovo products.
+pub enum Product {
+    /// Generic Lenovo server.
+    Generic,
 }
