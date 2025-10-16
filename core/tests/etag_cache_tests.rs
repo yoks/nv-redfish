@@ -196,4 +196,34 @@ mod cache_integration_tests {
         let error = result.unwrap_err();
         assert!(matches!(error, BmcReqwestError::CacheMiss));
     }
+
+    #[tokio::test]
+    async fn test_etag_cache_from_header() {
+        let mock_server = MockServer::start().await;
+        let resource_path = paths::CHASSIS_1;
+        let etag_value = "headeretag";
+
+        let test_resource =
+            create_test_resource(resource_path, None, names::TEST_CHASSIS, 100);
+
+        Mock::given(method("GET"))
+            .and(path(resource_path))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(&test_resource)
+                    .insert_header("etag", etag_value),
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let bmc = create_test_bmc(&mock_server);
+
+        let resource_id = create_odata_id(resource_path);
+        let result = bmc.get::<TestResource>(&resource_id).await;
+
+        assert!(result.is_ok());
+        let retrieved = result.unwrap();
+        assert_eq!(retrieved.etag.as_ref().unwrap().to_string(), etag_value);
+    }
 }

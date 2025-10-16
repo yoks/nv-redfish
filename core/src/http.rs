@@ -595,6 +595,7 @@ where
 #[derive(Debug)]
 pub enum BmcReqwestError {
     ReqwestError(reqwest::Error),
+    JsonError(serde_json::Error),
     InvalidResponse(Box<reqwest::Response>),
     CacheMiss,
     CacheError(String),
@@ -638,6 +639,7 @@ impl std::fmt::Display for BmcReqwestError {
             }
             Self::CacheMiss => write!(f, "Resource not found in cache"),
             Self::CacheError(r) => write!(f, "Error occurred in cache {r}"),
+            Self::JsonError(e) => write!(f, "JSON conversion error error: {e}"),
         }
     }
 }
@@ -855,7 +857,27 @@ impl ReqwestClient {
             return Err(BmcReqwestError::InvalidResponse(Box::new(response)));
         }
 
-        response.json().await.map_err(BmcReqwestError::ReqwestError)
+        let etag_header = response.headers().get("etag").cloned();
+
+        let mut value: serde_json::Value = response
+            .json()
+            .await
+            .map_err(BmcReqwestError::ReqwestError)?;
+
+        if let Some(header) = etag_header {
+            if let Ok(etag_value) = header.to_str() {
+                if let Some(obj) = value.as_object_mut() {
+                    let etag_value = serde_json::Value::String(etag_value.to_string());
+
+                    // Handles both absent and null values
+                    obj.entry("@odata.etag")
+                        .and_modify(|v| *v = etag_value.clone())
+                        .or_insert(etag_value);
+                }
+            }
+        }
+
+        serde_json::from_value(value).map_err(BmcReqwestError::JsonError)
     }
 }
 
@@ -936,7 +958,11 @@ impl HttpClient for ReqwestClient {
             .send()
             .await?;
 
-        self.handle_response(response).await
+        if !response.status().is_success() {
+            return Err(BmcReqwestError::InvalidResponse(Box::new(response)));
+        }
+
+        Ok(Empty {})
     }
 }
 
