@@ -81,6 +81,7 @@ impl MockBmc {
             "/redfish/v1" => {
                 r##"{
                       "@odata.id": "/redfish/v1",
+                      "@odata.type": "dummy type",
                       "Id": "RootService",
                       "Name": "Root Service",
                       "RedfishVersion": "1.19.0",
@@ -110,6 +111,7 @@ impl MockBmc {
             "/redfish/v1/Chassis" => {
                 r#"{
                       "@odata.id": "/redfish/v1/Chassis",
+                      "@odata.type": "dummy type",
                       "Name": "Chassis Collection",
                       "Members": [
                           {
@@ -121,6 +123,7 @@ impl MockBmc {
             "/redfish/v1/Chassis/1" => {
                 r#"{
                    "@odata.id": "/redfish/v1/Chassis/1",
+                   "@odata.type": "dummy type",
                    "Id": "1",
                    "Name": "Chassis 1",
                    "ChassisType": "Rack",
@@ -134,6 +137,7 @@ impl MockBmc {
             "/redfish/v1/Chassis/1/PCIeDevices" => {
                 r#"{
                       "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices",
+                      "@odata.type": "dummy type",
                       "Name": "Chassis Collection",
                       "Members": [
                           {
@@ -148,6 +152,7 @@ impl MockBmc {
             "/redfish/v1/Chassis/1/PCIeDevices/0-24" => {
                 r#"{
                      "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/0-24",
+                     "@odata.type": "dummy type",
                      "Id": "0-24",
                      "Links": {},
                      "Manufacturer": "Intel Corporation",
@@ -199,6 +204,7 @@ impl MockBmc {
             "/redfish/v1/Chassis/1/PCIeDevices/0-24/PCIeFunctions" => {
                 r#"{
                     "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/0-24/PCIeFunctions",
+                    "@odata.type": "dummy type",
                     "Description": "Collection of PCIeFunctions",
                     "Members": [
                         {
@@ -214,6 +220,7 @@ impl MockBmc {
                 {
                     "@odata.context": "/redfish/v1/$metadata#PCIeFunction.PCIeFunction",
                     "@odata.etag": "\"1754525529\"",
+                    "@odata.type": "dummy type",
                     "@odata.id": "/redfish/v1/Chassis/1/PCIeDevices/0-24/PCIeFunctions/0-24-0",
                     "ClassCode": "0x010601",
                     "Description": "Sapphire Rapids SATA AHCI Controller",
@@ -240,6 +247,7 @@ impl MockBmc {
                 r#"{
                     "@odata.context": "/redfish/v1/$metadata#ComputerSystemCollection.ComputerSystemCollection",
                     "@odata.id": "/redfish/v1/Systems",
+                    "@odata.type": "dummy type",
                     "Description": "Collection of Computer Systems",
                     "Members": [
                         {
@@ -263,6 +271,7 @@ impl MockBmc {
                     },
                     "@odata.context": "/redfish/v1/$metadata#ComputerSystem.ComputerSystem",
                     "@odata.id": "/redfish/v1/Systems/1",
+                    "@odata.type": "dummy type",
                     "Actions": {
                         "#ComputerSystem.Reset": {
                             "target": "/redfish/v1/Systems/1/Actions/ComputerSystem.Reset",
@@ -420,6 +429,7 @@ impl MockBmc {
             "/redfish/v1/Oem/Contoso/TurboencabulatorService" => {
                 r##"{
                        "@odata.id": "/redfish/v1/Oem/Contoso/TurboencabulatorService",
+                       "@odata.type": "dummy type",
                        "Id": "TurboencabulatorService",
                        "Name": "Turboencabulator Service",
                        "Status": {
@@ -435,6 +445,7 @@ impl MockBmc {
             "/redfish/v1/AccountService" => {
                 r##"{
                    "@odata.id": "/redfish/v1/AccountService",
+                   "@odata.type": "dummy type",
                    "Id": "AccountService",
                    "Accounts": { "@odata.id": "/redfish/v1/AccountService/Accounts" },
                    "Description": "User Accounts",
@@ -448,6 +459,7 @@ impl MockBmc {
             "/redfish/v1/AccountService/Accounts" => {
                r##"{
                    "@odata.id": "/redfish/v1/AccountService/Accounts",
+                   "@odata.type": "dummy type",
                    "Description": "User Accounts",
                    "Name": "Accounts",
                    "Members": []
@@ -456,6 +468,7 @@ impl MockBmc {
             "/redfish/v1/AccountService/Accounts/1" => {
                 r##"{
                    "@odata.id": "/redfish/v1/AccountService/Accounts/1",
+                   "@odata.type": "dummy type",
                    "AccountTypes": [],
                    "Id": "1",
                    "Description": "User Account",
