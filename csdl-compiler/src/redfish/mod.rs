@@ -17,3 +17,15 @@
 
 /// Redfish annotations helpers.
 pub mod annotations;
+
+/// Defines excerpt copy of the resource.
+pub mod excerpt;
+
+#[doc(inline)]
+pub use excerpt::Excerpt;
+
+#[doc(inline)]
+pub use excerpt::ExcerptKey;
+
+#[doc(inline)]
+pub use excerpt::ExcerptCopy;

@@ -13,13 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use csdl_compiler::commands::process_command;
-use csdl_compiler::commands::Commands;
-use csdl_compiler::commands::DEFAULT_ROOT;
-use csdl_compiler::Error;
-use glob::glob;
 use std::env::var;
 use std::path::PathBuf;
+
+use csdl_compiler::Error;
+use csdl_compiler::commands::{Commands, DEFAULT_ROOT, process_command};
+use glob::glob;
 
 fn main() -> Result<(), Error> {
     let out_dir = PathBuf::from(var("OUT_DIR").unwrap());
@@ -64,6 +63,11 @@ fn main() -> Result<(), Error> {
             "PCIeDevice.*",
             "PCIeFunctionCollection.*",
             "PCIeFunction.*",
+            "Thermal.*",
+            "Thermal.*.*",
+            "ThermalMetrics.*",
+            "ThermalSubsystem.*",
+            "Sensor.*",
         ]
         .iter()
         .map(|v| v.parse())

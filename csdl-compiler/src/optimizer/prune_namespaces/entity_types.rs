@@ -40,6 +40,14 @@ pub fn prune<'a>(input: Compiled<'a>) -> Compiled<'a> {
                 )
             })
             .collect(),
+        excerpt_copies: input
+            .excerpt_copies
+            .into_iter()
+            .map(|(name, copies)| {
+                let new_name = *replacements.get(&name).map_or(&name, |v| v);
+                (new_name, copies)
+            })
+            .collect(),
         creatable_entity_types: input
             .creatable_entity_types
             .into_iter()

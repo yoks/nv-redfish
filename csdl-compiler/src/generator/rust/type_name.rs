@@ -18,6 +18,7 @@ use crate::edmx::attribute_values::SimpleIdentifier;
 use crate::edmx::ActionName as EdmxActionName;
 use crate::edmx::ParameterName;
 use crate::generator::casemungler;
+use crate::redfish::ExcerptCopy;
 use proc_macro2::Ident;
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
@@ -62,6 +63,11 @@ impl<'a> TypeName<'a> {
     #[must_use]
     pub const fn for_create(&self) -> TypeNameForCreate<'a> {
         TypeNameForCreate(*self)
+    }
+
+    #[must_use]
+    pub const fn for_excerpt_copy(&self, excerpt: &'a ExcerptCopy) -> TypeNameForExcerptCopy<'a> {
+        TypeNameForExcerptCopy(*self, excerpt)
     }
 }
 
@@ -119,6 +125,23 @@ impl Display for TypeNameForCreate<'_> {
 }
 
 impl ToTokens for TypeNameForCreate<'_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.append(Ident::new(&self.to_string(), Span::call_site()));
+    }
+}
+
+pub struct TypeNameForExcerptCopy<'a>(TypeName<'a>, &'a ExcerptCopy);
+
+impl Display for TypeNameForExcerptCopy<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self.1 {
+            ExcerptCopy::AllKeys => write!(f, "{}Excerpt", self.0),
+            ExcerptCopy::Key(key) => write!(f, "{}Excerpt{key}", self.0),
+        }
+    }
+}
+
+impl ToTokens for TypeNameForExcerptCopy<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         tokens.append(Ident::new(&self.to_string(), Span::call_site()));
     }

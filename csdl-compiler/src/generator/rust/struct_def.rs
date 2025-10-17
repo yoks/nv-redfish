@@ -31,6 +31,7 @@ use crate::generator::rust::FullTypeName;
 use crate::generator::rust::StructFieldName;
 use crate::generator::rust::TypeName;
 use crate::odata::annotations::Permissions;
+use crate::redfish::ExcerptCopy;
 use crate::IsNullable;
 use crate::IsRequired;
 use crate::OneOrCollection;
@@ -45,6 +46,7 @@ use std::iter;
 #[derive(Debug)]
 pub enum GenerateType {
     Read,
+    Excerpt(ExcerptCopy),
     Update,
     Create,
     Action,
@@ -90,6 +92,7 @@ impl<'a> StructDef<'a> {
             match t {
                 GenerateType::Create => self.generate_create(tokens, config),
                 GenerateType::Read => self.generate_read(tokens, config),
+                GenerateType::Excerpt(v) => self.generate_excerpt(tokens, config, v),
                 GenerateType::Update => self.generate_update(tokens, config),
                 GenerateType::Action => self.generate_action(tokens, config),
             }
@@ -105,7 +108,7 @@ impl<'a> StructDef<'a> {
 
         // Properties token streams:
         let properties_iter = self.properties.properties.iter().filter_map(|p| {
-            if p.odata.permissions_is_write_only() {
+            if p.odata.permissions_is_write_only() || p.redfish.is_excerpt_only.into_inner() {
                 None
             } else {
                 Some(Self::generate_property(p, config))
@@ -192,6 +195,35 @@ impl<'a> StructDef<'a> {
                 impl #name { #content }
             });
         }
+    }
+
+    fn generate_excerpt(
+        &self,
+        tokens: &mut TokenStream,
+        config: &Config,
+        excerpt_copy: &ExcerptCopy,
+    ) {
+        let mut content = TokenStream::new();
+        let all_properties = self.properties.properties.iter().filter_map(|p| {
+            if !p.odata.permissions_is_write_only()
+                && p.redfish
+                    .excerpt
+                    .as_ref()
+                    .is_some_and(|excerpt| excerpt.matches(excerpt_copy))
+            {
+                Some(Self::generate_property(p, config))
+            } else {
+                None
+            }
+        });
+
+        content.extend(all_properties);
+
+        let name = self.name.for_excerpt_copy(excerpt_copy);
+        tokens.extend([quote! {
+            #[derive(Deserialize, Debug)]
+            pub struct #name { #content }
+        }]);
     }
 
     fn base_type(
@@ -558,8 +590,17 @@ impl<'a> StructDef<'a> {
                     return TokenStream::new();
                 }
                 let doc = doc_format_and_generate(p.ptype.name(), &p.odata);
-                let full_type = FullTypeName::new(p.ptype.name(), config);
-                let ptype = quote! { NavProperty<#full_type> };
+                let ptype = p.redfish.excerpt_copy.as_ref().map_or_else(
+                    || {
+                        let full_type = FullTypeName::new(p.ptype.name(), config);
+                        quote! { NavProperty<#full_type> }
+                    },
+                    |excerpt| {
+                        FullTypeName::new(p.ptype.name(), config)
+                            .for_excerpt_copy(excerpt)
+                            .to_token_stream()
+                    },
+                );
                 let (sa, t) = Self::gen_de_struct_field(
                     &p.ptype,
                     ptype,

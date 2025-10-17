@@ -109,6 +109,15 @@ pub type IsRequiredOnCreate = TaggedType<bool, IsRequiredOnCreateTag>;
 #[capability(inner_access)]
 pub enum IsRequiredOnCreateTag {}
 
+/// Whether an attribute appears only in excerpt copies of resource.
+pub type IsExcerptCopyOnly = TaggedType<bool, IsExcerptCopyOnlyTag>;
+#[doc(hidden)]
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Copy)]
+#[transparent(Display, Debug)]
+#[capability(inner_access)]
+pub enum IsExcerptCopyOnlyTag {}
+
 /// Whether a type is abstract.
 pub type IsAbstract = TaggedType<bool, IsAbstractTag>;
 #[doc(hidden)]

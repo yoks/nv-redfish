@@ -18,6 +18,7 @@ use crate::compiler::TypeClass;
 use crate::generator::rust::Config;
 use crate::generator::rust::ModName;
 use crate::generator::rust::TypeName;
+use crate::redfish::ExcerptCopy;
 use proc_macro2::Punct;
 use proc_macro2::Spacing;
 use proc_macro2::TokenStream;
@@ -54,6 +55,14 @@ impl<'a, 'config> FullTypeName<'a, 'config> {
     #[must_use]
     pub const fn for_create(&self) -> FullTypeNameForCreate<'a, 'config> {
         FullTypeNameForCreate(*self)
+    }
+
+    #[must_use]
+    pub const fn for_excerpt_copy(
+        &self,
+        excerpt: &'a ExcerptCopy,
+    ) -> FullTypeNameForExcerptCopy<'a, 'config> {
+        FullTypeNameForExcerptCopy(*self, excerpt)
     }
 
     fn namespace_to_tokens(&self, tokens: &mut TokenStream) {
@@ -100,6 +109,18 @@ impl ToTokens for FullTypeNameForCreate<'_, '_> {
         tokens.append(Punct::new(':', Spacing::Joint));
         tokens.append(Punct::new(':', Spacing::Joint));
         let name = TypeName::new_qualified(self.0.type_name.name).for_create();
+        tokens.extend(quote! { #name });
+    }
+}
+
+pub struct FullTypeNameForExcerptCopy<'a, 'config>(FullTypeName<'a, 'config>, &'a ExcerptCopy);
+
+impl ToTokens for FullTypeNameForExcerptCopy<'_, '_> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.0.namespace_to_tokens(tokens);
+        tokens.append(Punct::new(':', Spacing::Joint));
+        tokens.append(Punct::new(':', Spacing::Joint));
+        let name = TypeName::new_qualified(self.0.type_name.name).for_excerpt_copy(self.1);
         tokens.extend(quote! { #name });
     }
 }

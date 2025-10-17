@@ -117,6 +117,7 @@ impl<'a> Properties<'a> {
         stack: &Stack<'a, '_>,
     ) -> Result<Compiled<'a>, Error<'a>> {
         let qname = v.ptype.qualified_type_name().into();
+        let redfish = RedfishProperty::new(v);
         if ctx.root_set_entities.contains(&qname) || ctx.config.entity_type_filter.matches(&qname) {
             let (ptype, compiled) = ctx
                 .schema_index
@@ -135,18 +136,27 @@ impl<'a> Properties<'a> {
                     }
                     .map(|compiled| (qtype, compiled))
                 })?;
+            let compiled = if let Some(ec) = redfish.excerpt_copy.clone() {
+                compiled.merge(Compiled::new_excerpt_copy(qname, ec))
+            } else {
+                compiled
+            };
             p.nav_properties
                 .push(NavProperty::Expandable(NavPropertyExpandable {
                     name: &v.name,
                     ptype: v.ptype.as_ref().map(|_| ptype),
                     odata: OData::new(MustHaveId::new(false), v),
-                    redfish: RedfishProperty::new(v),
+                    redfish,
                     nullable: v.nullable.unwrap_or(IsNullable::new(false)),
                 }));
             Ok(compiled)
         } else {
-            p.nav_properties
-                .push(NavProperty::Reference(v.ptype.as_ref().map(|_| &v.name)));
+            if redfish.excerpt_copy.is_none() {
+                // Don't add excerpt copy of entities that are not
+                // included in entity pattern.
+                p.nav_properties
+                    .push(NavProperty::Reference(v.ptype.as_ref().map(|_| &v.name)));
+            }
             Ok(Compiled::default())
         }
     }

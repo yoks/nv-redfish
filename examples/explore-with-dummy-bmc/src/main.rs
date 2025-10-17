@@ -13,29 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use nv_redfish_core::Action;
-use nv_redfish_core::ActionError;
-use nv_redfish_core::Bmc;
-use nv_redfish_core::Creatable;
-use nv_redfish_core::Empty;
-use nv_redfish_core::EntityTypeRef;
-use nv_redfish_core::Expandable;
-use nv_redfish_core::NavProperty;
-use nv_redfish_core::ODataETag;
-use nv_redfish_core::ODataId;
-use nv_redfish_core::Updatable;
-use redfish_oem_contoso::redfish::contoso_turboencabulator_service::ContosoTurboencabulatorServiceUpdate;
-use redfish_oem_contoso::redfish::contoso_turboencabulator_service::TurboencabulatorMode;
+use std::error::Error as StdError;
+use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::sync::Arc;
+
+use nv_redfish_core::http::ExpandQuery;
+use nv_redfish_core::{
+    Action, ActionError, Bmc, Creatable, Empty, EntityTypeRef, Expandable, NavProperty, ODataETag,
+    ODataId, Updatable,
+};
+use redfish_oem_contoso::redfish::contoso_turboencabulator_service::{
+    ContosoTurboencabulatorServiceUpdate, TurboencabulatorMode,
+};
 use redfish_std::redfish::manager_account::ManagerAccountCreate;
 use redfish_std::redfish::resource::ResetType;
 use redfish_std::redfish::service_root::ServiceRoot;
-use serde::Deserialize;
-use serde::Serialize;
-use std::error::Error as StdError;
-use std::fmt::Display;
-use std::fmt::Formatter;
-use std::fmt::Result as FmtResult;
-use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
 pub enum Error {
@@ -674,6 +667,7 @@ async fn main() -> Result<(), Error> {
     // Oem:
     let contoso_oem: Constoso = serde_json::from_value(
         service_root
+            .base
             .base
             .oem
             .as_ref()

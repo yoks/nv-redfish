@@ -22,10 +22,12 @@
 //! base class and flattened in during deserialization.
 //!
 
+use crate::compiler::compiled::excerpt_copies_merge_to;
 use crate::compiler::Compiled;
 use crate::compiler::EntityType;
 use crate::compiler::MapType as _;
 use crate::compiler::NavProperty;
+use crate::compiler::OData;
 use crate::compiler::Properties;
 use crate::compiler::PropertiesManipulation as _;
 use crate::compiler::QualifiedName;
@@ -92,21 +94,7 @@ pub fn prune_entity_type_inheritance<'a>(input: Compiled<'a>) -> Compiled<'a> {
                     if let Some(parent) = remove.remove(&next_base) {
                         properties.push(parent.properties);
                         base = parent.base;
-                        if odata.description.is_none() {
-                            odata.description = parent.odata.description;
-                        }
-                        if odata.long_description.is_none() {
-                            odata.long_description = parent.odata.long_description;
-                        }
-                        if odata.insertable.is_none() {
-                            odata.insertable = parent.odata.insertable;
-                        }
-                        if odata.updatable.is_none() {
-                            odata.updatable = parent.odata.updatable;
-                        }
-                        if odata.deletable.is_none() {
-                            odata.deletable = parent.odata.deletable;
-                        }
+                        merge_odata(&mut odata, parent.odata);
                     } else {
                         break;
                     }
@@ -131,6 +119,15 @@ pub fn prune_entity_type_inheritance<'a>(input: Compiled<'a>) -> Compiled<'a> {
             .into_iter()
             .map(|name| replace(&name, &replacements))
             .collect(),
+        excerpt_copies: input.excerpt_copies.into_iter().fold(
+            HashMap::new(),
+            |mut acc, (name, copies)| {
+                // Merge copies to the new name...
+                let new_name = replace(&name, &replacements);
+                excerpt_copies_merge_to(&mut acc, new_name, copies);
+                acc
+            },
+        ),
         complex_types: input
             .complex_types
             .into_iter()
@@ -139,5 +136,23 @@ pub fn prune_entity_type_inheritance<'a>(input: Compiled<'a>) -> Compiled<'a> {
         enum_types: input.enum_types,
         type_definitions: input.type_definitions,
         actions: map_types_in_actions(input.actions, |t| replace(&t, &replacements)),
+    }
+}
+
+const fn merge_odata<'a>(odata: &mut OData<'a>, parent_odata: OData<'a>) {
+    if odata.description.is_none() {
+        odata.description = parent_odata.description;
+    }
+    if odata.long_description.is_none() {
+        odata.long_description = parent_odata.long_description;
+    }
+    if odata.insertable.is_none() {
+        odata.insertable = parent_odata.insertable;
+    }
+    if odata.updatable.is_none() {
+        odata.updatable = parent_odata.updatable;
+    }
+    if odata.deletable.is_none() {
+        odata.deletable = parent_odata.deletable;
     }
 }

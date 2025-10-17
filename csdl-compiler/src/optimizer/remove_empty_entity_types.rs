@@ -30,6 +30,8 @@ use crate::compiler::QualifiedName;
 use crate::optimizer::map_types_in_actions;
 use crate::optimizer::replace;
 use crate::optimizer::Replacements;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 
 pub fn remove_empty_entity_types<'a>(input: Compiled<'a>) -> Compiled<'a> {
     let et_replacements = collect_et_replacements(&input);
@@ -55,6 +57,22 @@ pub fn remove_empty_entity_types<'a>(input: Compiled<'a>) -> Compiled<'a> {
             .into_iter()
             .map(|name| replace(&name, &et_replacements))
             .collect(),
+        excerpt_copies: input.excerpt_copies.into_iter().fold(
+            HashMap::new(),
+            |mut acc, (name, copies)| {
+                // Merge copies to the new name...
+                let new_name = replace(&name, &et_replacements);
+                match acc.entry(new_name) {
+                    Entry::Occupied(mut e) => {
+                        e.get_mut().extend(copies);
+                    }
+                    Entry::Vacant(e) => {
+                        e.insert(copies);
+                    }
+                }
+                acc
+            },
+        ),
         complex_types: input
             .complex_types
             .into_iter()

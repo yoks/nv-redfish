@@ -42,6 +42,8 @@ use crate::compiler::EnumType;
 use crate::compiler::QualifiedName;
 use crate::compiler::TypeDefinition;
 use crate::edmx::ActionName;
+use crate::redfish::ExcerptCopy;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::iter::once as iter_once;
@@ -51,6 +53,11 @@ use tagged_types::TaggedType;
 pub type ActionsMap<'a> = HashMap<&'a ActionName, Action<'a>>;
 /// All actions that belong to a type, keyed by its qualified name.
 pub type TypeActions<'a> = HashMap<QualifiedName<'a>, ActionsMap<'a>>;
+
+/// Set of all required excerpt copies of one type.
+pub type ExcerptCopiesSet = HashSet<ExcerptCopy>;
+/// Map from type name to required excerpt copies.
+pub type ExcerptCopiesMap<'a> = HashMap<QualifiedName<'a>, ExcerptCopiesSet>;
 
 /// Whether a type is creatable.
 pub type IsCreatable = TaggedType<bool, IsCreatableTag>;
@@ -77,6 +84,8 @@ pub struct Compiled<'a> {
     pub actions: TypeActions<'a>,
     /// Entity types whose collections are creatable.
     pub creatable_entity_types: HashSet<QualifiedName<'a>>,
+    /// Excerpt copies of entity types that need to be generated.
+    pub excerpt_copies: ExcerptCopiesMap<'a>,
 }
 
 impl<'a> Compiled<'a> {
@@ -135,6 +144,17 @@ impl<'a> Compiled<'a> {
         }
     }
 
+    /// Create a excerpt copy reference of the entity type.
+    #[must_use]
+    pub fn new_excerpt_copy(qtype: QualifiedName<'a>, copy: ExcerptCopy) -> Self {
+        Self {
+            excerpt_copies: vec![(qtype, vec![copy].into_iter().collect::<HashSet<_>>())]
+                .into_iter()
+                .collect(),
+            ..Default::default()
+        }
+    }
+
     /// Merge two compiled structures.
     #[must_use]
     pub fn merge(mut self, other: Self) -> Self {
@@ -159,6 +179,26 @@ impl<'a> Compiled<'a> {
                     selfactions.insert(qname, new_actions);
                     selfactions
                 });
+
+        for (qtype, copies) in other.excerpt_copies {
+            excerpt_copies_merge_to(&mut self.excerpt_copies, qtype, copies);
+        }
         self
+    }
+}
+
+/// Merge `copies` to type with name `name` in `target`.
+pub fn excerpt_copies_merge_to<'a>(
+    target: &mut ExcerptCopiesMap<'a>,
+    name: QualifiedName<'a>,
+    copies: ExcerptCopiesSet,
+) {
+    match target.entry(name) {
+        Entry::Occupied(mut e) => {
+            e.get_mut().extend(copies);
+        }
+        Entry::Vacant(e) => {
+            e.insert(copies);
+        }
     }
 }

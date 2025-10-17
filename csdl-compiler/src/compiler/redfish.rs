@@ -16,6 +16,9 @@
 //! Redfish-specific attributes used during code generation.
 
 use crate::redfish::annotations::RedfishPropertyAnnotations;
+use crate::redfish::Excerpt;
+use crate::redfish::ExcerptCopy;
+use crate::IsExcerptCopyOnly;
 use crate::IsRequired;
 use crate::IsRequiredOnCreate;
 
@@ -26,6 +29,12 @@ pub struct RedfishProperty {
     pub is_required: IsRequired,
     /// Whether the property is required on create.
     pub is_required_on_create: IsRequiredOnCreate,
+    /// Whether the property is only appear in excerpt copies of the resource.
+    pub is_excerpt_only: IsExcerptCopyOnly,
+    /// Defines which excerpt view property belongs to.
+    pub excerpt: Option<Excerpt>,
+    /// Property is excerpt copy of the resource.
+    pub excerpt_copy: Option<ExcerptCopy>,
 }
 
 impl RedfishProperty {
@@ -35,6 +44,9 @@ impl RedfishProperty {
         Self {
             is_required: src.is_required(),
             is_required_on_create: src.is_required_on_create(),
+            is_excerpt_only: src.is_excerpt_only(),
+            excerpt: src.excerpt(),
+            excerpt_copy: src.excerpt_copy(),
         }
     }
 }

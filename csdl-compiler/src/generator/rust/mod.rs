@@ -124,6 +124,7 @@ impl<'a> RustGenerator<'a> {
         let root = ModDef::default();
         let mut cactions = compiled.actions;
         let creatable = compiled.creatable_entity_types;
+        let mut excerpt_copies = compiled.excerpt_copies;
         let root = cactions.iter().try_fold(root, |m, (_, ma)| {
             ma.iter()
                 .try_fold(m, |m, (_, a)| m.add_action_type(a, &config))
@@ -140,7 +141,11 @@ impl<'a> RustGenerator<'a> {
             .into_iter()
             .try_fold(root, |m, (_, t)| {
                 let is_creatable = IsCreatable::new(creatable.contains(&t.name));
-                m.add_entity_type(t, is_creatable, &config)
+                let type_excerpt_copies = excerpt_copies
+                    .remove(&t.name)
+                    .map(|v| v.into_iter().collect::<Vec<_>>())
+                    .unwrap_or_default();
+                m.add_entity_type(t, is_creatable, type_excerpt_copies, &config)
             })?;
         let root = compiled
             .type_definitions

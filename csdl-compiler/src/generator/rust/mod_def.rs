@@ -30,6 +30,7 @@ use crate::generator::rust::StructDef;
 use crate::generator::rust::TypeDef;
 use crate::generator::rust::TypeName;
 use crate::odata::annotations::Permissions;
+use crate::redfish::ExcerptCopy;
 use proc_macro2::Delimiter;
 use proc_macro2::Group;
 use proc_macro2::Ident;
@@ -218,15 +219,17 @@ impl<'a> ModDef<'a> {
         self,
         t: EntityType<'a>,
         creatable: IsCreatable,
+        excerpt_copies: Vec<ExcerptCopy>,
         config: &Config,
     ) -> Result<Self, Error<'a>> {
-        self.inner_add_entity_type(t, creatable, 0, config)
+        self.inner_add_entity_type(t, creatable, excerpt_copies, 0, config)
     }
 
     fn inner_add_entity_type(
         mut self,
         t: EntityType<'a>,
         creatable: IsCreatable,
+        excerpt_copies: Vec<ExcerptCopy>,
         depth: usize,
         config: &Config,
     ) -> Result<Self, Error<'a>> {
@@ -235,7 +238,7 @@ impl<'a> ModDef<'a> {
             self.sub_mods
                 .remove(&mod_name)
                 .unwrap_or_else(|| ModDef::new(mod_name, depth))
-                .inner_add_entity_type(t, creatable, depth + 1, config)
+                .inner_add_entity_type(t, creatable, excerpt_copies, depth + 1, config)
                 .map(|submod| {
                     self.sub_mods.insert(mod_name, submod);
                     self
@@ -259,6 +262,9 @@ impl<'a> ModDef<'a> {
             };
             if creatable.into_inner() {
                 gen_types.push(GenerateType::Create);
+            }
+            for excerpt_copy in excerpt_copies {
+                gen_types.push(GenerateType::Excerpt(excerpt_copy));
             }
             // This is collection case. Members to be create are
             // defined by Members property.
