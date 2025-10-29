@@ -26,7 +26,7 @@ mod storage;
 
 use crate::schema::redfish::computer_system_collection::ComputerSystemCollection as ComputerSystemCollectionSchema;
 use crate::Error;
-use nv_redfish_core::http::ExpandQuery;
+use nv_redfish_core::query::ExpandQuery;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::Expandable as _;
 use nv_redfish_core::NavProperty;

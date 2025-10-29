@@ -84,8 +84,10 @@ pub mod http;
 pub mod nav_property;
 /// Type for `@odata.id` identifier.
 pub mod odata;
+/// Support of redfish queries
+pub mod query;
 
-use crate::http::ExpandQuery;
+use crate::query::ExpandQuery;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{future::Future, sync::Arc};
 
@@ -103,6 +105,10 @@ pub use deserialize::de_required_nullable;
 pub use edm_date_time_offset::EdmDateTimeOffset;
 #[doc(inline)]
 pub use edm_duration::EdmDuration;
+#[doc(inline)]
+pub use query::FilterQuery;
+#[doc(inline)]
+pub use query::ToFilterLiteral;
 #[doc(inline)]
 pub use nav_property::NavProperty;
 #[doc(inline)]
@@ -138,7 +144,7 @@ pub trait EntityTypeRef {
 }
 
 /// Defines entity types that support `$expand` via query parameters.
-pub trait Expandable: EntityTypeRef + Send + Sync + Sized + for<'a> Deserialize<'a> {
+pub trait Expandable: EntityTypeRef + Send + Sync + Sized + 'static + for<'a> Deserialize<'a> {
     /// Expand the entity according to the provided query.
     fn expand<B: Bmc>(
         &self,
@@ -214,4 +220,10 @@ pub trait RedfishSettings<E: EntityTypeRef>: Sized {
 pub trait ToSnakeCase {
     /// Convert this enum variant to a `snake_case` string
     fn to_snake_case(&self) -> &'static str;
+}
+
+/// Trait for types that can be used as filter properties in `OData` queries
+pub trait FilterProperty {
+    /// Returns the `OData` property path for this property
+    fn property_path(&self) -> &str;
 }

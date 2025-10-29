@@ -18,7 +18,7 @@ use crate::systems::Memory;
 use crate::systems::Processor;
 use crate::systems::Storage;
 use crate::Error;
-use nv_redfish_core::http::ExpandQuery;
+use nv_redfish_core::query::ExpandQuery;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::Expandable as _;
 use std::sync::Arc;

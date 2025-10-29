@@ -21,7 +21,7 @@ mod thermal;
 
 use crate::schema::redfish::chassis_collection::ChassisCollection as ChassisCollectionSchema;
 use crate::Error;
-use nv_redfish_core::http::ExpandQuery;
+use nv_redfish_core::query::ExpandQuery;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::Expandable as _;
 use nv_redfish_core::NavProperty;

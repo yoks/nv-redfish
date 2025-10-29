@@ -17,7 +17,7 @@ use std::error::Error as StdError;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::sync::Arc;
 
-use nv_redfish_core::http::ExpandQuery;
+use nv_redfish_core::query::ExpandQuery;
 use nv_redfish_core::{
     Action, ActionError, Bmc, Creatable, Empty, EntityTypeRef, Expandable, NavProperty, ODataETag,
     ODataId, Updatable,
@@ -489,6 +489,14 @@ impl Bmc for MockBmc {
     where
         T: Expandable,
     {
+        todo!("unimplimented")
+    }
+
+    async fn filter<T: EntityTypeRef + Sized + for<'a> Deserialize<'a> + 'static + Send + Sync>(
+        &self,
+        _id: &ODataId,
+        _query: nv_redfish_core::FilterQuery,
+    ) -> Result<Arc<T>, Error> {
         todo!("unimplimented")
     }
 

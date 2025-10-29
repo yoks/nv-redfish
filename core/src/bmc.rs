@@ -52,7 +52,8 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::http::ExpandQuery;
+use crate::FilterQuery;
+use crate::query::ExpandQuery;
 use crate::Action;
 use crate::Empty;
 use crate::EntityTypeRef;
@@ -73,7 +74,7 @@ pub trait Bmc: Send + Sync {
     /// Expand any expandable object (navigation property or entity).
     ///
     /// `T` is structure that is used for return type.
-    fn expand<T: Expandable + Send + Sync>(
+    fn expand<T: Expandable + Send + Sync + 'static>(
         &self,
         id: &ODataId,
         query: ExpandQuery,
@@ -85,6 +86,15 @@ pub trait Bmc: Send + Sync {
     fn get<T: EntityTypeRef + Sized + for<'a> Deserialize<'a> + 'static + Send + Sync>(
         &self,
         id: &ODataId,
+    ) -> impl Future<Output = Result<Arc<T>, Self::Error>> + Send;
+
+    /// Get and filters data of the object (navigation property or entity).
+    ///
+    /// `T` is structure that is used for return type.
+    fn filter<T: EntityTypeRef + Sized + for<'a> Deserialize<'a> + 'static + Send + Sync>(
+        &self,
+        id: &ODataId,
+        query: FilterQuery,
     ) -> impl Future<Output = Result<Arc<T>, Self::Error>> + Send;
 
     /// Creates element of the collection.

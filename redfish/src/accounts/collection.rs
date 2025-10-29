@@ -49,7 +49,7 @@ use crate::schema::redfish::manager_account::ManagerAccount;
 use crate::schema::redfish::manager_account_collection::ManagerAccountCollection;
 use crate::schema::redfish::resource::ResourceCollection;
 use crate::Error;
-use nv_redfish_core::http::ExpandQuery;
+use nv_redfish_core::query::ExpandQuery;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::EntityTypeRef as _;
 use nv_redfish_core::NavProperty;

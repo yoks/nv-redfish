@@ -15,10 +15,10 @@
 
 use nv_redfish_core::bmc::BmcCredentials;
 use nv_redfish_core::http::BmcReqwestError;
-use nv_redfish_core::http::ExpandQuery;
 use nv_redfish_core::http::HttpBmc;
 use nv_redfish_core::http::ReqwestClient;
 use nv_redfish_core::http::ReqwestClientParams;
+use nv_redfish_core::query::ExpandQuery;
 use nv_redfish_core::Creatable;
 use nv_redfish_core::Deletable;
 use nv_redfish_core::EntityTypeRef;

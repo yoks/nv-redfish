@@ -22,7 +22,7 @@ use crate::sensors::extract_environment_sensors;
 use crate::sensors::Sensor;
 use crate::Error;
 use nv_redfish_core::bmc::Bmc;
-use nv_redfish_core::http::ExpandQuery;
+use nv_redfish_core::query::ExpandQuery;
 use nv_redfish_core::Expandable as _;
 use nv_redfish_core::NavProperty;
 use std::sync::Arc;

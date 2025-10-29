@@ -38,6 +38,7 @@ use crate::Creatable;
 use crate::Deletable;
 use crate::EntityTypeRef;
 use crate::Expandable;
+use crate::FilterQuery;
 use crate::ODataETag;
 use crate::ODataId;
 use crate::Updatable;
@@ -185,5 +186,15 @@ impl<T: EntityTypeRef + Sized + for<'a> Deserialize<'a> + 'static + Send + Sync>
             Self::Expanded(v) => Ok(v.0.clone()),
             Self::Reference(_) => bmc.get::<T>(self.id()).await,
         }
+    }
+
+    /// Filter the property value using the provided query.
+    ///
+    /// # Errors
+    ///
+    /// Returns a BMC error if filtering the entity fails.
+    #[allow(missing_docs)]
+    pub async fn filter<B: Bmc>(&self, bmc: &B, query: FilterQuery) -> Result<Arc<T>, B::Error> {
+        bmc.filter::<T>(self.id(), query).await
     }
 }

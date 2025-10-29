@@ -21,7 +21,7 @@
 use crate::schema::redfish::log_entry::LogEntry;
 use crate::schema::redfish::log_service::LogService as LogServiceSchema;
 use crate::Error;
-use nv_redfish_core::http::ExpandQuery;
+use nv_redfish_core::query::ExpandQuery;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::Expandable as _;
 use std::sync::Arc;

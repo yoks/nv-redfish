@@ -17,10 +17,7 @@ mod common;
 
 #[cfg(feature = "reqwest")]
 mod reqwest_client_tests {
-    use nv_redfish_core::{
-        http::{BmcReqwestError, ExpandQuery},
-        Bmc,
-    };
+    use nv_redfish_core::{http::BmcReqwestError, query::{ExpandQuery, FilterQuery}, Bmc};
     use wiremock::{
         matchers::{body_json, header, method, path, query_param},
         Mock, MockServer, ResponseTemplate,
@@ -82,6 +79,35 @@ mod reqwest_client_tests {
         let retrieved = result.unwrap();
         assert_eq!(retrieved.name, names::TEST_SYSTEM);
         assert_eq!(retrieved.value, 100);
+    }
+
+    #[tokio::test]
+    async fn test_get_request_with_filter() {
+        let mock_server = MockServer::start().await;
+        let resource_path = paths::SYSTEMS_1;
+
+        let test_resource =
+            create_test_resource(resource_path, Some("789"), names::TEST_SYSTEM, 50);
+
+        Mock::given(method("GET"))
+            .and(path(resource_path))
+            .and(query_param("$filter", "value gt 10"))
+            .and(header("authorization", "Basic cm9vdDpwYXNzd29yZA=="))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&test_resource))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let bmc = create_test_bmc(&mock_server);
+
+        let resource_id = create_odata_id(resource_path);
+        let filter_query = FilterQuery::gt(&"value", 10);
+        let result = bmc.filter::<TestResource>(&resource_id, filter_query).await;
+
+        assert!(result.is_ok());
+        let retrieved = result.unwrap();
+        assert_eq!(retrieved.name, names::TEST_SYSTEM);
+        assert_eq!(retrieved.value, 50);
     }
 
     #[tokio::test]

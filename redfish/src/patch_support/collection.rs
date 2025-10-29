@@ -20,7 +20,7 @@ use crate::schema::redfish::resource::ItemOrCollection;
 use crate::schema::redfish::resource::Oem;
 use crate::schema::redfish::resource::ResourceCollection;
 use crate::Error;
-use nv_redfish_core::http::ExpandQuery;
+use nv_redfish_core::query::ExpandQuery;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::Creatable;
 use nv_redfish_core::EntityTypeRef;

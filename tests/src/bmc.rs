@@ -15,7 +15,7 @@
 
 use crate::Expect;
 use nv_redfish_core::action::ActionTarget;
-use nv_redfish_core::http::ExpandQuery;
+use nv_redfish_core::query::ExpandQuery;
 use nv_redfish_core::ActionError;
 use nv_redfish_core::Bmc as NvRedfishBmc;
 use nv_redfish_core::Empty;
@@ -252,6 +252,21 @@ impl NvRedfishBmc for Bmc {
                 expect,
             )),
         }
+    }
+
+    async fn filter<
+        T: nv_redfish_core::EntityTypeRef
+            + Sized
+            + for<'a> serde::Deserialize<'a>
+            + 'static
+            + Send
+            + Sync,
+    >(
+        &self,
+        _id: &ODataId,
+        _query: nv_redfish_core::FilterQuery,
+    ) -> Result<Arc<T>, Self::Error> {
+        todo!("unimplimented")
     }
 }
 

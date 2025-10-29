@@ -21,7 +21,7 @@ mod manager;
 
 use crate::schema::redfish::manager_collection::ManagerCollection as ManagerCollectionSchema;
 use crate::Error;
-use nv_redfish_core::http::ExpandQuery;
+use nv_redfish_core::query::ExpandQuery;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::Expandable as _;
 use nv_redfish_core::NavProperty;

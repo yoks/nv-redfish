@@ -23,7 +23,7 @@ mod software_inventory;
 use crate::schema::redfish::update_service::UpdateService as UpdateServiceSchema;
 use crate::schema::redfish::update_service::UpdateServiceSimpleUpdateAction;
 use crate::Error;
-use nv_redfish_core::http::ExpandQuery;
+use nv_redfish_core::query::ExpandQuery;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::Expandable as _;
 use std::sync::Arc;

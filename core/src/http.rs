@@ -24,272 +24,8 @@ use url::Url;
 #[cfg(feature = "reqwest")]
 use crate::Empty;
 use crate::{
-    bmc::BmcCredentials, cache::TypeErasedCarCache, Bmc, EntityTypeRef, Expandable, ODataETag,
-    ODataId,
+    Bmc, EntityTypeRef, Expandable, ODataETag, ODataId, bmc::BmcCredentials, cache::TypeErasedCarCache, query::ExpandQuery
 };
-
-/// Builder for Redfish `$expand` query parameters according to DSP0266 specification.
-///
-/// The `$expand` query parameter allows clients to request that the server expand
-/// navigation properties inline instead of returning just references. This is particularly
-/// useful for reducing the number of HTTP requests needed to retrieve related data.
-///
-/// According to the [Redfish specification Table 9](https://redfish.dmtf.org/schemas/DSP0266_1.15.0.html#the-expand-query-parameter),
-/// the supported expand options are:
-///
-/// | Option | Description | Example URL |
-/// |--------|-------------|-------------|
-/// | `*` | Expand all hyperlinks, including payload annotations | `?$expand=*` |
-/// | `.` | Expand hyperlinks not in links property instances | `?$expand=.` |
-/// | `~` | Expand hyperlinks in links property instances | `?$expand=~` |
-/// | `$levels` | Number of levels to cascade expansion | `?$expand=.($levels=2)` |
-///
-/// # Examples
-///
-/// ```rust
-/// use nv_redfish_core::http::ExpandQuery;
-///
-/// // Default: expand current resource one level
-/// let default = ExpandQuery::default();
-/// assert_eq!(default.to_query_string(), "$expand=.($levels=1)");
-///
-/// // Expand all hyperlinks
-/// let all = ExpandQuery::all();
-/// assert_eq!(all.to_query_string(), "$expand=*($levels=1)");
-///
-/// // Expand with multiple levels
-/// let deep = ExpandQuery::current().levels(3);
-/// assert_eq!(deep.to_query_string(), "$expand=.($levels=3)");
-///
-/// // Expand specific navigation property
-/// let thermal = ExpandQuery::property("Thermal");
-/// assert_eq!(thermal.to_query_string(), "$expand=Thermal($levels=1)");
-/// ```
-#[derive(Debug, Clone)]
-pub struct ExpandQuery {
-    /// The expand expression (*, ., ~, or specific navigation properties)
-    expand_expression: String,
-    /// Number of levels to cascade the expand operation (default is 1)
-    levels: Option<u32>,
-}
-
-impl Default for ExpandQuery {
-    /// Default expand query: $expand=.($levels=1)
-    /// Expands all hyperlinks not in any links property instances of the resource
-    fn default() -> Self {
-        Self {
-            expand_expression: ".".to_string(),
-            levels: Some(1),
-        }
-    }
-}
-
-impl ExpandQuery {
-    /// Create a new expand query with default values.
-    ///
-    /// This is equivalent to [`ExpandQuery::default()`] and creates a query
-    /// that expands the current resource one level deep: `$expand=.($levels=1)`.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use nv_redfish_core::http::ExpandQuery;
-    ///
-    /// let query = ExpandQuery::new();
-    /// assert_eq!(query.to_query_string(), "$expand=.($levels=1)");
-    /// ```
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Expand all hyperlinks, including those in payload annotations.
-    ///
-    /// This expands all hyperlinks found in the resource, including those in payload
-    /// annotations such as `@Redfish.Settings`, `@Redfish.ActionInfo`, and
-    /// `@Redfish.CollectionCapabilities`.
-    ///
-    /// Equivalent to: `$expand=*`
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use nv_redfish_core::http::ExpandQuery;
-    ///
-    /// let query = ExpandQuery::all();
-    /// assert_eq!(query.to_query_string(), "$expand=*($levels=1)");
-    ///
-    /// // With multiple levels
-    /// let deep = ExpandQuery::all().levels(3);
-    /// assert_eq!(deep.to_query_string(), "$expand=*($levels=3)");
-    /// ```
-    #[must_use]
-    pub fn all() -> Self {
-        Self {
-            expand_expression: "*".to_string(),
-            levels: Some(1),
-        }
-    }
-
-    /// Expand all hyperlinks not in any links property instances of the resource.
-    ///
-    /// This expands hyperlinks found directly in the resource properties, but not
-    /// those in dedicated `Links` sections. Includes payload annotations.
-    ///
-    /// Equivalent to: `$expand=.`
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use nv_redfish_core::http::ExpandQuery;
-    ///
-    /// let query = ExpandQuery::current();
-    /// assert_eq!(query.to_query_string(), "$expand=.($levels=1)");
-    /// ```
-    #[must_use]
-    pub fn current() -> Self {
-        Self {
-            expand_expression: ".".to_string(),
-            levels: Some(1),
-        }
-    }
-
-    /// Expand all hyperlinks found in all links property instances of the resource.
-    ///
-    /// This expands only hyperlinks found in `Links` sections of the resource,
-    /// which typically contain references to related resources.
-    ///
-    /// Equivalent to: `$expand=~`
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use nv_redfish_core::http::ExpandQuery;
-    ///
-    /// let query = ExpandQuery::links();
-    /// assert_eq!(query.to_query_string(), "$expand=~($levels=1)");
-    /// ```
-    #[must_use]
-    pub fn links() -> Self {
-        Self {
-            expand_expression: "~".to_string(),
-            levels: Some(1),
-        }
-    }
-
-    /// Expand a specific navigation property.
-    ///
-    /// This expands only the specified navigation property, which is useful when you
-    /// know exactly which related data you need.
-    ///
-    /// # Arguments
-    ///
-    /// * `property` - The name of the navigation property to expand
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use nv_redfish_core::http::ExpandQuery;
-    ///
-    /// let thermal = ExpandQuery::property("Thermal");
-    /// assert_eq!(thermal.to_query_string(), "$expand=Thermal($levels=1)");
-    ///
-    /// let members = ExpandQuery::property("Members");
-    /// assert_eq!(members.to_query_string(), "$expand=Members($levels=1)");
-    /// ```
-    pub fn property<S: Into<String>>(property: S) -> Self {
-        Self {
-            expand_expression: property.into(),
-            levels: Some(1),
-        }
-    }
-
-    /// Expand multiple specific navigation properties.
-    ///
-    /// This allows expanding several navigation properties in a single request,
-    /// which is more efficient than making separate requests for each property.
-    ///
-    /// # Arguments
-    ///
-    /// * `properties` - A slice of navigation property names to expand
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use nv_redfish_core::http::ExpandQuery;
-    ///
-    /// let env = ExpandQuery::properties(&["Thermal", "Power"]);
-    /// assert_eq!(env.to_query_string(), "$expand=Thermal,Power($levels=1)");
-    ///
-    /// let system = ExpandQuery::properties(&["Processors", "Memory", "Storage"]);
-    /// assert_eq!(system.to_query_string(), "$expand=Processors,Memory,Storage($levels=1)");
-    /// ```
-    #[must_use]
-    pub fn properties(properties: &[&str]) -> Self {
-        Self {
-            expand_expression: properties.join(","),
-            levels: Some(1),
-        }
-    }
-
-    /// Set the number of levels to cascade the expand operation.
-    ///
-    /// The `$levels` parameter controls how deep the expansion goes:
-    /// - Level 1: Expand hyperlinks in the current resource
-    /// - Level 2: Also expand hyperlinks in the resources expanded at level 1
-    /// - And so on...
-    ///
-    /// # Arguments
-    ///
-    /// * `levels` - Number of levels to expand (typically 1-6 in practice)
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use nv_redfish_core::http::ExpandQuery;
-    ///
-    /// let shallow = ExpandQuery::current().levels(1);
-    /// assert_eq!(shallow.to_query_string(), "$expand=.($levels=1)");
-    ///
-    /// let deep = ExpandQuery::all().levels(3);
-    /// assert_eq!(deep.to_query_string(), "$expand=*($levels=3)");
-    /// ```
-    #[must_use]
-    pub const fn levels(mut self, levels: u32) -> Self {
-        self.levels = Some(levels);
-        self
-    }
-
-    /// Convert to the `OData` query string according to Redfish specification.
-    ///
-    /// This generates the actual query parameter string that will be appended to
-    /// HTTP requests to Redfish services.
-    ///
-    /// # Returns
-    ///
-    /// A query string in the format `$expand=expression($levels=n)` or just
-    /// `$expand=expression` if no levels are specified.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use nv_redfish_core::http::ExpandQuery;
-    ///
-    /// let query = ExpandQuery::property("Thermal").levels(2);
-    /// assert_eq!(query.to_query_string(), "$expand=Thermal($levels=2)");
-    ///
-    /// let query = ExpandQuery::all();
-    /// assert_eq!(query.to_query_string(), "$expand=*($levels=1)");
-    /// ```
-    #[must_use]
-    #[allow(clippy::option_if_let_else)]
-    pub fn to_query_string(&self) -> String {
-        match self.levels {
-            Some(levels) => format!("$expand={}($levels={})", self.expand_expression, levels),
-            None => format!("$expand={}", self.expand_expression),
-        }
-    }
-}
 
 #[cfg(feature = "reqwest")]
 use std::time::Duration;
@@ -470,19 +206,24 @@ pub trait CacheableError {
     fn cache_error(reason: String) -> Self;
 }
 
-impl<C: HttpClient> Bmc for HttpBmc<C>
+impl<C: HttpClient> HttpBmc<C>
 where
     C::Error: CacheableError + StdError + Send + Sync,
 {
-    type Error = C::Error;
-
+    /// Perform a GET request with `ETag` caching support
+    ///
+    /// This handles:
+    /// - Retrieving cached `ETag` before request
+    /// - Sending conditional GET with If-None-Match
+    /// - Handling 304 Not Modified responses from cache
+    /// - Updating cache and `ETag` storage on success
     #[allow(clippy::significant_drop_tightening)]
-    async fn get<T: EntityTypeRef + Sized + for<'de> Deserialize<'de> + 'static + Send + Sync>(
+    async fn get_with_cache<T: EntityTypeRef + Sized + for<'de> Deserialize<'de> + 'static + Send + Sync>(
         &self,
+        endpoint_url: Url,
         id: &ODataId,
-    ) -> Result<Arc<T>, Self::Error> {
-        let endpoint_url = self.redfish_endpoint.with_path(&id.to_string());
-
+    ) -> Result<Arc<T>, C::Error> {
+        // Retrieve cached etag
         let etag: Option<ODataETag> = {
             let etags = self
                 .etags
@@ -491,6 +232,7 @@ where
             etags.get(id).cloned()
         };
 
+        // Perform GET request
         match self
             .client
             .get::<T>(endpoint_url, &self.credentials, etag)
@@ -498,6 +240,8 @@ where
         {
             Ok(response) => {
                 let entity = Arc::new(response);
+
+                // Update cache if entity has etag
                 if let Some(etag) = entity.etag() {
                     let mut cache = self
                         .cache
@@ -508,6 +252,7 @@ where
                         .etags
                         .write()
                         .map_err(|e| C::Error::cache_error(e.to_string()))?;
+
                     if let Some(ret) = cache.put_typed(id.clone(), Arc::clone(&entity)) {
                         etags.remove(ret.id());
                     }
@@ -516,6 +261,7 @@ where
                 Ok(entity)
             }
             Err(e) => {
+                // Handle 304 Not Modified - return from cache
                 if e.is_cached() {
                     let mut cache = self
                         .cache
@@ -531,8 +277,23 @@ where
             }
         }
     }
+}
 
-    async fn expand<T: Expandable + Send + Sync>(
+impl<C: HttpClient> Bmc for HttpBmc<C>
+where
+    C::Error: CacheableError + StdError + Send + Sync,
+{
+    type Error = C::Error;
+
+    async fn get<T: EntityTypeRef + Sized + for<'de> Deserialize<'de> + 'static + Send + Sync>(
+        &self,
+        id: &ODataId,
+    ) -> Result<Arc<T>, Self::Error> {
+        let endpoint_url = self.redfish_endpoint.with_path(&id.to_string());
+        self.get_with_cache(endpoint_url, id).await
+    }
+
+    async fn expand<T: Expandable + Send + Sync + 'static>(
         &self,
         id: &ODataId,
         query: ExpandQuery,
@@ -541,10 +302,7 @@ where
             .redfish_endpoint
             .with_path_and_query(&id.to_string(), &query.to_query_string());
 
-        self.client
-            .get::<T>(endpoint_url, &self.credentials, None)
-            .await
-            .map(Arc::new)
+        self.get_with_cache(endpoint_url, id).await
     }
 
     async fn create<V: Sync + Send + Serialize, R: Sync + Send + for<'de> Deserialize<'de>>(
@@ -588,6 +346,18 @@ where
         self.client
             .post(endpoint_url, params, &self.credentials)
             .await
+    }
+    
+    async fn filter<T: EntityTypeRef + Sized + for<'a> Deserialize<'a> + 'static + Send + Sync>(
+        &self,
+        id: &ODataId,
+        query: crate::FilterQuery,
+    ) -> Result<Arc<T>, Self::Error> {
+        let endpoint_url = self
+            .redfish_endpoint
+            .with_path_and_query(&id.to_string(), &query.to_query_string());
+
+        self.get_with_cache(endpoint_url, id).await
     }
 }
 
@@ -969,49 +739,6 @@ impl HttpClient for ReqwestClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_default_expand() {
-        let query = ExpandQuery::default();
-        assert_eq!(query.to_query_string(), "$expand=.($levels=1)");
-    }
-
-    #[test]
-    fn test_expand_all() {
-        let query = ExpandQuery::all();
-        assert_eq!(query.to_query_string(), "$expand=*($levels=1)");
-    }
-
-    #[test]
-    fn test_expand_current() {
-        let query = ExpandQuery::current();
-        assert_eq!(query.to_query_string(), "$expand=.($levels=1)");
-    }
-
-    #[test]
-    fn test_expand_links() {
-        let query = ExpandQuery::links();
-        assert_eq!(query.to_query_string(), "$expand=~($levels=1)");
-    }
-
-    #[test]
-    fn test_expand_property() {
-        let query = ExpandQuery::property("Thermal");
-        assert_eq!(query.to_query_string(), "$expand=Thermal($levels=1)");
-    }
-
-    #[test]
-    fn test_expand_properties() {
-        let query = ExpandQuery::properties(&["Thermal", "Power"]);
-        assert_eq!(query.to_query_string(), "$expand=Thermal,Power($levels=1)");
-    }
-
-    #[test]
-    fn test_expand_with_levels() {
-        let query = ExpandQuery::all().levels(3);
-        assert_eq!(query.to_query_string(), "$expand=*($levels=3)");
-    }
-
     #[cfg(feature = "reqwest")]
     #[test]
     fn test_cacheable_error_trait() {
