@@ -23,7 +23,9 @@ use crate::schema::redfish::log_service::LogService as LogServiceSchema;
 use crate::Error;
 use nv_redfish_core::query::ExpandQuery;
 use nv_redfish_core::Bmc;
+use nv_redfish_core::EntityTypeRef as _;
 use nv_redfish_core::Expandable as _;
+use nv_redfish_core::ODataId;
 use std::sync::Arc;
 
 /// Log service.
@@ -71,12 +73,40 @@ impl<B: Bmc + Sync + Send> LogService<B> {
             .await
             .map_err(Error::Bmc)?;
 
-        let mut entries = Vec::new();
-        for entry_ref in &entries_collection.members {
-            let entry = entry_ref.get(self.bmc.as_ref()).await.map_err(Error::Bmc)?;
-            entries.push(entry);
-        }
-        Ok(entries)
+        self.get_entries(&entries_collection.members).await
+    }
+
+    /// Filter log entries using `OData` filter query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The log service does not have a log entries collection
+    /// - Filtering log entries data fails
+    pub async fn filter_entries(
+        &self,
+        filter: nv_redfish_core::FilterQuery,
+    ) -> Result<Vec<Arc<LogEntry>>, Error<B>> {
+        let entries_ref = self
+            .data
+            .entries
+            .as_ref()
+            .ok_or(Error::LogEntriesNotAvailable)?;
+
+        let entries_collection = entries_ref
+            .filter(self.bmc.as_ref(), filter)
+            .await
+            .map_err(Error::Bmc)?;
+
+        self.get_entries(&entries_collection.members).await
+    }
+
+    /// `OData` identifier of the `AccountService` in Redfish.
+    ///
+    /// Typically `/redfish/v1/Systems/System_0/LogServices/SEL"`.
+    #[must_use]
+    pub fn odata_id(&self) -> &ODataId {
+        self.data.id()
     }
 
     /// Clear all log entries.
@@ -106,5 +136,18 @@ impl<B: Bmc + Sync + Send> LogService<B> {
             .map_err(Error::Bmc)?;
 
         Ok(())
+    }
+
+    /// This unwraps `NavProperty`, usually all BMC already have them expanded, so we do not expect network IO here
+    async fn get_entries(
+        &self,
+        entry_refs: &[nv_redfish_core::NavProperty<LogEntry>],
+    ) -> Result<Vec<Arc<LogEntry>>, Error<B>> {
+        let mut entries = Vec::new();
+        for entry_ref in entry_refs {
+            let entry = entry_ref.get(self.bmc.as_ref()).await.map_err(Error::Bmc)?;
+            entries.push(entry);
+        }
+        Ok(entries)
     }
 }

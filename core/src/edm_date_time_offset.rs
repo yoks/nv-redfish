@@ -48,11 +48,13 @@
 //!
 
 use core::str::FromStr;
+use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::fmt::Error as FmtError;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
+use std::time::SystemTime;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -70,6 +72,17 @@ impl From<OffsetDateTime> for EdmDateTimeOffset {
 impl From<EdmDateTimeOffset> for OffsetDateTime {
     fn from(w: EdmDateTimeOffset) -> Self {
         w.0
+    }
+}
+
+impl From<EdmDateTimeOffset> for SystemTime {
+    fn from(w: EdmDateTimeOffset) -> Self {
+        let unix_timestamp = w.0.unix_timestamp();
+        let nanos = w.0.nanosecond();
+
+        Self::UNIX_EPOCH
+            + Duration::from_secs(unix_timestamp.cast_unsigned())
+            + Duration::from_nanos(u64::from(nanos))
     }
 }
 
