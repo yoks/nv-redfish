@@ -62,6 +62,7 @@ where
     let type_nss = f().fold(TypeNamespaces::<'a>::new(), |mut map, name| {
         let matches = map.entry(name.name).or_default();
         let mut namespace = name.namespace;
+        *matches.entry(namespace).or_insert(0) += 1;
         while let Some(parent) = namespace.parent() {
             *matches.entry(parent).or_insert(0) += 1;
             namespace = parent;

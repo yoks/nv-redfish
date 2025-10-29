@@ -42,9 +42,9 @@ pub fn prune_entity_type_inheritance<'a>(input: Compiled<'a>) -> Compiled<'a> {
         .iter()
         .fold(
             HashMap::<QualifiedName<'a>, (QualifiedName<'a>, u64)>::new(),
-            |mut v, (_, ct)| {
-                if let Some(base) = ct.base {
-                    v.entry(base).or_insert((ct.name, 0)).1 += 1;
+            |mut v, (_, et)| {
+                if let Some(base) = et.base {
+                    v.entry(base).or_insert((et.name, 0)).1 += 1;
                 }
                 v
             },

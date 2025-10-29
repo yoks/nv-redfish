@@ -119,25 +119,23 @@ impl<'a> Properties<'a> {
         let qname = v.ptype.qualified_type_name().into();
         let redfish = RedfishProperty::new(v);
         if ctx.root_set_entities.contains(&qname) || ctx.config.entity_type_filter.matches(&qname) {
-            let (ptype, compiled) = ctx
-                .schema_index
-                // Find the deepest available child in the type hierarchy
-                // for the singleton, to target the most recent protocol
-                // version.
-                .find_child_entity_type(qname)
-                .and_then(|(qtype, et)| {
-                    if stack.contains_entity(qtype) {
-                        // Already compiled entity
-                        Ok(Compiled::default())
-                    } else {
-                        EntityType::compile(qtype, et, ctx, stack)
-                            .map_err(Box::new)
-                            .map_err(|e| Error::EntityType(qtype, e))
-                    }
-                    .map(|compiled| (qtype, compiled))
-                })?;
+            // Find the deepest available child in the type hierarchy
+            // for the singleton, to target the most recent protocol
+            // version.
+            let (qtype, et) = ctx.schema_index.find_child_entity_type(qname)?;
+            let (ptype, compiled) = {
+                if stack.contains_entity(qtype) {
+                    // Already compiled entity
+                    Ok(Compiled::default())
+                } else {
+                    EntityType::compile(qtype, et, ctx, stack)
+                        .map_err(Box::new)
+                        .map_err(|e| Error::EntityType(qtype, e))
+                }
+                .map(|compiled| (qtype, compiled))
+            }?;
             let compiled = if let Some(ec) = redfish.excerpt_copy.clone() {
-                compiled.merge(Compiled::new_excerpt_copy(qname, ec))
+                compiled.merge(Compiled::new_excerpt_copy(qtype, ec))
             } else {
                 compiled
             };
