@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::edmx::ParameterName as EdmxParameterName;
 use crate::edmx::PropertyName as EdmxPropertyName;
 use crate::generator::casemungler;
 use proc_macro2::Ident;

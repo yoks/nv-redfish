@@ -1,7 +1,7 @@
 error[E0609]: no field `write_only` on type `ServiceRoot`
- --> tests/compile-fails/no-write-only-in-read.rs:6:24
-  |
-6 |     println!("{:?}", v.write_only);
-  |                        ^^^^^^^^^^ unknown field
-  |
-  = note: available fields are: `odata_id`, `odata_etag`, `odata_type`, `redfish_settings`, `redfish_settings_apply_type` ... and 13 others
+  --> tests/compile-fails/no-write-only-in-read.rs:21:24
+   |
+21 |     println!("{:?}", v.write_only);
+   |                        ^^^^^^^^^^ unknown field
+   |
+   = note: available fields are: `odata_id`, `odata_etag`, `odata_type`, `redfish_settings`, `redfish_settings_apply_type` ... and 13 others

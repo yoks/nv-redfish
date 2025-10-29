@@ -1,4 +1,3 @@
 target/**
-schemas/**
 oem/lenovo/*.xml
 Cargo.lock

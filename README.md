@@ -81,3 +81,6 @@ let root = ServiceRoot::new(Arc::clone(&bmc)).await?;
 
 See workspace `Cargo.toml`.
 
+This project includes Redfish schema files from DMTF’s [Redfish-Publications repository](https://github.com/DMTF/Redfish-Publications/tree/main), licensed under the [BSD-3-Clause license](schemas/redfish-csdl/LICENSE).
+
+This project includes Swordfish schema files from [SNIA](https://www.snia.org/forums/smi/swordfish), licensed under the [BSD-3-Clause license](schemas/swordfish-csdl/LICENSE) 

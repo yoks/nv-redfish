@@ -1,28 +1,30 @@
 #
-# Download schemas from DMTF / SNIA sites and then prepare
-# build and test everything.
+# Build and test everything.
 #
 
 pwd := $(shell pwd)
 
-redfish-version = 2025.2
-redfish-sha256sum = d95756f8a13b94a0f7e0949e21c9473f3a3d55b6e4dd1222269aab70f9f4eb19
-swordfish-bundle-version = v1.2.8
-swordfish-bundle-sha256sum = 87a0dd6c7e9a831a519e105b75ba8759ca85314cf92fd782cfd9ce6637f863aa
+maybe-lenovo-build = $(if $(wildcard $(pwd)/oem/lenovo/*.xml),cargo build --features oem-lenovo)
 
-schema-dir = schemas
-schema-dir-dep = $(schema-dir)/.dep
-schema-dir-redfish = $(schema-dir)/redfish-csdl
-schema-dir-swordfish = $(schema-dir)/swordfish-csdl
-schema-dir-oem-contoso = $(schema-dir)/oem-contoso-csdl
+space := $(empty) $(empty)
+comma :=,
 
-redfish-schemas-dep = schemas/.dep-redfish
-swordfish-schemas-dep = schemas/.dep-swordfish
+# We cannot use --all-features because they depends on oem files that
+# are not distributed by the repo.
+all-std-features = accounts \
+                   chassis \
+                   systems \
+                   update-service
 
-all: $(redfish-schemas-dep) $(swordfish-schemas-dep) 
-	cargo build --all-features
+ci-features-list := $(subst $(space),$(comma),$(all-std-features))
+
+define build-and-test
+	cargo build
+	cargo test $1 -- --no-capture
+	cargo clippy $1
+	cargo build  $1
 	cargo build --features oem-hpe,accounts
-	cargo build --features oem-lenovo
+	$(maybe-lenovo-build)
 	cargo build --features oem-hpe
 	cargo build --features oem-nvidia
 	cargo build --features oem-dell
@@ -32,31 +34,25 @@ all: $(redfish-schemas-dep) $(swordfish-schemas-dep)
 	cargo build --features systems
 	cargo build --features update-service
 	cargo build --features ""
-	cargo test -- --no-capture
-	cargo clippy --all-features
-	cargo doc  --all-features
+	cargo doc $1
 	cargo build
+
+endef
+
+
+all:
+	$(call build-and-test,--all-features)
+
+ci: rust-install
+	$(call build-and-test,--features $(ci-features-list))
+
+rust-install:
+	rustup component add clippy
+
+
 
 clean:
 	rm -rf $(schema-dir)
 	rm -rf target
-
-$(redfish-schemas-dep): $(schema-dir-dep)
-	curl -vfL "https://github.com/DMTF/Redfish-Publications/archive/refs/tags/$(redfish-version).zip" > $(schema-dir)/redfish-pub.zip
-	printf "%s  %s" $(redfish-sha256sum) $(schema-dir)/redfish-pub.zip | shasum -a 256 -c -
-	unzip -j -o $(schema-dir)/redfish-pub.zip "Redfish-Publications-$(redfish-version)/csdl/*" -d $(schema-dir-redfish)
-	unzip -j -o $(schema-dir)/redfish-pub.zip "Redfish-Publications-$(redfish-version)/mockups/public-oem-examples/Contoso.com/*" -d $(schema-dir-oem-contoso)
-	touch $@
-
-$(swordfish-schemas-dep): $(schema-dir-dep)
-	curl -vfL "https://www.snia.org/sites/default/files/technical-work/swordfish/release/$(swordfish-bundle-version)/zip/Swordfish_$(swordfish-bundle-version).zip" > $(schema-dir)/swordfish-bundle.zip
-	printf "%s  %s" $(swordfish-bundle-sha256sum) $(schema-dir)/swordfish-bundle.zip | shasum -a 256 -c -
-	unzip -p $(schema-dir)/swordfish-bundle.zip "Swordfish_$(swordfish-bundle-version)_Schema.zip" > $(schema-dir)/swordfish-schema.zip
-	unzip -j -o $(schema-dir)/swordfish-schema.zip "csdl-schema/*" -d $(schema-dir-swordfish)
-	touch $@
-
-$(schema-dir-dep):
-	mkdir $(schema-dir)
-	touch $@
 
 
