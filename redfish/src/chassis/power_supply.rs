@@ -72,13 +72,16 @@ where
     /// Get the metrics sensors for this power supply.
     ///
     /// Returns a vector of `Sensor<B>` obtained from metrics metrics, if available.
+    /// # Errors
+    ///
+    /// Returns an error if get of metrics failed.
     #[cfg(feature = "sensors")]
-    pub async fn metrics_sensors(&self) -> Vec<Sensor<B>> {
+    pub async fn metrics_sensors(&self) -> Result<Vec<Sensor<B>>, Error<B>> {
         let sensor_refs = if let Some(metrics_ref) = &self.data.metrics {
             metrics_ref
                 .get(self.bmc.as_ref())
                 .await
-                .ok()
+                .map_err(Error::Bmc)
                 .map(|m| {
                     extract_sensor_uris!(m,
                         single: input_voltage,
@@ -94,15 +97,14 @@ where
                         vec: rail_power_watts,
                         vec: fan_speeds_percent
                     )
-                })
-                .unwrap_or_default()
+                })?
         } else {
             Vec::new()
         };
 
-        sensor_refs
+        Ok(sensor_refs
             .into_iter()
             .map(|r| Sensor::new(r, self.bmc.clone()))
-            .collect()
+            .collect())
     }
 }

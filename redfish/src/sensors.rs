@@ -134,11 +134,10 @@ pub(crate) fn collect_sensors(
 pub(crate) async fn extract_environment_sensors<B: Bmc>(
     metrics_ref: &NavProperty<EnvironmentMetrics>,
     bmc: &B,
-) -> Vec<NavProperty<SchemaSensor>> {
+) -> Result<Vec<NavProperty<SchemaSensor>>, Error<B>> {
     metrics_ref
         .get(bmc)
         .await
-        .ok()
         .map(|m| {
             extract_sensor_uris!(m,
                 single: temperature_celsius,
@@ -155,5 +154,5 @@ pub(crate) async fn extract_environment_sensors<B: Bmc>(
                 vec: fan_speeds_percent
             )
         })
-        .unwrap_or_default()
+        .map_err(Error::Bmc)
 }
