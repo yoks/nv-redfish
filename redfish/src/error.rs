@@ -63,10 +63,10 @@ pub enum Error<B: Bmc> {
     /// Sensors not available for this resource
     SensorsNotAvailable,
     /// Log service not available for this resource
-    #[cfg(feature = "__log-service")]
+    #[cfg(feature = "log-services")]
     LogServiceNotAvailable,
     /// Log entries not available
-    #[cfg(feature = "__log-service")]
+    #[cfg(feature = "log-services")]
     LogEntriesNotAvailable,
     /// Manager not supported by BMC
     #[cfg(feature = "managers")]
@@ -129,11 +129,11 @@ impl<B: Bmc> Display for Error<B> {
             Self::SensorsNotAvailable => {
                 write!(f, "Sensors is not available for this resource")
             }
-            #[cfg(feature = "__log-service")]
+            #[cfg(feature = "log-services")]
             Self::LogServiceNotAvailable => {
                 write!(f, "Log service is not available for this resource")
             }
-            #[cfg(feature = "__log-service")]
+            #[cfg(feature = "log-services")]
             Self::LogEntriesNotAvailable => {
                 write!(f, "Log entries are not available")
             }

@@ -143,7 +143,7 @@ patterns = [
 ]
 
 [[features]]
-name = "__log-service"
+name = "log-services"
 csdl_files = [
     "LogService_v1.xml",
     "LogServiceCollection_v1.xml",

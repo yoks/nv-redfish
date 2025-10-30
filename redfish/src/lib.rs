@@ -99,8 +99,8 @@ pub mod systems;
 pub mod update_service;
 
 /// Log Service.
-#[cfg(feature = "__log-service")]
-pub mod log_service;
+#[cfg(feature = "log-services")]
+pub mod log_services;
 
 #[doc(inline)]
 pub use error::Error;

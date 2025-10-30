@@ -26,13 +26,13 @@
 //! links to their sensors. For legacy BMCs that only expose sensor data through
 //! `Chassis/Power` and `Chassis/Thermal`, use those explicit endpoints instead.
 
-use std::sync::Arc;
-
-use nv_redfish_core::{Bmc, NavProperty, ODataId};
-
 use crate::schema::redfish::environment_metrics::EnvironmentMetrics;
 use crate::schema::redfish::sensor::Sensor as SchemaSensor;
 use crate::Error;
+use nv_redfish_core::Bmc;
+use nv_redfish_core::NavProperty;
+use nv_redfish_core::ODataId;
+use std::sync::Arc;
 
 /// Extracts sensor URIs from metric fields and creates sensor navigation properties.
 ///
@@ -125,7 +125,6 @@ impl<B: Bmc> Sensor<B> {
 pub(crate) fn collect_sensors(
     uris: impl IntoIterator<Item = String>,
 ) -> Vec<NavProperty<SchemaSensor>> {
-    use nv_redfish_core::ODataId;
     uris.into_iter()
         .map(|uri| NavProperty::<SchemaSensor>::new_reference(ODataId::from(uri)))
         .collect()

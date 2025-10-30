@@ -14,7 +14,8 @@ comma :=,
 all-std-features = accounts \
                    chassis \
                    systems \
-                   update-service
+                   update-service \
+                   log-services
 
 ci-features-list := $(subst $(space),$(comma),$(all-std-features))
 

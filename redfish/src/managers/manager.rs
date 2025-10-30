@@ -19,8 +19,8 @@ use nv_redfish_core::Bmc;
 
 use crate::schema::redfish::manager::Manager as ManagerSchema;
 
-#[cfg(feature = "__log-service")]
-use crate::log_service::LogService;
+#[cfg(feature = "log-services")]
+use crate::log_services::LogService;
 
 /// Represents a manager (BMC) in the system.
 ///
@@ -52,7 +52,7 @@ impl<B: Bmc + Sync + Send> Manager<B> {
     /// Returns an error if:
     /// - The manager does not have log services
     /// - Fetching log service data fails
-    #[cfg(feature = "__log-service")]
+    #[cfg(feature = "log-services")]
     pub async fn list_log_services(&self) -> Result<Vec<LogService<B>>, crate::Error<B>> {
         let log_services_ref = self
             .data
