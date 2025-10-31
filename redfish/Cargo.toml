@@ -9,6 +9,14 @@ edition.workspace = true
 keywords.workspace = true
 categories.workspace = true
 documentation.workspace = true
+include = [
+    "src/**/*",
+    "build.rs",
+    "features.toml",
+    "schemas/**/*.xml",
+    "oem/**/*.xml",
+    "oem/**/README.md",
+]
 
 [features]
 default = []

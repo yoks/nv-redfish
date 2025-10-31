@@ -56,8 +56,8 @@ fn main() -> Result<(), Box<dyn StdError>> {
 
     let out_dir = PathBuf::from(var("OUT_DIR").unwrap());
     let output = out_dir.join("redfish.rs");
-    let redfish_schema_path = "../schemas/redfish-csdl";
-    let swordfish_schema_path = "../schemas/swordfish-csdl";
+    let redfish_schema_path = "schemas/redfish-csdl";
+    let swordfish_schema_path = "schemas/swordfish-csdl";
     let service_root = vec!["ServiceRoot_v1.xml"]
         .into_iter()
         .map(Into::into)
@@ -128,7 +128,7 @@ fn main() -> Result<(), Box<dyn StdError>> {
         }
 
         let (root_csdls, resolve_csdls, patterns) = manifest.collect_vendor_features(v, &features);
-        let oem_schema_path = "../oem";
+        let oem_schema_path = "oem";
 
         let root_csdls = root_csdls
             .iter()
