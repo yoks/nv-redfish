@@ -15,10 +15,37 @@
 
 //! Errors for tests
 
-use crate::bmc::Error as BmcError;
+use nv_redfish_bmc_mock::Error as BmcError;
+use std::error::Error as StdError;
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
 
 #[derive(Debug)]
 pub enum Error {
     Bmc(BmcError),
     ExpectedProperty(&'static str),
 }
+
+pub enum TestError {}
+
+impl Default for TestError {
+    fn default() -> Self {
+        unreachable!("nobody can construct it");
+    }
+}
+
+impl Display for TestError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "error")
+    }
+}
+
+impl Debug for TestError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        Display::fmt(self, f)
+    }
+}
+
+impl StdError for TestError {}

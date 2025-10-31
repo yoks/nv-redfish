@@ -17,21 +17,13 @@
 
 /// Schema compiled for base tests.
 pub mod base;
-/// BMC trait implementation for tests.
-pub mod bmc;
 /// Errors used in tests.
 pub mod error;
-/// Expectations in tests.
-pub mod expect;
 /// Expectations in tests.
 pub mod json_merge;
 
 #[doc(inline)]
-pub use bmc::Bmc;
-#[doc(inline)]
 pub use error::Error;
-#[doc(inline)]
-pub use expect::Expect;
 #[doc(inline)]
 pub use json_merge::json_merge;
 
@@ -39,3 +31,10 @@ pub use json_merge::json_merge;
 pub const ODATA_ID: &str = "@odata.id";
 /// Used in tests for `@odata.type` fields.
 pub const ODATA_TYPE: &str = "@odata.type";
+
+use error::TestError;
+use nv_redfish_bmc_mock::Bmc as MockBmc;
+use nv_redfish_bmc_mock::Expect as MockExpect;
+
+pub type Bmc = MockBmc<TestError>;
+pub type Expect = MockExpect<TestError>;

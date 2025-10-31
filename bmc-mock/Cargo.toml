@@ -1,0 +1,15 @@
+[package]
+name = "nv-redfish-bmc-mock"
+version.workspace = true
+license-file.workspace = true
+repository.workspace = true
+readme.workspace = true
+edition.workspace = true
+keywords.workspace = true
+categories.workspace = true
+documentation.workspace = true
+
+[dependencies]
+nv-redfish-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

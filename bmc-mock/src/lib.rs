@@ -13,7 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::Expect;
+pub mod expect;
+
+#[doc(inline)]
+pub use expect::Expect;
+pub use expect::ExpectedRequest;
+
 use nv_redfish_core::action::ActionTarget;
 use nv_redfish_core::query::ExpandQuery;
 use nv_redfish_core::ActionError;
@@ -23,6 +28,8 @@ use nv_redfish_core::Expandable;
 use nv_redfish_core::ODataETag;
 use nv_redfish_core::ODataId;
 use serde::Serialize;
+use serde_json::from_value;
+use serde_json::to_value;
 use serde_json::Error as JsonError;
 use std::collections::VecDeque;
 use std::error::Error as StdError;
@@ -36,19 +43,21 @@ use std::sync::PoisonError;
 #[derive(Debug)]
 pub enum Error {
     NotSupported,
+    ErrorResponse(Box<dyn StdError + Send + Sync>),
     MutexLock(String),
     NothingIsExpected,
     BadResponseJson(JsonError),
-    UnexpectedGet(ODataId, Expect),
-    UnexpectedExpand(ODataId, Expect),
-    UnexpectedUpdate(ODataId, String, Expect),
-    UnexpectedCreate(ODataId, String, Expect),
-    UnexpectedAction(ActionTarget, String, Expect),
+    UnexpectedGet(ODataId, ExpectedRequest),
+    UnexpectedExpand(ODataId, ExpectedRequest),
+    UnexpectedUpdate(ODataId, String, ExpectedRequest),
+    UnexpectedCreate(ODataId, String, ExpectedRequest),
+    UnexpectedAction(ActionTarget, String, ExpectedRequest),
 }
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
+            Self::ErrorResponse(err) => write!(f, "response: {err}"),
             Self::NotSupported => write!(f, "not supported"),
             Self::MutexLock(err) => write!(f, "lock error: {err}"),
             Self::NothingIsExpected => {
@@ -92,27 +101,30 @@ impl Error {
 }
 
 #[derive(Default)]
-pub struct Bmc {
-    expect: Mutex<VecDeque<Expect>>,
+pub struct Bmc<E> {
+    expect: Mutex<VecDeque<Expect<E>>>,
 }
 
-impl Bmc {
-    pub fn expect(&self, exp: Expect) {
-        let expect: &mut VecDeque<Expect> = &mut self.expect.lock().expect("not poisoned");
+impl<E> Bmc<E> {
+    pub fn expect(&self, exp: Expect<E>) {
+        let expect: &mut VecDeque<Expect<E>> = &mut self.expect.lock().expect("not poisoned");
         expect.clear();
         expect.push_front(exp);
     }
 
     pub fn debug_expect(&self) {
-        let expect: &VecDeque<Expect> = &self.expect.lock().expect("not poisoned");
+        let expect: &VecDeque<Expect<E>> = &self.expect.lock().expect("not poisoned");
         println!("Expectations (total: {})", expect.len());
         for v in expect {
-            println!("{v:#?}");
+            println!("{:#?}", v.request);
         }
     }
 }
 
-impl NvRedfishBmc for Bmc {
+impl<E> NvRedfishBmc for Bmc<E>
+where
+    E: StdError + Send + Sync + 'static,
+{
     type Error = Error;
 
     async fn expand<T>(&self, in_id: &ODataId, _query: ExpandQuery) -> Result<Arc<T>, Error>
@@ -126,11 +138,15 @@ impl NvRedfishBmc for Bmc {
             .pop_front()
             .ok_or(Error::NothingIsExpected)?;
         match expect {
-            Expect::Expand { id, response } if id == *in_id => {
-                let result: T = serde_json::from_value(response).map_err(Error::BadResponseJson)?;
+            Expect {
+                request: ExpectedRequest::Expand { id },
+                response,
+            } if id == *in_id => {
+                let response = response.map_err(|err| Error::ErrorResponse(Box::new(err)))?;
+                let result: T = from_value(response).map_err(Error::BadResponseJson)?;
                 Ok(Arc::new(result))
             }
-            _ => Err(Error::UnexpectedExpand(in_id.clone(), expect)),
+            _ => Err(Error::UnexpectedExpand(in_id.clone(), expect.request)),
         }
     }
 
@@ -145,11 +161,15 @@ impl NvRedfishBmc for Bmc {
             .pop_front()
             .ok_or(Error::NothingIsExpected)?;
         match expect {
-            Expect::Get { id, response } if id == *in_id => {
-                let result: T = serde_json::from_value(response).map_err(Error::BadResponseJson)?;
+            Expect {
+                request: ExpectedRequest::Get { id },
+                response,
+            } if id == *in_id => {
+                let response = response.map_err(|err| Error::ErrorResponse(Box::new(err)))?;
+                let result: T = from_value(response).map_err(Error::BadResponseJson)?;
                 Ok(Arc::new(result))
             }
-            _ => Err(Error::UnexpectedGet(in_id.clone(), expect)),
+            _ => Err(Error::UnexpectedGet(in_id.clone(), expect.request)),
         }
     }
 
@@ -168,20 +188,20 @@ impl NvRedfishBmc for Bmc {
             .map_err(Error::mutex_lock)?
             .pop_front()
             .ok_or(Error::NothingIsExpected)?;
-        let in_request = serde_json::to_value(update).expect("json serializable");
+        let in_request = to_value(update).expect("json serializable");
         match expect {
-            Expect::Update {
-                id,
-                request,
+            Expect {
+                request: ExpectedRequest::Update { id, request },
                 response,
             } if id == *in_id && request == in_request => {
-                let result: R = serde_json::from_value(response).map_err(Error::BadResponseJson)?;
+                let response = response.map_err(|err| Error::ErrorResponse(Box::new(err)))?;
+                let result: R = from_value(response).map_err(Error::BadResponseJson)?;
                 Ok(result)
             }
             _ => Err(Error::UnexpectedUpdate(
                 in_id.clone(),
                 in_request.to_string(),
-                expect,
+                expect.request,
             )),
         }
     }
@@ -200,26 +220,26 @@ impl NvRedfishBmc for Bmc {
             .map_err(Error::mutex_lock)?
             .pop_front()
             .ok_or(Error::NothingIsExpected)?;
-        let in_request = serde_json::to_value(create).expect("json serializable");
+        let in_request = to_value(create).expect("json serializable");
         match expect {
-            Expect::Create {
-                id,
-                request,
+            Expect {
+                request: ExpectedRequest::Create { id, request },
                 response,
             } if id == *in_id && request == in_request => {
-                let result: R = serde_json::from_value(response).map_err(Error::BadResponseJson)?;
+                let response = response.map_err(|err| Error::ErrorResponse(Box::new(err)))?;
+                let result: R = from_value(response).map_err(Error::BadResponseJson)?;
                 Ok(result)
             }
             _ => Err(Error::UnexpectedCreate(
                 in_id.clone(),
                 in_request.to_string(),
-                expect,
+                expect.request,
             )),
         }
     }
 
     async fn delete(&self, _id: &ODataId) -> Result<Empty, Self::Error> {
-        todo!("unimplimented")
+        todo!("unimplemented")
     }
 
     async fn action<
@@ -236,20 +256,20 @@ impl NvRedfishBmc for Bmc {
             .map_err(Error::mutex_lock)?
             .pop_front()
             .ok_or(Error::NothingIsExpected)?;
-        let in_request = serde_json::to_value(params).expect("json serializable");
+        let in_request = to_value(params).expect("json serializable");
         match expect {
-            Expect::Action {
-                target,
-                request,
+            Expect {
+                request: ExpectedRequest::Action { target, request },
                 response,
             } if target == action.target && request == in_request => {
-                let result: R = serde_json::from_value(response).map_err(Error::BadResponseJson)?;
+                let response = response.map_err(|err| Error::ErrorResponse(Box::new(err)))?;
+                let result: R = from_value(response).map_err(Error::BadResponseJson)?;
                 Ok(result)
             }
             _ => Err(Error::UnexpectedAction(
                 action.target.clone(),
                 in_request.to_string(),
-                expect,
+                expect.request,
             )),
         }
     }
@@ -266,7 +286,7 @@ impl NvRedfishBmc for Bmc {
         _id: &ODataId,
         _query: nv_redfish_core::FilterQuery,
     ) -> Result<Arc<T>, Self::Error> {
-        todo!("unimplimented")
+        todo!("unimplemented")
     }
 }
 
