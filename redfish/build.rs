@@ -128,7 +128,7 @@ fn main() -> Result<(), Box<dyn StdError>> {
         }
 
         let (root_csdls, resolve_csdls, patterns) = manifest.collect_vendor_features(v, &features);
-        let oem_schema_path = "oem";
+        let oem_schema_path = "schemas/oem";
 
         let root_csdls = root_csdls
             .iter()
