@@ -24,7 +24,7 @@ use std::sync::Arc;
 #[cfg(feature = "sensors")]
 use crate::sensors::extract_environment_sensors;
 #[cfg(feature = "sensors")]
-use crate::sensors::Sensor;
+use crate::sensors::SensorRef;
 
 /// Represents a memory module (DIMM) in a computer system.
 ///
@@ -85,7 +85,7 @@ impl<B: Bmc> Memory<B> {
     ///
     /// Returns an error if get of environment metrics failed.
     #[cfg(feature = "sensors")]
-    pub async fn environment_sensors(&self) -> Result<Vec<Sensor<B>>, Error<B>> {
+    pub async fn environment_sensors(&self) -> Result<Vec<SensorRef<B>>, Error<B>> {
         let sensor_refs = if let Some(env_ref) = &self.data.environment_metrics {
             extract_environment_sensors(env_ref, self.bmc.as_ref()).await?
         } else {
@@ -94,7 +94,7 @@ impl<B: Bmc> Memory<B> {
 
         Ok(sensor_refs
             .into_iter()
-            .map(|r| Sensor::new(self.bmc.clone(), r))
+            .map(|r| SensorRef::new(self.bmc.clone(), r))
             .collect())
     }
 }

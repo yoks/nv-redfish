@@ -33,7 +33,7 @@ use crate::schema::redfish::sensor::Sensor as SchemaSensor;
 #[cfg(feature = "sensors")]
 use crate::sensors::extract_environment_sensors;
 #[cfg(feature = "sensors")]
-use crate::sensors::Sensor;
+use crate::sensors::SensorRef;
 
 /// Represents a chassis in the BMC.
 ///
@@ -165,7 +165,7 @@ impl<B: Bmc> Chassis<B> {
     ///
     /// Returns an error if get of environment metrics failed.
     #[cfg(feature = "sensors")]
-    pub async fn environment_sensors(&self) -> Result<Vec<Sensor<B>>, Error<B>> {
+    pub async fn environment_sensors(&self) -> Result<Vec<SensorRef<B>>, Error<B>> {
         let sensor_refs = if let Some(env_ref) = &self.data.environment_metrics {
             extract_environment_sensors(env_ref, self.bmc.as_ref()).await?
         } else {
@@ -174,7 +174,7 @@ impl<B: Bmc> Chassis<B> {
 
         Ok(sensor_refs
             .into_iter()
-            .map(|r| Sensor::new(self.bmc.clone(), r))
+            .map(|r| SensorRef::new(self.bmc.clone(), r))
             .collect())
     }
 
@@ -188,7 +188,7 @@ impl<B: Bmc> Chassis<B> {
     /// - The chassis does not have sensors
     /// - Fetching sensors data fails
     #[cfg(feature = "sensors")]
-    pub async fn sensors(&self) -> Result<Vec<Sensor<B>>, Error<B>> {
+    pub async fn sensors(&self) -> Result<Vec<SensorRef<B>>, Error<B>> {
         if let Some(sensors_collection) = &self.data.sensors {
             let sc = sensors_collection
                 .get(self.bmc.as_ref())
@@ -196,7 +196,7 @@ impl<B: Bmc> Chassis<B> {
                 .map_err(Error::Bmc)?;
             let mut sensor_data = Vec::with_capacity(sc.members.len());
             for sensor in &sc.members {
-                sensor_data.push(Sensor::new(
+                sensor_data.push(SensorRef::new(
                     self.bmc.clone(),
                     NavProperty::<SchemaSensor>::new_reference(sensor.id().clone()),
                 ));

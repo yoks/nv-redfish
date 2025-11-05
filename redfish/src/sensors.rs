@@ -78,12 +78,12 @@ macro_rules! extract_sensor_uris {
 ///
 /// This struct provides methods to fetch sensor data from the BMC.
 /// call to [`fetch`](Self::fetch).
-pub struct Sensor<B: Bmc> {
+pub struct SensorRef<B: Bmc> {
     bmc: NvBmc<B>,
     sensor_ref: NavProperty<SchemaSensor>,
 }
 
-impl<B: Bmc> Sensor<B> {
+impl<B: Bmc> SensorRef<B> {
     /// Create a new sensor handle.
     ///
     /// # Arguments

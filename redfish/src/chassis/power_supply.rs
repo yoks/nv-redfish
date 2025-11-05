@@ -24,7 +24,7 @@ use std::sync::Arc;
 #[cfg(feature = "sensors")]
 use crate::extract_sensor_uris;
 #[cfg(feature = "sensors")]
-use crate::sensors::Sensor;
+use crate::sensors::SensorRef;
 
 /// Represents a power supply in a chassis.
 ///
@@ -84,7 +84,7 @@ impl<B: Bmc> PowerSupply<B> {
     ///
     /// Returns an error if get of metrics failed.
     #[cfg(feature = "sensors")]
-    pub async fn metrics_sensors(&self) -> Result<Vec<Sensor<B>>, Error<B>> {
+    pub async fn metrics_sensors(&self) -> Result<Vec<SensorRef<B>>, Error<B>> {
         let sensor_refs = if let Some(metrics_ref) = &self.data.metrics {
             metrics_ref
                 .get(self.bmc.as_ref())
@@ -112,7 +112,7 @@ impl<B: Bmc> PowerSupply<B> {
 
         Ok(sensor_refs
             .into_iter()
-            .map(|r| Sensor::new(self.bmc.clone(), r))
+            .map(|r| SensorRef::new(self.bmc.clone(), r))
             .collect())
     }
 }

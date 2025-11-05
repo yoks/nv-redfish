@@ -26,7 +26,7 @@ use crate::extract_sensor_uris;
 #[cfg(feature = "sensors")]
 use crate::sensors::extract_environment_sensors;
 #[cfg(feature = "sensors")]
-use crate::sensors::Sensor;
+use crate::sensors::SensorRef;
 
 /// Represents a processor in a computer system.
 ///
@@ -87,7 +87,7 @@ impl<B: Bmc> Processor<B> {
     ///
     /// Returns an error if get of environment metrics failed.
     #[cfg(feature = "sensors")]
-    pub async fn environment_sensors(&self) -> Result<Vec<Sensor<B>>, Error<B>> {
+    pub async fn environment_sensors(&self) -> Result<Vec<SensorRef<B>>, Error<B>> {
         let sensor_refs = if let Some(env_ref) = &self.data.environment_metrics {
             extract_environment_sensors(env_ref, self.bmc.as_ref()).await?
         } else {
@@ -96,7 +96,7 @@ impl<B: Bmc> Processor<B> {
 
         Ok(sensor_refs
             .into_iter()
-            .map(|r| Sensor::new(self.bmc.clone(), r))
+            .map(|r| SensorRef::new(self.bmc.clone(), r))
             .collect())
     }
 
@@ -108,7 +108,7 @@ impl<B: Bmc> Processor<B> {
     ///
     /// Returns an error if get of metrics failed.
     #[cfg(feature = "sensors")]
-    pub async fn metrics_sensors(&self) -> Result<Vec<Sensor<B>>, Error<B>> {
+    pub async fn metrics_sensors(&self) -> Result<Vec<SensorRef<B>>, Error<B>> {
         let sensor_refs = if let Some(metrics_ref) = &self.data.metrics {
             metrics_ref
                 .get(self.bmc.as_ref())
@@ -125,7 +125,7 @@ impl<B: Bmc> Processor<B> {
 
         Ok(sensor_refs
             .into_iter()
-            .map(|r| Sensor::new(self.bmc.clone(), r))
+            .map(|r| SensorRef::new(self.bmc.clone(), r))
             .collect())
     }
 }
