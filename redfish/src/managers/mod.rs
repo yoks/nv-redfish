@@ -21,7 +21,7 @@ mod manager;
 
 use crate::schema::redfish::manager_collection::ManagerCollection as ManagerCollectionSchema;
 use crate::Error;
-use crate::ProtocolFeatures;
+use crate::NvBmc;
 use crate::ServiceRoot;
 use nv_redfish_core::Bmc;
 use std::sync::Arc;
@@ -32,29 +32,23 @@ pub use manager::Manager;
 ///
 /// Provides functions to access collection members.
 pub struct ManagerCollection<B: Bmc> {
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     collection: Arc<ManagerCollectionSchema>,
-    protocol_features: Arc<ProtocolFeatures>,
 }
 
 impl<B: Bmc + Sync + Send> ManagerCollection<B> {
     /// Create a new manager collection handle.
-    pub(crate) async fn new(bmc: Arc<B>, root: &ServiceRoot<B>) -> Result<Self, Error<B>> {
+    pub(crate) async fn new(bmc: &NvBmc<B>, root: &ServiceRoot<B>) -> Result<Self, Error<B>> {
         let collection_ref = root
             .root
             .managers
             .as_ref()
             .ok_or(Error::ManagerNotSupported)?;
 
-        let collection = root
-            .protocol_features()
-            .expand_property(bmc.as_ref(), collection_ref)
-            .await?;
-
+        let collection = bmc.expand_property(collection_ref).await?;
         Ok(Self {
             bmc: bmc.clone(),
             collection,
-            protocol_features: root.protocol_features_clone(),
         })
     }
 
@@ -70,11 +64,7 @@ impl<B: Bmc + Sync + Send> ManagerCollection<B> {
                 .get(self.bmc.as_ref())
                 .await
                 .map_err(Error::Bmc)?;
-            managers.push(Manager::new(
-                self.bmc.clone(),
-                manager,
-                self.protocol_features.clone(),
-            ));
+            managers.push(Manager::new(self.bmc.clone(), manager));
         }
 
         Ok(managers)

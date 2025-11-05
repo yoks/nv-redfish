@@ -16,7 +16,7 @@
 use crate::schema::redfish::chassis::Chassis as ChassisSchema;
 #[allow(unused_imports)] // enabled by any feature
 use crate::Error;
-use crate::ProtocolFeatures;
+use crate::NvBmc;
 use nv_redfish_core::bmc::Bmc;
 use std::sync::Arc;
 
@@ -43,27 +43,14 @@ use crate::sensors::Sensor;
 /// Provides access to chassis information and sub-resources such as power supplies.
 pub struct Chassis<B: Bmc> {
     #[allow(dead_code)] // enabled by any feature
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     data: Arc<ChassisSchema>,
-    #[allow(dead_code)] // enabled by feature
-    protocol_features: Arc<ProtocolFeatures>,
 }
 
-impl<B> Chassis<B>
-where
-    B: Bmc + Sync + Send,
-{
+impl<B: Bmc> Chassis<B> {
     /// Create a new chassis handle.
-    pub(crate) const fn new(
-        bmc: Arc<B>,
-        data: Arc<ChassisSchema>,
-        protocol_features: Arc<ProtocolFeatures>,
-    ) -> Self {
-        Self {
-            bmc,
-            data,
-            protocol_features,
-        }
+    pub(crate) const fn new(bmc: NvBmc<B>, data: Arc<ChassisSchema>) -> Self {
+        Self { bmc, data }
     }
 
     /// Get the raw schema data for this chassis.
@@ -88,11 +75,7 @@ where
         if let Some(ps) = &self.data.power_subsystem {
             let ps = ps.get(self.bmc.as_ref()).await.map_err(Error::Bmc)?;
             if let Some(supplies) = &ps.power_supplies {
-                let supplies = &self
-                    .protocol_features
-                    .expand_property(self.bmc.as_ref(), supplies)
-                    .await?
-                    .members;
+                let supplies = &self.bmc.expand_property(supplies).await?.members;
                 let mut power_supplies = Vec::with_capacity(supplies.len());
                 for power_supply in supplies {
                     let power_supply = power_supply
@@ -175,11 +158,7 @@ where
                 .get(self.bmc.as_ref())
                 .await
                 .map_err(Error::Bmc)?;
-            log_services.push(LogService::new(
-                self.bmc.clone(),
-                log_service,
-                self.protocol_features.clone(),
-            ));
+            log_services.push(LogService::new(self.bmc.clone(), log_service));
         }
 
         Ok(log_services)
@@ -202,7 +181,7 @@ where
 
         Ok(sensor_refs
             .into_iter()
-            .map(|r| Sensor::new(r, self.bmc.clone()))
+            .map(|r| Sensor::new(self.bmc.clone(), r))
             .collect())
     }
 
@@ -225,8 +204,8 @@ where
             let mut sensor_data = Vec::with_capacity(sc.members.len());
             for sensor in &sc.members {
                 sensor_data.push(Sensor::new(
-                    NavProperty::<SchemaSensor>::new_reference(sensor.id().clone()),
                     self.bmc.clone(),
+                    NavProperty::<SchemaSensor>::new_reference(sensor.id().clone()),
                 ));
             }
             Ok(sensor_data)

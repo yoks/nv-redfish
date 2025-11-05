@@ -16,6 +16,7 @@
 use crate::schema::redfish::storage::Storage as StorageSchema;
 use crate::systems::Drive;
 use crate::Error;
+use crate::NvBmc;
 use nv_redfish_core::Bmc;
 use std::sync::Arc;
 
@@ -23,16 +24,13 @@ use std::sync::Arc;
 ///
 /// Provides access to storage controller information and associated drives.
 pub struct Storage<B: Bmc> {
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     data: Arc<StorageSchema>,
 }
 
-impl<B> Storage<B>
-where
-    B: Bmc + Sync + Send,
-{
+impl<B: Bmc> Storage<B> {
     /// Create a new storage handle.
-    pub(crate) const fn new(bmc: Arc<B>, data: Arc<StorageSchema>) -> Self {
+    pub(crate) const fn new(bmc: NvBmc<B>, data: Arc<StorageSchema>) -> Self {
         Self { bmc, data }
     }
 

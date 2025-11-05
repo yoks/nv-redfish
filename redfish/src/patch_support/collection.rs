@@ -20,7 +20,7 @@ use crate::schema::redfish::resource::ItemOrCollection;
 use crate::schema::redfish::resource::Oem;
 use crate::schema::redfish::resource::ResourceCollection;
 use crate::Error;
-use crate::ProtocolFeatures;
+use crate::NvBmc;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::Creatable;
 use nv_redfish_core::EntityTypeRef;
@@ -47,23 +47,20 @@ where
     fn convert_patched(base: ResourceCollection, members: Vec<NavProperty<M>>) -> T;
 
     async fn expand_collection(
-        bmc: &B,
+        bmc: &NvBmc<B>,
         nav: &NavProperty<T>,
         patch_fn: Option<&ReadPatchFn>,
-        protocol_features: &ProtocolFeatures,
     ) -> Result<Arc<T>, Error<B>> {
         if let Some(patch_fn) = patch_fn {
             // Patches are not free so we keep separate branch for
             // patched collections only having this cost on systems
             // that requires to pay the price.
             let patched_collection_ref = NavProperty::<Collection>::new_reference(nav.id().clone());
-            let collection = protocol_features
-                .expand_property(bmc, &patched_collection_ref)
-                .await?;
+            let collection = bmc.expand_property(&patched_collection_ref).await?;
             let members = collection.members(&patch_fn.as_ref())?;
             Ok(Arc::new(Self::convert_patched(collection.base(), members)))
         } else {
-            protocol_features.expand_property(bmc, nav).await
+            bmc.expand_property(nav).await
         }
     }
 }

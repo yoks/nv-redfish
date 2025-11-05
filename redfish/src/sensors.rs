@@ -29,6 +29,7 @@
 use crate::schema::redfish::environment_metrics::EnvironmentMetrics;
 use crate::schema::redfish::sensor::Sensor as SchemaSensor;
 use crate::Error;
+use crate::NvBmc;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::NavProperty;
 use nv_redfish_core::ODataId;
@@ -78,8 +79,8 @@ macro_rules! extract_sensor_uris {
 /// This struct provides methods to fetch sensor data from the BMC.
 /// call to [`fetch`](Self::fetch).
 pub struct Sensor<B: Bmc> {
+    bmc: NvBmc<B>,
     sensor_ref: NavProperty<SchemaSensor>,
-    bmc: Arc<B>,
 }
 
 impl<B: Bmc> Sensor<B> {
@@ -90,8 +91,8 @@ impl<B: Bmc> Sensor<B> {
     /// * `sensor_ref` - Navigation properties pointing to sensor
     /// * `bmc` - BMC client for fetching sensor data
     #[must_use]
-    pub(crate) const fn new(sensor_ref: NavProperty<SchemaSensor>, bmc: Arc<B>) -> Self {
-        Self { sensor_ref, bmc }
+    pub(crate) const fn new(bmc: NvBmc<B>, sensor_ref: NavProperty<SchemaSensor>) -> Self {
+        Self { bmc, sensor_ref }
     }
 
     /// Refresh sensor data from the BMC.

@@ -38,6 +38,7 @@ use crate::patch_support::JsonValue;
 use crate::patch_support::ReadPatchFn;
 use crate::schema::redfish::account_service::AccountService as SchemaAccountService;
 use crate::Error;
+use crate::NvBmc;
 use crate::ServiceRoot;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::EntityTypeRef as _;
@@ -64,13 +65,13 @@ pub(crate) use collection::SlotDefinedConfig;
 pub struct AccountService<B: Bmc> {
     collection_config: collection::Config,
     service: Arc<SchemaAccountService>,
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
 }
 
 impl<B: Bmc> AccountService<B> {
     /// Create a new account service. This is always done by
     /// `ServiceRoot` object.
-    pub(crate) async fn new(bmc: Arc<B>, root: &ServiceRoot<B>) -> Result<Self, Error<B>> {
+    pub(crate) async fn new(bmc: &NvBmc<B>, root: &ServiceRoot<B>) -> Result<Self, Error<B>> {
         let service = root
             .root
             .account_service
@@ -94,7 +95,6 @@ impl<B: Bmc> AccountService<B> {
         let slot_defined_user_accounts = root.slot_defined_user_accounts();
         Ok(Self {
             collection_config: collection::Config {
-                protocol_features: root.protocol_features_clone(),
                 account: AccountConfig {
                     read_patch_fn: account_read_patch_fn,
                     disable_account_on_delete: slot_defined_user_accounts
@@ -104,7 +104,7 @@ impl<B: Bmc> AccountService<B> {
                 slot_defined_user_accounts,
             },
             service,
-            bmc,
+            bmc: bmc.clone(),
         })
     }
 

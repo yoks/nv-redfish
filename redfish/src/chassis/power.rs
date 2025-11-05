@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crate::schema::redfish::power::Power as PowerSchema;
+use crate::NvBmc;
 use nv_redfish_core::Bmc;
 use std::sync::Arc;
 
@@ -27,7 +28,7 @@ use std::sync::Arc;
 /// to encourage explicit handling of legacy vs modern approaches.
 pub struct Power<B: Bmc> {
     #[allow(dead_code)]
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     data: Arc<PowerSchema>,
 }
 
@@ -36,7 +37,7 @@ where
     B: Bmc + Sync + Send,
 {
     /// Create a new power resource handle.
-    pub(crate) const fn new(bmc: Arc<B>, data: Arc<PowerSchema>) -> Self {
+    pub(crate) const fn new(bmc: NvBmc<B>, data: Arc<PowerSchema>) -> Self {
         Self { bmc, data }
     }
 

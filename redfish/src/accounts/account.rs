@@ -37,6 +37,7 @@ use crate::patch_support::ReadPatchFn;
 use crate::patch_support::UpdateWithPatch;
 use crate::schema::redfish::manager_account::ManagerAccount;
 use crate::Error;
+use crate::NvBmc;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::Deletable as _;
 use std::sync::Arc;
@@ -52,7 +53,7 @@ pub struct Config {
 /// Represents a Redfish `ManagerAccount`.
 pub struct Account<B: Bmc> {
     config: Config,
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     data: Arc<ManagerAccount>,
 }
 
@@ -64,14 +65,14 @@ impl<B: Bmc> UpdateWithPatch<ManagerAccount, ManagerAccountUpdate, B> for Accoun
         self.config.read_patch_fn.as_ref()
     }
     fn bmc(&self) -> &B {
-        &self.bmc
+        self.bmc.as_ref()
     }
 }
 
 impl<B: Bmc> Account<B> {
     /// Create a new account handle. This does not create an account on the
     /// BMC.
-    pub(crate) const fn new(bmc: Arc<B>, data: Arc<ManagerAccount>, config: Config) -> Self {
+    pub(crate) const fn new(bmc: NvBmc<B>, data: Arc<ManagerAccount>, config: Config) -> Self {
         Self { config, bmc, data }
     }
 

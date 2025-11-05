@@ -20,7 +20,7 @@ use crate::schema::redfish::resource::ResourceCollection;
 use crate::schema::redfish::software_inventory::SoftwareInventory as SoftwareInventorySchema;
 use crate::schema::redfish::software_inventory_collection::SoftwareInventoryCollection as SoftwareInventoryCollectionSchema;
 use crate::Error;
-use crate::ProtocolFeatures;
+use crate::NvBmc;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::NavProperty;
 use std::sync::Arc;
@@ -30,13 +30,13 @@ use std::sync::Arc;
 /// Provides access to software version information and metadata.
 pub struct SoftwareInventory<B: Bmc> {
     #[allow(dead_code)]
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     data: Arc<SoftwareInventorySchema>,
 }
 
 impl<B: Bmc> SoftwareInventory<B> {
     /// Create a new software inventory handle.
-    pub(crate) const fn new(bmc: Arc<B>, data: Arc<SoftwareInventorySchema>) -> Self {
+    pub(crate) const fn new(bmc: NvBmc<B>, data: Arc<SoftwareInventorySchema>) -> Self {
         Self { bmc, data }
     }
 
@@ -51,7 +51,7 @@ impl<B: Bmc> SoftwareInventory<B> {
 }
 
 pub struct SoftwareInventoryCollection<B: Bmc> {
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     collection: Arc<SoftwareInventoryCollectionSchema>,
     read_patch_fn: Option<ReadPatchFn>,
 }
@@ -69,18 +69,12 @@ impl<B: Bmc> CollectionWithPatch<SoftwareInventoryCollectionSchema, SoftwareInve
 
 impl<B: Bmc> SoftwareInventoryCollection<B> {
     pub(crate) async fn new(
-        bmc: Arc<B>,
+        bmc: &NvBmc<B>,
         collection_ref: &NavProperty<SoftwareInventoryCollectionSchema>,
         read_patch_fn: Option<ReadPatchFn>,
-        protocol_features: Arc<ProtocolFeatures>,
     ) -> Result<Self, Error<B>> {
-        let collection = Self::expand_collection(
-            bmc.as_ref(),
-            collection_ref,
-            read_patch_fn.as_ref(),
-            protocol_features.as_ref(),
-        )
-        .await?;
+        let collection =
+            Self::expand_collection(bmc, collection_ref, read_patch_fn.as_ref()).await?;
         Ok(Self {
             bmc: bmc.clone(),
             collection,

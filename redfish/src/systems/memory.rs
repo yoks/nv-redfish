@@ -16,6 +16,7 @@
 use crate::schema::redfish::memory::Memory as MemorySchema;
 use crate::schema::redfish::memory_metrics::MemoryMetrics;
 use crate::Error;
+use crate::NvBmc;
 use nv_redfish_core::Bmc;
 use std::sync::Arc;
 
@@ -28,16 +29,13 @@ use crate::sensors::Sensor;
 ///
 /// Provides access to memory module information and associated metrics/sensors.
 pub struct Memory<B: Bmc> {
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     data: Arc<MemorySchema>,
 }
 
-impl<B> Memory<B>
-where
-    B: Bmc + Sync + Send,
-{
+impl<B: Bmc> Memory<B> {
     /// Create a new memory handle.
-    pub(crate) const fn new(bmc: Arc<B>, data: Arc<MemorySchema>) -> Self {
+    pub(crate) const fn new(bmc: NvBmc<B>, data: Arc<MemorySchema>) -> Self {
         Self { bmc, data }
     }
 
@@ -86,7 +84,7 @@ where
 
         Ok(sensor_refs
             .into_iter()
-            .map(|r| Sensor::new(r, self.bmc.clone()))
+            .map(|r| Sensor::new(self.bmc.clone(), r))
             .collect())
     }
 }

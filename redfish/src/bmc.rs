@@ -1,0 +1,83 @@
+// SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! BMC implementaion that takes in account protocol features.  That
+//! is built on top of core BMC.
+
+use crate::Error;
+use crate::ProtocolFeatures;
+use nv_redfish_core::query::ExpandQuery;
+use nv_redfish_core::Bmc;
+use nv_redfish_core::Expandable;
+use nv_redfish_core::NavProperty;
+use std::sync::Arc;
+
+pub struct NvBmc<B: Bmc> {
+    bmc: Arc<B>,
+    protocol_features: Arc<ProtocolFeatures>,
+}
+
+impl<B: Bmc> NvBmc<B> {
+    pub(crate) fn new(bmc: Arc<B>, protocol_features: ProtocolFeatures) -> Self {
+        Self {
+            bmc,
+            protocol_features: protocol_features.into(),
+        }
+    }
+
+    pub fn as_ref(&self) -> &B {
+        self.bmc.as_ref()
+    }
+
+    /// Expand navigation property with optimal available method.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::Bmc` if failed to send request to the BMC.
+    ///
+    pub async fn expand_property<T>(&self, nav: &NavProperty<T>) -> Result<Arc<T>, Error<B>>
+    where
+        T: Expandable,
+    {
+        let optimal_query = if self.protocol_features.expand.no_links {
+            // Prefer no links expand.
+            Some(ExpandQuery::no_links())
+        } else if self.protocol_features.expand.expand_all {
+            Some(ExpandQuery::all())
+        } else {
+            None
+        };
+        if let Some(optimal_query) = optimal_query {
+            nav.expand(self.bmc.as_ref(), optimal_query)
+                .await
+                .map_err(Error::Bmc)?
+                .get(self.bmc.as_ref())
+                .await
+                .map_err(Error::Bmc)
+        } else {
+            // if query is not suported.
+            nav.get(self.bmc.as_ref()).await.map_err(Error::Bmc)
+        }
+    }
+}
+
+impl<B: Bmc> Clone for NvBmc<B> {
+    fn clone(&self) -> Self {
+        Self {
+            bmc: self.bmc.clone(),
+            protocol_features: self.protocol_features.clone(),
+        }
+    }
+}

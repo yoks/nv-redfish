@@ -106,9 +106,14 @@ pub(crate) mod patch_support;
 /// Redfish protocol features.
 pub(crate) mod protocol_features;
 
+/// Bmc wrapper used in nv-redfish.
+pub(crate) mod bmc;
+
 #[doc(inline)]
 pub use error::Error;
 #[doc(inline)]
 pub use protocol_features::ProtocolFeatures;
 #[doc(inline)]
 pub use service_root::ServiceRoot;
+
+pub(crate) use bmc::NvBmc;

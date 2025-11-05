@@ -24,7 +24,7 @@ use crate::patch_support::ReadPatchFn;
 use crate::schema::redfish::update_service::UpdateService as UpdateServiceSchema;
 use crate::schema::redfish::update_service::UpdateServiceSimpleUpdateAction;
 use crate::Error;
-use crate::ProtocolFeatures;
+use crate::NvBmc;
 use crate::ServiceRoot;
 use nv_redfish_core::Bmc;
 use serde_json::Value as JsonValue;
@@ -41,15 +41,21 @@ pub use software_inventory::SoftwareInventory;
 ///
 /// Provides functions to access firmware and software inventory, and perform update actions.
 pub struct UpdateService<B: Bmc> {
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     data: Arc<UpdateServiceSchema>,
     fw_inventory_read_patch_fn: Option<ReadPatchFn>,
-    protocol_features: Arc<ProtocolFeatures>,
 }
 
-impl<B: Bmc + Sync + Send> UpdateService<B> {
+impl<B: Bmc> UpdateService<B> {
     /// Create a new update service handle.
-    pub(crate) fn new(root: &ServiceRoot<B>, data: Arc<UpdateServiceSchema>, bmc: Arc<B>) -> Self {
+    pub(crate) async fn new(bmc: &NvBmc<B>, root: &ServiceRoot<B>) -> Result<Self, Error<B>> {
+        let service_ref = root
+            .root
+            .update_service
+            .as_ref()
+            .ok_or(Error::UpdateServiceNotSupported)?;
+        let data = service_ref.get(bmc.as_ref()).await.map_err(Error::Bmc)?;
+
         let mut fw_inventory_patches = Vec::new();
         if root.fw_inventory_wrong_release_date() {
             fw_inventory_patches.push(fw_inventory_patch_wrong_release_date);
@@ -61,12 +67,11 @@ impl<B: Bmc + Sync + Send> UpdateService<B> {
                 Arc::new(move |v| fw_inventory_patches.iter().fold(v, |acc, f| f(acc)));
             Some(fw_inventory_patches_fn)
         };
-        Self {
-            bmc,
+        Ok(Self {
+            bmc: bmc.clone(),
             data,
             fw_inventory_read_patch_fn,
-            protocol_features: root.protocol_features_clone(),
-        }
+        })
     }
 
     /// Get the raw schema data for this update service.
@@ -93,10 +98,9 @@ impl<B: Bmc + Sync + Send> UpdateService<B> {
             .ok_or(Error::FirmwareInventoryNotAvailable)?;
 
         SoftwareInventoryCollection::new(
-            self.bmc.clone(),
+            &self.bmc,
             collection_ref,
             self.fw_inventory_read_patch_fn.clone(),
-            self.protocol_features.clone(),
         )
         .await?
         .members()
@@ -116,10 +120,7 @@ impl<B: Bmc + Sync + Send> UpdateService<B> {
             .software_inventory
             .as_ref()
             .ok_or(Error::SoftwareInventoryNotAvailable)?;
-        let collection = self
-            .protocol_features
-            .expand_property(self.bmc.as_ref(), collection_ref)
-            .await?;
+        let collection = self.bmc.expand_property(collection_ref).await?;
 
         let mut items = Vec::new();
         for item_ref in &collection.members {

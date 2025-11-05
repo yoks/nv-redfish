@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crate::schema::redfish::thermal::Thermal as ThermalSchema;
+use crate::NvBmc;
 use nv_redfish_core::Bmc;
 use std::sync::Arc;
 
@@ -27,16 +28,13 @@ use std::sync::Arc;
 /// to encourage explicit handling of legacy vs modern approaches.
 pub struct Thermal<B: Bmc> {
     #[allow(dead_code)]
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     data: Arc<ThermalSchema>,
 }
 
-impl<B> Thermal<B>
-where
-    B: Bmc + Sync + Send,
-{
+impl<B: Bmc> Thermal<B> {
     /// Create a new thermal resource handle.
-    pub(crate) const fn new(bmc: Arc<B>, data: Arc<ThermalSchema>) -> Self {
+    pub(crate) const fn new(bmc: NvBmc<B>, data: Arc<ThermalSchema>) -> Self {
         Self { bmc, data }
     }
 

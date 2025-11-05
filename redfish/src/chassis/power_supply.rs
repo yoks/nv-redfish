@@ -16,6 +16,7 @@
 use crate::schema::redfish::power_supply::PowerSupply as PowerSupplySchema;
 use crate::schema::redfish::power_supply_metrics::PowerSupplyMetrics;
 use crate::Error;
+use crate::NvBmc;
 use nv_redfish_core::Bmc;
 use std::sync::Arc;
 
@@ -28,16 +29,13 @@ use crate::sensors::Sensor;
 ///
 /// Provides access to power supply information and associated metrics/sensors.
 pub struct PowerSupply<B: Bmc> {
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     data: Arc<PowerSupplySchema>,
 }
 
-impl<B> PowerSupply<B>
-where
-    B: Bmc + Sync + Send,
-{
+impl<B: Bmc> PowerSupply<B> {
     /// Create a new power supply handle.
-    pub(crate) const fn new(bmc: Arc<B>, data: Arc<PowerSupplySchema>) -> Self {
+    pub(crate) const fn new(bmc: NvBmc<B>, data: Arc<PowerSupplySchema>) -> Self {
         Self { bmc, data }
     }
 
@@ -104,7 +102,7 @@ where
 
         Ok(sensor_refs
             .into_iter()
-            .map(|r| Sensor::new(r, self.bmc.clone()))
+            .map(|r| Sensor::new(self.bmc.clone(), r))
             .collect())
     }
 }

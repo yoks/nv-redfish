@@ -31,7 +31,7 @@ mod storage;
 
 use crate::schema::redfish::computer_system_collection::ComputerSystemCollection as ComputerSystemCollectionSchema;
 use crate::Error;
-use crate::ProtocolFeatures;
+use crate::NvBmc;
 use crate::ServiceRoot;
 use nv_redfish_core::Bmc;
 use std::sync::Arc;
@@ -55,26 +55,21 @@ pub use storage::Storage;
 ///
 /// Provides functions to access collection members.
 pub struct SystemCollection<B: Bmc> {
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     collection: Arc<ComputerSystemCollectionSchema>,
-    protocol_features: Arc<ProtocolFeatures>,
 }
 
 impl<B: Bmc + Sync + Send> SystemCollection<B> {
-    pub(crate) async fn new(bmc: Arc<B>, root: &ServiceRoot<B>) -> Result<Self, Error<B>> {
+    pub(crate) async fn new(bmc: &NvBmc<B>, root: &ServiceRoot<B>) -> Result<Self, Error<B>> {
         let collection_ref = root
             .root
             .systems
             .as_ref()
             .ok_or(Error::SystemNotSupported)?;
-        let collection = root
-            .protocol_features()
-            .expand_property(bmc.as_ref(), collection_ref)
-            .await?;
+        let collection = bmc.expand_property(collection_ref).await?;
         Ok(Self {
             bmc: bmc.clone(),
             collection,
-            protocol_features: root.protocol_features_clone(),
         })
     }
 
@@ -90,11 +85,7 @@ impl<B: Bmc + Sync + Send> SystemCollection<B> {
                 .get(self.bmc.as_ref())
                 .await
                 .map_err(Error::Bmc)?;
-            systems.push(ComputerSystem::new(
-                self.bmc.clone(),
-                system,
-                self.protocol_features.clone(),
-            ));
+            systems.push(ComputerSystem::new(self.bmc.clone(), system));
         }
 
         Ok(systems)

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::schema::redfish::computer_system::ComputerSystem as ComputerSystemSchema;
-use crate::ProtocolFeatures;
+use crate::NvBmc;
 use nv_redfish_core::Bmc;
 use std::sync::Arc;
 
@@ -35,10 +35,8 @@ use crate::Error;
 /// Provides access to system information and sub-resources such as processors.
 pub struct ComputerSystem<B: Bmc> {
     #[allow(dead_code)] // feature-enabled...
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     data: Arc<ComputerSystemSchema>,
-    #[allow(dead_code)] // feature-enabled...
-    protocol_features: Arc<ProtocolFeatures>,
 }
 
 impl<B> ComputerSystem<B>
@@ -46,16 +44,8 @@ where
     B: Bmc + Sync + Send,
 {
     /// Create a new computer system handle.
-    pub(crate) const fn new(
-        bmc: Arc<B>,
-        data: Arc<ComputerSystemSchema>,
-        protocol_features: Arc<ProtocolFeatures>,
-    ) -> Self {
-        Self {
-            bmc,
-            data,
-            protocol_features,
-        }
+    pub(crate) const fn new(bmc: NvBmc<B>, data: Arc<ComputerSystemSchema>) -> Self {
+        Self { bmc, data }
     }
 
     /// Get the raw schema data for this computer system.
@@ -84,10 +74,7 @@ where
             .as_ref()
             .ok_or(Error::ProcessorsNotAvailable)?;
 
-        let processors_collection = self
-            .protocol_features
-            .expand_property(self.bmc.as_ref(), processors_ref)
-            .await?;
+        let processors_collection = self.bmc.expand_property(processors_ref).await?;
 
         let mut processors = Vec::new();
         for processor_ref in &processors_collection.members {
@@ -118,10 +105,7 @@ where
             .as_ref()
             .ok_or(Error::StorageNotAvailable)?;
 
-        let storage_collection = self
-            .protocol_features
-            .expand_property(self.bmc.as_ref(), storage_ref)
-            .await?;
+        let storage_collection = self.bmc.expand_property(storage_ref).await?;
 
         let mut storage_controllers = Vec::new();
         for storage_controller_ref in &storage_collection.members {
@@ -148,10 +132,7 @@ where
     pub async fn memory_modules(&self) -> Result<Vec<Memory<B>>, Error<B>> {
         let memory_ref = self.data.memory.as_ref().ok_or(Error::MemoryNotAvailable)?;
 
-        let memory_collection = self
-            .protocol_features
-            .expand_property(self.bmc.as_ref(), memory_ref)
-            .await?;
+        let memory_collection = self.bmc.expand_property(memory_ref).await?;
 
         let mut memory_modules = Vec::new();
         for memory_ref in &memory_collection.members {
@@ -191,11 +172,7 @@ where
                 .get(self.bmc.as_ref())
                 .await
                 .map_err(Error::Bmc)?;
-            log_services.push(LogService::new(
-                self.bmc.clone(),
-                log_service,
-                self.protocol_features.clone(),
-            ));
+            log_services.push(LogService::new(self.bmc.clone(), log_service));
         }
 
         Ok(log_services)

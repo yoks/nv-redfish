@@ -50,7 +50,7 @@ use crate::schema::redfish::manager_account::ManagerAccount;
 use crate::schema::redfish::manager_account_collection::ManagerAccountCollection;
 use crate::schema::redfish::resource::ResourceCollection;
 use crate::Error;
-use crate::ProtocolFeatures;
+use crate::NvBmc;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::EntityTypeRef as _;
 use nv_redfish_core::NavProperty;
@@ -80,8 +80,6 @@ pub struct SlotDefinedConfig {
 /// how accounts are created, listed, and deleted.
 #[derive(Clone)]
 pub struct Config {
-    /// Supported Redfish protocol features
-    pub protocol_features: Arc<ProtocolFeatures>,
     /// Configuration of `Account` objects.
     pub account: AccountConfig,
     /// Configuration for slot-defined user accounts.
@@ -93,7 +91,7 @@ pub struct Config {
 /// Provides functions to access collection members.
 pub struct AccountCollection<B: Bmc> {
     config: Config,
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     collection: Arc<ManagerAccountCollection>,
 }
 
@@ -118,26 +116,22 @@ impl<B: Bmc> CreateWithPatch<ManagerAccountCollection, ManagerAccount, ManagerAc
         self.config.account.read_patch_fn.as_ref()
     }
     fn bmc(&self) -> &B {
-        &self.bmc
+        self.bmc.as_ref()
     }
 }
 
 impl<B: Bmc> AccountCollection<B> {
     pub(crate) async fn new(
-        bmc: Arc<B>,
+        bmc: NvBmc<B>,
         collection_ref: &NavProperty<ManagerAccountCollection>,
         config: Config,
     ) -> Result<Self, Error<B>> {
-        let collection = Self::expand_collection(
-            bmc.as_ref(),
-            collection_ref,
-            config.account.read_patch_fn.as_ref(),
-            config.protocol_features.as_ref(),
-        )
-        .await?;
+        let collection =
+            Self::expand_collection(&bmc, collection_ref, config.account.read_patch_fn.as_ref())
+                .await?;
         Ok(Self {
             config,
-            bmc: bmc.clone(),
+            bmc,
             collection,
         })
     }

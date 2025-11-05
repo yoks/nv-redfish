@@ -21,7 +21,7 @@
 use crate::schema::redfish::log_entry::LogEntry;
 use crate::schema::redfish::log_service::LogService as LogServiceSchema;
 use crate::Error;
-use crate::ProtocolFeatures;
+use crate::NvBmc;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::EntityTypeRef as _;
 use nv_redfish_core::NavProperty;
@@ -32,23 +32,14 @@ use std::sync::Arc;
 ///
 /// Provides functions to access log entries and perform log operations.
 pub struct LogService<B: Bmc> {
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     data: Arc<LogServiceSchema>,
-    protocol_features: Arc<ProtocolFeatures>,
 }
 
-impl<B: Bmc + Sync + Send> LogService<B> {
+impl<B: Bmc> LogService<B> {
     /// Create a new log service handle.
-    pub(crate) const fn new(
-        bmc: Arc<B>,
-        data: Arc<LogServiceSchema>,
-        protocol_features: Arc<ProtocolFeatures>,
-    ) -> Self {
-        Self {
-            bmc,
-            data,
-            protocol_features,
-        }
+    pub(crate) const fn new(bmc: NvBmc<B>, data: Arc<LogServiceSchema>) -> Self {
+        Self { bmc, data }
     }
 
     /// Get the raw schema data for this log service.
@@ -74,10 +65,7 @@ impl<B: Bmc + Sync + Send> LogService<B> {
             .as_ref()
             .ok_or(Error::LogEntriesNotAvailable)?;
 
-        let entries_collection = self
-            .protocol_features
-            .expand_property(self.bmc.as_ref(), entries_ref)
-            .await?;
+        let entries_collection = self.bmc.expand_property(entries_ref).await?;
         self.expand_entries(&entries_collection.members).await
     }
 

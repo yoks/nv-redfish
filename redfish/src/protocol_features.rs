@@ -17,19 +17,14 @@
 
 use crate::schema::redfish::service_root::Expand;
 use crate::schema::redfish::service_root::ProtocolFeaturesSupported;
-use crate::Error;
-use nv_redfish_core::query::ExpandQuery;
-use nv_redfish_core::Bmc;
-use nv_redfish_core::Expandable;
-use nv_redfish_core::NavProperty;
 use std::convert::identity;
-use std::sync::Arc;
 
 /// Defines features supported by Redfish protocol. Provides helpers
 /// to write code that takes features in account.
 #[derive(Default)]
 pub struct ProtocolFeatures {
-    expand: ExpandQueryFeatures,
+    /// Expand query features support.
+    pub expand: ExpandQueryFeatures,
 }
 
 impl ProtocolFeatures {
@@ -43,50 +38,14 @@ impl ProtocolFeatures {
                 .unwrap_or_default(),
         }
     }
-
-    /// Expand navigation property with optimal available method.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Error::Bmc` if failed to send request to the BMC.
-    ///
-    pub async fn expand_property<B, T>(
-        &self,
-        bmc: &B,
-        nav: &NavProperty<T>,
-    ) -> Result<Arc<T>, Error<B>>
-    where
-        B: Bmc,
-        T: Expandable,
-    {
-        let optimal_query = if self.expand.no_links {
-            // Prefer no links expand.
-            Some(ExpandQuery::no_links())
-        } else if self.expand.expand_all {
-            Some(ExpandQuery::all())
-        } else {
-            None
-        };
-        if let Some(optimal_query) = optimal_query {
-            nav.expand(bmc, optimal_query)
-                .await
-                .map_err(Error::Bmc)?
-                .get(bmc)
-                .await
-                .map_err(Error::Bmc)
-        } else {
-            // if query is not suported.
-            nav.get(bmc).await.map_err(Error::Bmc)
-        }
-    }
 }
 
 /// Expand query support.
-struct ExpandQueryFeatures {
+pub struct ExpandQueryFeatures {
     /// Indicates '*' support by the Server.
-    expand_all: bool,
+    pub expand_all: bool,
     /// Indicates '.' support by the Server.
-    no_links: bool,
+    pub no_links: bool,
 }
 
 // We want to have explicit defaults. Not language one. They are the

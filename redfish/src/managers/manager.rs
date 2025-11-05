@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::schema::redfish::manager::Manager as ManagerSchema;
-use crate::ProtocolFeatures;
+use crate::NvBmc;
 use nv_redfish_core::Bmc;
 use std::sync::Arc;
 
@@ -25,23 +25,14 @@ use crate::log_services::LogService;
 ///
 /// Provides access to manager information and associated services.
 pub struct Manager<B: Bmc> {
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     data: Arc<ManagerSchema>,
-    protocol_features: Arc<ProtocolFeatures>,
 }
 
 impl<B: Bmc + Sync + Send> Manager<B> {
     /// Create a new manager handle.
-    pub(crate) const fn new(
-        bmc: Arc<B>,
-        data: Arc<ManagerSchema>,
-        protocol_features: Arc<ProtocolFeatures>,
-    ) -> Self {
-        Self {
-            bmc,
-            data,
-            protocol_features,
-        }
+    pub(crate) const fn new(bmc: NvBmc<B>, data: Arc<ManagerSchema>) -> Self {
+        Self { bmc, data }
     }
 
     /// Get the raw schema data for this manager.
@@ -79,11 +70,7 @@ impl<B: Bmc + Sync + Send> Manager<B> {
                 .get(self.bmc.as_ref())
                 .await
                 .map_err(crate::Error::Bmc)?;
-            log_services.push(LogService::new(
-                self.bmc.clone(),
-                log_service,
-                self.protocol_features.clone(),
-            ));
+            log_services.push(LogService::new(self.bmc.clone(), log_service));
         }
 
         Ok(log_services)

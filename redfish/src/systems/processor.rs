@@ -16,6 +16,7 @@
 use crate::schema::redfish::processor::Processor as ProcessorSchema;
 use crate::schema::redfish::processor_metrics::ProcessorMetrics;
 use crate::Error;
+use crate::NvBmc;
 use nv_redfish_core::Bmc;
 use std::sync::Arc;
 
@@ -30,16 +31,13 @@ use crate::sensors::Sensor;
 ///
 /// Provides access to processor information and associated metrics/sensors.
 pub struct Processor<B: Bmc> {
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     data: Arc<ProcessorSchema>,
 }
 
-impl<B> Processor<B>
-where
-    B: Bmc + Sync + Send,
-{
+impl<B: Bmc> Processor<B> {
     /// Create a new processor handle.
-    pub(crate) const fn new(bmc: Arc<B>, data: Arc<ProcessorSchema>) -> Self {
+    pub(crate) const fn new(bmc: NvBmc<B>, data: Arc<ProcessorSchema>) -> Self {
         Self { bmc, data }
     }
 
@@ -88,7 +86,7 @@ where
 
         Ok(sensor_refs
             .into_iter()
-            .map(|r| Sensor::new(r, self.bmc.clone()))
+            .map(|r| Sensor::new(self.bmc.clone(), r))
             .collect())
     }
 
@@ -117,7 +115,7 @@ where
 
         Ok(sensor_refs
             .into_iter()
-            .map(|r| Sensor::new(r, self.bmc.clone()))
+            .map(|r| Sensor::new(self.bmc.clone(), r))
             .collect())
     }
 }

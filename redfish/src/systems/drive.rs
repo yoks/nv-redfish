@@ -16,6 +16,7 @@
 use crate::schema::redfish::drive::Drive as DriveSchema;
 use crate::schema::redfish::drive_metrics::DriveMetrics;
 use crate::Error;
+use crate::NvBmc;
 use nv_redfish_core::Bmc;
 use std::sync::Arc;
 
@@ -28,16 +29,13 @@ use crate::sensors::Sensor;
 ///
 /// Provides access to drive information and associated metrics/sensors.
 pub struct Drive<B: Bmc> {
-    bmc: Arc<B>,
+    bmc: NvBmc<B>,
     data: Arc<DriveSchema>,
 }
 
-impl<B> Drive<B>
-where
-    B: Bmc + Sync + Send,
-{
+impl<B: Bmc> Drive<B> {
     /// Create a new drive handle.
-    pub(crate) const fn new(bmc: Arc<B>, data: Arc<DriveSchema>) -> Self {
+    pub(crate) const fn new(bmc: NvBmc<B>, data: Arc<DriveSchema>) -> Self {
         Self { bmc, data }
     }
 
@@ -86,7 +84,7 @@ where
 
         Ok(sensor_refs
             .into_iter()
-            .map(|r| Sensor::new(r, self.bmc.clone()))
+            .map(|r| Sensor::new(self.bmc.clone(), r))
             .collect())
     }
 }
