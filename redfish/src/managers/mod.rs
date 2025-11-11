@@ -36,7 +36,7 @@ pub struct ManagerCollection<B: Bmc> {
     collection: Arc<ManagerCollectionSchema>,
 }
 
-impl<B: Bmc + Sync + Send> ManagerCollection<B> {
+impl<B: Bmc> ManagerCollection<B> {
     /// Create a new manager collection handle.
     pub(crate) async fn new(bmc: &NvBmc<B>, root: &ServiceRoot<B>) -> Result<Self, Error<B>> {
         let collection_ref = root

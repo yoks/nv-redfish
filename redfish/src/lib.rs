@@ -86,6 +86,9 @@ pub mod systems;
 #[cfg(feature = "update-service")]
 pub mod update_service;
 
+/// Ethernet interfaces
+#[cfg(feature = "ethernet-interfaces")]
+pub mod ethernet_interfaces;
 /// Log Service.
 #[cfg(feature = "log-services")]
 pub mod log_services;
@@ -111,6 +114,8 @@ pub(crate) mod bmc;
 
 #[doc(inline)]
 pub use error::Error;
+#[doc(inline)]
+pub use nv_redfish_core::Bmc;
 #[doc(inline)]
 pub use protocol_features::ProtocolFeatures;
 #[doc(inline)]

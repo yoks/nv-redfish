@@ -20,6 +20,8 @@ use nv_redfish_core::Bmc;
 use nv_redfish_core::NavProperty;
 use std::sync::Arc;
 
+#[cfg(feature = "ethernet-interfaces")]
+use crate::ethernet_interfaces::EthernetInterfaceCollection;
 #[cfg(feature = "log-services")]
 use crate::log_services::LogService;
 
@@ -53,6 +55,25 @@ impl<B: Bmc + Sync + Send> Manager<B> {
     #[must_use]
     pub fn raw(&self) -> Arc<ManagerSchema> {
         self.data.clone()
+    }
+
+    /// Get ethernet interfaces for this manager.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The manager does not have / provide ethernet interfaces
+    /// - Fetching log ethernet internet data fails
+    #[cfg(feature = "ethernet-interfaces")]
+    pub async fn ethernet_interfaces(
+        &self,
+    ) -> Result<EthernetInterfaceCollection<B>, crate::Error<B>> {
+        let p = self
+            .data
+            .ethernet_interfaces
+            .as_ref()
+            .ok_or(crate::Error::EthernetInterfacesNotAvailable)?;
+        EthernetInterfaceCollection::new(&self.bmc, p).await
     }
 
     /// Get log services for this manager.

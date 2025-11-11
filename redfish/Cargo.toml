@@ -24,6 +24,7 @@ default = []
 std-redfish = [
     "accounts",
     "chassis",
+    "ethernet-interfaces",
     "log-services",
     "managers",
     "memory",
@@ -39,6 +40,7 @@ std-redfish = [
 
 accounts = []
 chassis = []
+ethernet-interfaces = []
 log-services = []
 managers = []
 memory = []

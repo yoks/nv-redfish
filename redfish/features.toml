@@ -31,6 +31,19 @@ patterns = [
 ]
 
 [[features]]
+name = "ethernet-interfaces"
+csdl_files = [
+    "EthernetInterfaceCollection_v1.xml",
+    "EthernetInterface_v1.xml",
+    "VLanNetworkInterface_v1.xml",
+    "IPAddresses_v1.xml"
+]
+patterns = [
+    "EthernetInterfaceCollection.*",
+    "EthernetInterface.*"
+]
+
+[[features]]
 name = "memory"
 csdl_files = [
     "Memory_v1.xml",

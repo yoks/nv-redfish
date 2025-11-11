@@ -71,6 +71,9 @@ pub enum Error<B: Bmc> {
     /// Manager not supported by BMC
     #[cfg(feature = "managers")]
     ManagerNotSupported,
+    /// Ethernet interfaces not available for this resource
+    #[cfg(feature = "ethernet-interfaces")]
+    EthernetInterfacesNotAvailable,
     /// JSON parse error.
     Json(JsonError),
 }
@@ -136,6 +139,10 @@ impl<B: Bmc> Display for Error<B> {
             #[cfg(feature = "log-services")]
             Self::LogEntriesNotAvailable => {
                 write!(f, "Log entries are not available")
+            }
+            #[cfg(feature = "ethernet-interfaces")]
+            Self::EthernetInterfacesNotAvailable => {
+                write!(f, "Ethernet interfaces are not available")
             }
             #[cfg(feature = "managers")]
             Self::ManagerNotSupported => {
