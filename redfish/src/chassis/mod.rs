@@ -16,6 +16,8 @@
 #[allow(clippy::module_inception)]
 mod chassis;
 
+#[cfg(feature = "network-adapters")]
+mod network_adapters;
 #[cfg(feature = "power")]
 mod power;
 #[cfg(feature = "power-supplies")]
@@ -23,16 +25,17 @@ mod power_supply;
 #[cfg(feature = "thermal")]
 mod thermal;
 
-use crate::schema::redfish::chassis_collection::ChassisCollection as ChassisCollectionSchema;
-use crate::Error;
-use crate::NvBmc;
-use crate::ServiceRoot;
-use nv_redfish_core::Bmc;
 use std::sync::Arc;
 
 #[doc(inline)]
 pub use chassis::Chassis;
+use nv_redfish_core::Bmc;
 
+#[doc(inline)]
+#[cfg(feature = "network-adapters")]
+pub use network_adapters::NetworkAdapter;
+#[cfg(feature = "network-adapters")]
+pub use network_adapters::NetworkAdapterCollection;
 #[doc(inline)]
 #[cfg(feature = "power")]
 pub use power::Power;
@@ -43,6 +46,9 @@ pub use power_supply::PowerSupply;
 #[cfg(feature = "thermal")]
 pub use thermal::Thermal;
 
+use crate::schema::redfish::chassis_collection::ChassisCollection as ChassisCollectionSchema;
+use crate::{Error, NvBmc, ServiceRoot};
+
 /// Chassis collection.
 ///
 /// Provides functions to access collection members.
@@ -51,7 +57,7 @@ pub struct ChassisCollection<B: Bmc> {
     collection: Arc<ChassisCollectionSchema>,
 }
 
-impl<B: Bmc + Sync + Send> ChassisCollection<B> {
+impl<B: Bmc> ChassisCollection<B> {
     pub(crate) async fn new(bmc: &NvBmc<B>, root: &ServiceRoot<B>) -> Result<Self, Error<B>> {
         let collection_ref = root
             .root
@@ -71,7 +77,17 @@ impl<B: Bmc + Sync + Send> ChassisCollection<B> {
     /// # Errors
     ///
     /// Returns an error if fetching collection data fails.
+    #[deprecated(since = "0.1.7", note = "please use `members()` instead")]
     pub async fn chassis(&self) -> Result<Vec<Chassis<B>>, Error<B>> {
+        self.members().await
+    }
+
+    /// List all chassis avaiable in this BMC
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if fetching collection data fails.
+    pub async fn members(&self) -> Result<Vec<Chassis<B>>, Error<B>> {
         let mut chassis_members = Vec::new();
         for chassis in &self.collection.members {
             chassis_members.push(Chassis::new(&self.bmc, chassis).await?);

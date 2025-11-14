@@ -28,6 +28,7 @@ std-redfish = [
     "log-services",
     "managers",
     "memory",
+    "network-adapters",
     "power",
     "power-supplies",
     "processors",
@@ -41,6 +42,7 @@ std-redfish = [
 accounts = []
 chassis = []
 ethernet-interfaces = []
+network-adapters = []
 log-services = []
 managers = []
 memory = []

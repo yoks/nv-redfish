@@ -74,6 +74,9 @@ pub enum Error<B: Bmc> {
     /// Ethernet interfaces not available for this resource
     #[cfg(feature = "ethernet-interfaces")]
     EthernetInterfacesNotAvailable,
+    /// Network adapters not available for this resource
+    #[cfg(feature = "network-adapters")]
+    NetworkAdaptersNotAvailable,
     /// JSON parse error.
     Json(JsonError),
 }
@@ -143,6 +146,10 @@ impl<B: Bmc> Display for Error<B> {
             #[cfg(feature = "ethernet-interfaces")]
             Self::EthernetInterfacesNotAvailable => {
                 write!(f, "Ethernet interfaces are not available")
+            }
+            #[cfg(feature = "network-adapters")]
+            Self::NetworkAdaptersNotAvailable => {
+                write!(f, "Network adapters are not available")
             }
             #[cfg(feature = "managers")]
             Self::ManagerNotSupported => {

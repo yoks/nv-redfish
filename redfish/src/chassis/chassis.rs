@@ -22,6 +22,10 @@ use nv_redfish_core::bmc::Bmc;
 use nv_redfish_core::NavProperty;
 use std::sync::Arc;
 
+#[cfg(feature = "network-adapters")]
+use crate::chassis::NetworkAdapter;
+#[cfg(feature = "network-adapters")]
+use crate::chassis::NetworkAdapterCollection;
 #[cfg(feature = "power")]
 use crate::chassis::Power;
 #[cfg(feature = "power-supplies")]
@@ -129,6 +133,28 @@ impl<B: Bmc> Chassis<B> {
         } else {
             Ok(None)
         }
+    }
+
+    /// Get network adapter resources
+    ///
+    /// Returns the deprecated `Chassis/NetworkAdapte` resources if available.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if fetching network adapters data fails.
+    /// `Error::NetworkAdaptersNotAvailable` is returned if BMC doesn't
+    /// provide network adapters collection.
+    #[cfg(feature = "network-adapters")]
+    pub async fn network_adapters(&self) -> Result<Vec<NetworkAdapter<B>>, Error<B>> {
+        let network_adapters_collection_ref = &self
+            .data
+            .network_adapters
+            .as_ref()
+            .ok_or(Error::NetworkAdaptersNotAvailable)?;
+        NetworkAdapterCollection::new(&self.bmc, network_adapters_collection_ref)
+            .await?
+            .members()
+            .await
     }
 
     /// Get log services for this chassis.

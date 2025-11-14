@@ -57,6 +57,17 @@ patterns = [
 ]
 
 [[features]]
+name = "network-adapters"
+csdl_files = [
+    "NetworkAdapterCollection_v1.xml",
+    "NetworkAdapter_v1.xml"
+]
+patterns = [
+    "NetworkAdapterCollection.*",
+    "NetworkAdapter.*"
+]
+
+[[features]]
 name = "systems"
 csdl_files = [
     "ComputerSystem_v1.xml",
