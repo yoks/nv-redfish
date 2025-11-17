@@ -26,6 +26,10 @@ use nv_redfish_core::Bmc;
 use nv_redfish_core::NavProperty;
 use std::marker::PhantomData;
 use std::sync::Arc;
+use tagged_types::TaggedType;
+
+#[doc(inline)]
+pub use crate::schema::redfish::ethernet_interface::LinkStatus;
 
 /// Ethernet interfaces collection.
 ///
@@ -62,6 +66,39 @@ impl<B: Bmc> EthernetInterfaceCollection<B> {
     }
 }
 
+/// Ethernet interface enabled.
+pub type Enabled = TaggedType<bool, EnabledTag>;
+#[doc(hidden)]
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[transparent(Debug, Display, FromStr, Serialize, Deserialize)]
+#[capability(inner_access)]
+pub enum EnabledTag {}
+
+/// Mac address of the ethernet interface.
+///
+/// Nv-redfish keeps open underlying type for `MacAddress` because it
+/// can be converted to `mac_address::MacAddress`.
+pub type MacAddress<T> = TaggedType<T, MacAddressTag>;
+#[doc(hidden)]
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[transparent(Debug, Display, FromStr, Serialize, Deserialize)]
+#[capability(inner_access)]
+pub enum MacAddressTag {}
+
+/// Uefi device path for the interface.
+///
+/// Nv-redfish keeps open underlying type for `UefiDevicePath` because it
+/// can really be represented by any implementation of UEFI's device path.
+pub type UefiDevicePath<T> = TaggedType<T, UefiDevicePathTag>;
+#[doc(hidden)]
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[transparent(Debug, Display, FromStr, Serialize, Deserialize)]
+#[capability(inner_access)]
+pub enum UefiDevicePathTag {}
+
 /// Ethernet Interface.
 ///
 /// Provides functions to access ethernet interface.
@@ -89,6 +126,48 @@ impl<B: Bmc> EthernetInterface<B> {
     #[must_use]
     pub fn raw(&self) -> Arc<EthernetInterfaceSchema> {
         self.data.clone()
+    }
+
+    /// State of the interface. `None` means that BMC hasn't reported
+    /// interface state or reported null.
+    #[must_use]
+    pub fn interface_enabled(&self) -> Option<Enabled> {
+        self.data
+            .interface_enabled
+            .as_ref()
+            .and_then(Option::as_ref)
+            .copied()
+            .map(Enabled::new)
+    }
+
+    /// Link status of the interface.
+    #[must_use]
+    pub fn link_status(&self) -> Option<LinkStatus> {
+        self.data
+            .link_status
+            .as_ref()
+            .and_then(Option::as_ref)
+            .copied()
+    }
+
+    /// MAC address of the interface.
+    #[must_use]
+    pub fn mac_address(&self) -> Option<MacAddress<&String>> {
+        self.data
+            .mac_address
+            .as_ref()
+            .and_then(Option::as_ref)
+            .map(MacAddress::new)
+    }
+
+    /// UEFI device path for the interface.
+    #[must_use]
+    pub fn uefi_device_path(&self) -> Option<UefiDevicePath<&String>> {
+        self.data
+            .uefi_device_path
+            .as_ref()
+            .and_then(Option::as_ref)
+            .map(UefiDevicePath::new)
     }
 }
 

@@ -21,6 +21,7 @@ use crate::ResourceSchema;
 use nv_redfish_core::bmc::Bmc;
 use nv_redfish_core::NavProperty;
 use std::sync::Arc;
+use tagged_types::TaggedType;
 
 #[cfg(feature = "assembly")]
 use crate::assembly::Assembly;
@@ -42,6 +43,41 @@ use crate::schema::redfish::sensor::Sensor as SchemaSensor;
 use crate::sensors::extract_environment_sensors;
 #[cfg(feature = "sensors")]
 use crate::sensors::SensorRef;
+
+/// Chassis Manufacturer.
+///
+/// Nv-redfish keeps open underlying type for manufacturer because user
+/// can introduce known manufacturer and use it as T.
+pub type Manufacturer<T> = TaggedType<T, ManufacturerTag>;
+#[doc(hidden)]
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[transparent(Debug, Display, FromStr, Serialize, Deserialize)]
+#[capability(inner_access)]
+pub enum ManufacturerTag {}
+
+/// Chassis model.
+///
+/// Nv-redfish keeps open underlying type for manufacturer because user
+/// can introduce known manufacturer and use it as T.
+pub type Model<T> = TaggedType<T, ModelTag>;
+#[doc(hidden)]
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[transparent(Debug, Display, FromStr, Serialize, Deserialize)]
+#[capability(inner_access)]
+pub enum ModelTag {}
+
+/// Chassis part number.
+pub type PartNumber = TaggedType<String, PartNumberTag>;
+/// Reference to chassis part number.
+pub type PartNumberRef<'a> = TaggedType<&'a String, PartNumberTag>;
+#[doc(hidden)]
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[transparent(Debug, Display, FromStr, Serialize, Deserialize)]
+#[capability(inner_access)]
+pub enum PartNumberTag {}
 
 /// Represents a chassis in the BMC.
 ///
@@ -74,6 +110,45 @@ impl<B: Bmc> Chassis<B> {
     #[must_use]
     pub fn raw(&self) -> Arc<ChassisSchema> {
         self.data.clone()
+    }
+
+    /// Get manufacturer of the chassis.
+    ///
+    /// None means that BMC hasn't reported manufacturer or reported
+    /// it as null.
+    #[must_use]
+    pub fn manufacturer(&self) -> Option<Manufacturer<&String>> {
+        self.data
+            .manufacturer
+            .as_ref()
+            .and_then(Option::as_ref)
+            .map(Manufacturer::new)
+    }
+
+    /// Get model of the chassis.
+    ///
+    /// None means that BMC hasn't reported model or reported
+    /// it as null.
+    #[must_use]
+    pub fn model(&self) -> Option<Model<&String>> {
+        self.data
+            .manufacturer
+            .as_ref()
+            .and_then(Option::as_ref)
+            .map(Model::new)
+    }
+
+    /// Get assigned part number of the chassis.
+    ///
+    /// None means that BMC hasn't reported part number or reported
+    /// it as null.
+    #[must_use]
+    pub fn part_number(&self) -> Option<PartNumberRef<'_>> {
+        self.data
+            .part_number
+            .as_ref()
+            .and_then(Option::as_ref)
+            .map(PartNumberRef::new)
     }
 
     /// Get assembly of this chassis

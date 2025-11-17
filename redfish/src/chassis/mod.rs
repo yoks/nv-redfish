@@ -25,11 +25,17 @@ mod power_supply;
 #[cfg(feature = "thermal")]
 mod thermal;
 
+use nv_redfish_core::Bmc;
 use std::sync::Arc;
 
 #[doc(inline)]
 pub use chassis::Chassis;
-use nv_redfish_core::Bmc;
+#[doc(inline)]
+pub use chassis::Manufacturer;
+#[doc(inline)]
+pub use chassis::Model;
+#[doc(inline)]
+pub use chassis::PartNumber;
 
 #[doc(inline)]
 #[cfg(feature = "network-adapters")]

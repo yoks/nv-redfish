@@ -25,7 +25,7 @@ pub type ResourceIdRef<'a> = TaggedType<&'a String, ResourceIdTag>;
 #[doc(hidden)]
 #[derive(tagged_types::Tag)]
 #[implement(Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-#[transparent(Debug, Display, FromStr)]
+#[transparent(Debug, Display, FromStr, Serialize, Deserialize)]
 #[capability(inner_access, cloned)]
 pub enum ResourceIdTag {}
 
@@ -36,7 +36,7 @@ pub type ResourceDescriptionRef<'a> = TaggedType<&'a String, ResourceDescription
 #[doc(hidden)]
 #[derive(tagged_types::Tag)]
 #[implement(Clone)]
-#[transparent(Debug, Display, FromStr)]
+#[transparent(Debug, Display, FromStr, Serialize, Deserialize)]
 #[capability(inner_access, cloned)]
 pub enum ResourceDescriptionTag {}
 
