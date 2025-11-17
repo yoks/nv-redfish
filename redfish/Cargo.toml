@@ -70,6 +70,7 @@ oem = []
 nv-redfish-core = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+tagged-types = { workspace = true }
 
 [build-dependencies]
 csdl-compiler = { workspace = true }
