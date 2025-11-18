@@ -26,7 +26,7 @@ use std::sync::Arc;
 #[cfg(feature = "sensors")]
 use crate::extract_sensor_uris;
 #[cfg(feature = "sensors")]
-use crate::sensors::SensorRef;
+use crate::sensor::SensorRef;
 
 /// Represents a power supply in a chassis.
 ///

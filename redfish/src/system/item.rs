@@ -22,14 +22,16 @@ use nv_redfish_core::Bmc;
 use nv_redfish_core::NavProperty;
 use std::sync::Arc;
 
+#[cfg(feature = "ethernet-interfaces")]
+use crate::ethernet_interface::EthernetInterfaceCollection;
 #[cfg(feature = "log-services")]
-use crate::log_services::LogService;
+use crate::log_service::LogService;
 #[cfg(feature = "memory")]
-use crate::systems::Memory;
+use crate::system::Memory;
 #[cfg(feature = "processors")]
-use crate::systems::Processor;
+use crate::system::Processor;
 #[cfg(feature = "storages")]
-use crate::systems::Storage;
+use crate::system::Storage;
 
 /// Represents a computer system in the BMC.
 ///
@@ -167,6 +169,25 @@ impl<B: Bmc> ComputerSystem<B> {
         }
 
         Ok(log_services)
+    }
+
+    /// Get ethernet interfaces for this computer system.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The sytems does not have / provide ethernet interfaces
+    /// - Fetching log ethernet internet data fails
+    #[cfg(feature = "ethernet-interfaces")]
+    pub async fn ethernet_interfaces(
+        &self,
+    ) -> Result<EthernetInterfaceCollection<B>, crate::Error<B>> {
+        let p = self
+            .data
+            .ethernet_interfaces
+            .as_ref()
+            .ok_or(crate::Error::EthernetInterfacesNotAvailable)?;
+        EthernetInterfaceCollection::new(&self.bmc, p).await
     }
 }
 

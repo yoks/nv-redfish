@@ -13,11 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::module_inception)]
-mod chassis;
+mod item;
 
 #[cfg(feature = "network-adapters")]
-mod network_adapters;
+mod network_adapter;
 #[cfg(feature = "power")]
 mod power;
 #[cfg(feature = "power-supplies")]
@@ -29,33 +28,33 @@ use nv_redfish_core::Bmc;
 use std::sync::Arc;
 
 #[doc(inline)]
-pub use chassis::Chassis;
+pub use item::Chassis;
 #[doc(inline)]
-pub use chassis::Manufacturer;
+pub use item::Manufacturer;
 #[doc(inline)]
-pub use chassis::Model;
+pub use item::Model;
 #[doc(inline)]
-pub use chassis::PartNumber;
+pub use item::PartNumber;
 #[doc(inline)]
-pub use chassis::SerialNumber;
+pub use item::SerialNumber;
 
 #[doc(inline)]
 #[cfg(feature = "network-adapters")]
-pub use network_adapters::Manufacturer as NetworkAdapterManufacturer;
+pub use network_adapter::Manufacturer as NetworkAdapterManufacturer;
 #[doc(inline)]
 #[cfg(feature = "network-adapters")]
-pub use network_adapters::Model as NetworkAdapterModel;
+pub use network_adapter::Model as NetworkAdapterModel;
 #[doc(inline)]
 #[cfg(feature = "network-adapters")]
-pub use network_adapters::NetworkAdapter;
+pub use network_adapter::NetworkAdapter;
 #[cfg(feature = "network-adapters")]
-pub use network_adapters::NetworkAdapterCollection;
+pub use network_adapter::NetworkAdapterCollection;
 #[doc(inline)]
 #[cfg(feature = "network-adapters")]
-pub use network_adapters::PartNumber as NetworkAdapterPartNumber;
+pub use network_adapter::PartNumber as NetworkAdapterPartNumber;
 #[doc(inline)]
 #[cfg(feature = "network-adapters")]
-pub use network_adapters::SerialNumber as NetworkAdapterSerialNumber;
+pub use network_adapter::SerialNumber as NetworkAdapterSerialNumber;
 #[doc(inline)]
 #[cfg(feature = "power")]
 pub use power::Power;
@@ -90,16 +89,6 @@ impl<B: Bmc> ChassisCollection<B> {
             bmc: bmc.clone(),
             collection,
         })
-    }
-
-    /// List all chassis avaiable in this BMC
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if fetching collection data fails.
-    #[deprecated(since = "0.1.7", note = "please use `members()` instead")]
-    pub async fn chassis(&self) -> Result<Vec<Chassis<B>>, Error<B>> {
-        self.members().await
     }
 
     /// List all chassis avaiable in this BMC

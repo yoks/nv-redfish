@@ -18,6 +18,7 @@ endef
 # are not distributed by the repo.
 all-std-features = accounts \
                    assembly \
+                   boot-options \
                    chassis \
                    ethernet-interfaces \
                    log-services \
@@ -34,6 +35,7 @@ all-std-features = accounts \
 
 # Features that cannot be compiled standalone (no references from the tree).
 std-not-standalone-features = assembly \
+             boot-options \
              ethernet-interfaces \
              log-services \
              network-adapters \

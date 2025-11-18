@@ -17,7 +17,7 @@
 //!
 //! This module provides types for working with Redfish Manager resources.
 
-mod manager;
+mod item;
 
 use crate::schema::redfish::manager_collection::ManagerCollection as ManagerCollectionSchema;
 use crate::Error;
@@ -26,7 +26,7 @@ use crate::ServiceRoot;
 use nv_redfish_core::Bmc;
 use std::sync::Arc;
 
-pub use manager::Manager;
+pub use item::Manager;
 
 /// Manager collection.
 ///
@@ -57,11 +57,11 @@ impl<B: Bmc> ManagerCollection<B> {
     /// # Errors
     ///
     /// Returns an error if fetching manager data fails.
-    pub async fn managers(&self) -> Result<Vec<Manager<B>>, Error<B>> {
-        let mut managers = Vec::new();
+    pub async fn members(&self) -> Result<Vec<Manager<B>>, Error<B>> {
+        let mut members = Vec::new();
         for m in &self.collection.members {
-            managers.push(Manager::new(&self.bmc, m).await?);
+            members.push(Manager::new(&self.bmc, m).await?);
         }
-        Ok(managers)
+        Ok(members)
     }
 }

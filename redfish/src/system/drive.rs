@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::schema::redfish::processor::Processor as ProcessorSchema;
-use crate::schema::redfish::processor_metrics::ProcessorMetrics;
+use crate::schema::redfish::drive::Drive as DriveSchema;
+use crate::schema::redfish::drive_metrics::DriveMetrics;
 use crate::Error;
 use crate::NvBmc;
 use crate::Resource;
@@ -24,54 +24,52 @@ use nv_redfish_core::NavProperty;
 use std::sync::Arc;
 
 #[cfg(feature = "sensors")]
-use crate::extract_sensor_uris;
+use crate::sensor::extract_environment_sensors;
 #[cfg(feature = "sensors")]
-use crate::sensors::extract_environment_sensors;
-#[cfg(feature = "sensors")]
-use crate::sensors::SensorRef;
+use crate::sensor::SensorRef;
 
-/// Represents a processor in a computer system.
+/// Represents a drive (disk) in a storage controller.
 ///
-/// Provides access to processor information and associated metrics/sensors.
-pub struct Processor<B: Bmc> {
+/// Provides access to drive information and associated metrics/sensors.
+pub struct Drive<B: Bmc> {
     bmc: NvBmc<B>,
-    data: Arc<ProcessorSchema>,
+    data: Arc<DriveSchema>,
 }
 
-impl<B: Bmc> Processor<B> {
-    /// Create a new processor handle.
+impl<B: Bmc> Drive<B> {
+    /// Create a new drive handle.
     pub(crate) async fn new(
         bmc: &NvBmc<B>,
-        nav: &NavProperty<ProcessorSchema>,
+        nav: &NavProperty<DriveSchema>,
     ) -> Result<Self, Error<B>> {
         nav.get(bmc.as_ref())
             .await
-            .map_err(crate::Error::Bmc)
+            .map_err(Error::Bmc)
             .map(|data| Self {
                 bmc: bmc.clone(),
                 data,
             })
     }
 
-    /// Get the raw schema data for this processor.
+    /// Get the raw schema data for this drive.
     ///
     /// Returns an `Arc` to the underlying schema, allowing cheap cloning
     /// and sharing of the data.
     #[must_use]
-    pub fn raw(&self) -> Arc<ProcessorSchema> {
+    pub fn raw(&self) -> Arc<DriveSchema> {
         self.data.clone()
     }
 
-    /// Get processor metrics.
+    /// Get drive metrics.
     ///
-    /// Returns the processor's performance and state metrics if available.
+    /// Returns the drive's performance and state metrics if available.
     ///
     /// # Errors
     ///
     /// Returns an error if:
-    /// - The processor does not have metrics
+    /// - The drive does not have metrics
     /// - Fetching metrics data fails
-    pub async fn metrics(&self) -> Result<Arc<ProcessorMetrics>, Error<B>> {
+    pub async fn metrics(&self) -> Result<Arc<DriveMetrics>, Error<B>> {
         let metrics_ref = self
             .data
             .metrics
@@ -81,7 +79,7 @@ impl<B: Bmc> Processor<B> {
         metrics_ref.get(self.bmc.as_ref()).await.map_err(Error::Bmc)
     }
 
-    /// Get the environment sensors for this processor.
+    /// Get the environment sensors for this drive.
     ///
     /// Returns a vector of `Sensor<B>` obtained from environment metrics, if available.
     ///
@@ -101,38 +99,9 @@ impl<B: Bmc> Processor<B> {
             .map(|r| SensorRef::new(self.bmc.clone(), r))
             .collect())
     }
-
-    /// Get the metrics sensors for this processor.
-    ///
-    /// Returns a vector of `Sensor<B>` obtained from metrics metrics, if available.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if get of metrics failed.
-    #[cfg(feature = "sensors")]
-    pub async fn metrics_sensors(&self) -> Result<Vec<SensorRef<B>>, Error<B>> {
-        let sensor_refs = if let Some(metrics_ref) = &self.data.metrics {
-            metrics_ref
-                .get(self.bmc.as_ref())
-                .await
-                .map_err(Error::Bmc)
-                .map(|m| {
-                    extract_sensor_uris!(m,
-                        single: core_voltage,
-                    )
-                })?
-        } else {
-            Vec::new()
-        };
-
-        Ok(sensor_refs
-            .into_iter()
-            .map(|r| SensorRef::new(self.bmc.clone(), r))
-            .collect())
-    }
 }
 
-impl<B: Bmc> Resource for Processor<B> {
+impl<B: Bmc> Resource for Drive<B> {
     fn resource_ref(&self) -> &ResourceSchema {
         &self.data.as_ref().base
     }

@@ -18,8 +18,10 @@
 //! This module provides types for working with Redfish ComputerSystem resources
 //! and their sub-resources like processors, storage, memory, and drives.
 
-mod computer_system;
+mod item;
 
+#[cfg(feature = "boot-options")]
+mod boot_option;
 #[cfg(feature = "storages")]
 mod drive;
 #[cfg(feature = "memory")]
@@ -37,10 +39,10 @@ use nv_redfish_core::Bmc;
 use std::sync::Arc;
 
 #[doc(inline)]
-pub use computer_system::ComputerSystem;
-#[doc(inline)]
 #[cfg(feature = "storages")]
 pub use drive::Drive;
+#[doc(inline)]
+pub use item::ComputerSystem;
 #[doc(inline)]
 #[cfg(feature = "memory")]
 pub use memory::Memory;
@@ -59,7 +61,7 @@ pub struct SystemCollection<B: Bmc> {
     collection: Arc<ComputerSystemCollectionSchema>,
 }
 
-impl<B: Bmc + Sync + Send> SystemCollection<B> {
+impl<B: Bmc> SystemCollection<B> {
     pub(crate) async fn new(bmc: &NvBmc<B>, root: &ServiceRoot<B>) -> Result<Self, Error<B>> {
         let collection_ref = root
             .root
@@ -78,12 +80,11 @@ impl<B: Bmc + Sync + Send> SystemCollection<B> {
     /// # Errors
     ///
     /// Returns an error if fetching system data fails.
-    pub async fn systems(&self) -> Result<Vec<ComputerSystem<B>>, Error<B>> {
-        let mut systems = Vec::new();
+    pub async fn members(&self) -> Result<Vec<ComputerSystem<B>>, Error<B>> {
+        let mut members = Vec::new();
         for m in &self.collection.members {
-            systems.push(ComputerSystem::new(&self.bmc, m).await?);
+            members.push(ComputerSystem::new(&self.bmc, m).await?);
         }
-
-        Ok(systems)
+        Ok(members)
     }
 }

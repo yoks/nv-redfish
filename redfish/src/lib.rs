@@ -79,16 +79,16 @@ pub mod hardware_id;
 
 /// Accounts Service.
 #[cfg(feature = "accounts")]
-pub mod accounts;
+pub mod account;
 /// Chassis.
 #[cfg(feature = "chassis")]
 pub mod chassis;
 /// Manager.
 #[cfg(feature = "managers")]
-pub mod managers;
+pub mod manager;
 /// Computer System.
 #[cfg(feature = "systems")]
-pub mod systems;
+pub mod system;
 /// Update Service.
 #[cfg(feature = "update-service")]
 pub mod update_service;
@@ -97,13 +97,13 @@ pub mod update_service;
 pub mod assembly;
 /// Ethernet interfaces
 #[cfg(feature = "ethernet-interfaces")]
-pub mod ethernet_interfaces;
+pub mod ethernet_interface;
 /// Log Service.
 #[cfg(feature = "log-services")]
-pub mod log_services;
+pub mod log_service;
 /// Metrics and sensor abstraction.
 #[cfg(feature = "sensors")]
-pub mod sensors;
+pub mod sensor;
 
 /// Individual OEM support.
 #[cfg(feature = "oem")]

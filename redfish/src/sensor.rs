@@ -70,7 +70,7 @@ macro_rules! extract_sensor_uris {
             }
         )*
 
-        $crate::sensors::collect_sensors(uris)
+        $crate::sensor::collect_sensors(uris)
     }};
 }
 

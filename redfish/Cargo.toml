@@ -24,6 +24,7 @@ default = []
 std-redfish = [
     "accounts",
     "assembly",
+    "boot-options",
     "chassis",
     "ethernet-interfaces",
     "log-services",
@@ -42,6 +43,7 @@ std-redfish = [
 
 accounts = []
 assembly = []
+boot-options = []
 chassis = []
 ethernet-interfaces = []
 network-adapters = []

@@ -24,9 +24,9 @@ use nv_redfish_core::NavProperty;
 use std::sync::Arc;
 
 #[cfg(feature = "sensors")]
-use crate::sensors::extract_environment_sensors;
+use crate::sensor::extract_environment_sensors;
 #[cfg(feature = "sensors")]
-use crate::sensors::SensorRef;
+use crate::sensor::SensorRef;
 
 /// Represents a memory module (DIMM) in a computer system.
 ///

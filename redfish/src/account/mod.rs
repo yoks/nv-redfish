@@ -29,10 +29,10 @@
 //!   behavior compatible across vendors (for example, defaulting `AccountTypes`).
 //!
 
-/// Account inside account service.
-mod account;
 /// Collection of accounts.
 mod collection;
+/// Account inside account service.
+mod item;
 
 use crate::patch_support::JsonValue;
 use crate::patch_support::ReadPatchFn;
@@ -52,14 +52,14 @@ pub use crate::schema::redfish::manager_account::ManagerAccountCreate;
 #[doc(inline)]
 pub use crate::schema::redfish::manager_account::ManagerAccountUpdate;
 #[doc(inline)]
-pub use account::Account;
+pub use item::Account;
 
-#[doc(inline)]
-pub(crate) use account::Config as AccountConfig;
 #[doc(inline)]
 pub use collection::AccountCollection;
 #[doc(inline)]
 pub(crate) use collection::SlotDefinedConfig;
+#[doc(inline)]
+pub(crate) use item::Config as AccountConfig;
 
 /// Account service. Provides the ability to manage accounts via Redfish.
 pub struct AccountService<B: Bmc> {

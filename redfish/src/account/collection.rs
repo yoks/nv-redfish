@@ -38,10 +38,10 @@
 //! - Collection reads use `$expand` with depth 1 to materialize
 //!   members when available.
 
-use crate::accounts::Account;
-use crate::accounts::AccountConfig;
-use crate::accounts::ManagerAccountCreate;
-use crate::accounts::ManagerAccountUpdate;
+use crate::account::Account;
+use crate::account::AccountConfig;
+use crate::account::ManagerAccountCreate;
+use crate::account::ManagerAccountUpdate;
 use crate::patch_support::CollectionWithPatch;
 use crate::patch_support::CreateWithPatch;
 use crate::patch_support::ReadPatchFn;

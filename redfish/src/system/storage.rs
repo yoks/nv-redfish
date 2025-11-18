@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::schema::redfish::storage::Storage as StorageSchema;
-use crate::systems::Drive;
+use crate::system::Drive;
 use crate::Error;
 use crate::NvBmc;
 use crate::Resource;

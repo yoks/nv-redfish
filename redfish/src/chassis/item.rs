@@ -40,13 +40,13 @@ use crate::chassis::PowerSupply;
 #[cfg(feature = "thermal")]
 use crate::chassis::Thermal;
 #[cfg(feature = "log-services")]
-use crate::log_services::LogService;
+use crate::log_service::LogService;
 #[cfg(feature = "sensors")]
 use crate::schema::redfish::sensor::Sensor as SchemaSensor;
 #[cfg(feature = "sensors")]
-use crate::sensors::extract_environment_sensors;
+use crate::sensor::extract_environment_sensors;
 #[cfg(feature = "sensors")]
-use crate::sensors::SensorRef;
+use crate::sensor::SensorRef;
 
 #[doc(hidden)]
 pub enum ChassisTag {}

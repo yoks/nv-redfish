@@ -37,6 +37,15 @@
 
 8. **Once approved**, maintainers will merge your PR
 
+### Naming conventions in NV-Redfish library
+
+NV-Redfish follows Redfish’s distinction between collections and single resources. When adding new code:
+
+- **Cargo features**: use **plural** kebab-case for collections, and **singular** kebab-case for singleton services.
+- **Rust modules/files**: keep names **singular** (snake_case) and aligned with the corresponding Redfish CSDL entity or complex type.
+- **Rust APIs (methods/fields)**: use **plural** snake_case for accessors that return collections, and **singular** snake_case for accessors that return a single resource or service.
+
+In all cases, aim for consistency with the Redfish schema: plural means “many”, singular means “one”, and the same idea should apply to features, modules, and API names.
 
 ## Signing Your Work
 

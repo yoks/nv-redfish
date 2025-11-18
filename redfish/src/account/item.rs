@@ -32,7 +32,7 @@
 //! `AccountCollection`) and do not create accounts on the BMC by themselves.
 //! Use the collection to create new accounts.
 
-use crate::accounts::ManagerAccountUpdate;
+use crate::account::ManagerAccountUpdate;
 use crate::patch_support::Payload;
 use crate::patch_support::ReadPatchFn;
 use crate::patch_support::UpdateWithPatch;

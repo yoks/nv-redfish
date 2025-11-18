@@ -17,10 +17,10 @@
 
 #![recursion_limit = "256"]
 
-use nv_redfish::accounts::AccountCollection;
-use nv_redfish::accounts::AccountService;
-use nv_redfish::accounts::AccountTypes;
-use nv_redfish::accounts::ManagerAccountCreate;
+use nv_redfish::account::AccountCollection;
+use nv_redfish::account::AccountService;
+use nv_redfish::account::AccountTypes;
+use nv_redfish::account::ManagerAccountCreate;
 use nv_redfish::ServiceRoot;
 use nv_redfish_core::ODataId;
 use nv_redfish_tests::json_merge;
@@ -277,7 +277,7 @@ async fn create_account_dell_slot_defined_first_available() -> Result<(), Box<dy
     let accounts = get_account_collection(bmc.clone(), &account_service, members).await?;
 
     // Expect update on slot 3 with create params + enable.
-    let update_req = nv_redfish::accounts::ManagerAccountUpdate::builder()
+    let update_req = nv_redfish::account::ManagerAccountUpdate::builder()
         .with_user_name("user".into())
         .with_password("password".into())
         .with_role_id("Operator".into())

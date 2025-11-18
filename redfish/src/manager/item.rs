@@ -23,9 +23,9 @@ use nv_redfish_core::NavProperty;
 use std::sync::Arc;
 
 #[cfg(feature = "ethernet-interfaces")]
-use crate::ethernet_interfaces::EthernetInterfaceCollection;
+use crate::ethernet_interface::EthernetInterfaceCollection;
 #[cfg(feature = "log-services")]
-use crate::log_services::LogService;
+use crate::log_service::LogService;
 
 /// Represents a manager (BMC) in the system.
 ///

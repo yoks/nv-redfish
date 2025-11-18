@@ -25,15 +25,15 @@ use nv_redfish_core::ODataId;
 use std::sync::Arc;
 
 #[cfg(feature = "accounts")]
-use crate::accounts::AccountService;
+use crate::account::AccountService;
 #[cfg(feature = "accounts")]
-use crate::accounts::SlotDefinedConfig as SlotDefinedUserAccountsConfig;
+use crate::account::SlotDefinedConfig as SlotDefinedUserAccountsConfig;
 #[cfg(feature = "chassis")]
 use crate::chassis::ChassisCollection;
 #[cfg(feature = "managers")]
-use crate::managers::ManagerCollection;
+use crate::manager::ManagerCollection;
 #[cfg(feature = "systems")]
-use crate::systems::SystemCollection;
+use crate::system::SystemCollection;
 #[cfg(feature = "update-service")]
 use crate::update_service::UpdateService;
 
@@ -82,7 +82,7 @@ impl<B: Bmc> ServiceRoot<B> {
     ///
     /// Returns error if chassis list is not avaiable in BMC
     #[cfg(feature = "chassis")]
-    pub async fn chassis_collection(&self) -> Result<ChassisCollection<B>, Error<B>> {
+    pub async fn chassis(&self) -> Result<ChassisCollection<B>, Error<B>> {
         ChassisCollection::new(&self.bmc, self).await
     }
 
@@ -92,7 +92,7 @@ impl<B: Bmc> ServiceRoot<B> {
     ///
     /// Returns error if system list is not available in BMC
     #[cfg(feature = "systems")]
-    pub async fn system_collection(&self) -> Result<SystemCollection<B>, Error<B>> {
+    pub async fn systems(&self) -> Result<SystemCollection<B>, Error<B>> {
         SystemCollection::new(&self.bmc, self).await
     }
 
