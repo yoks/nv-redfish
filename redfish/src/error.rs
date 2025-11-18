@@ -36,16 +36,16 @@ pub enum Error<B: Bmc> {
     #[cfg(feature = "chassis")]
     ChassisNotSupported,
     /// Computer system not supported by BMC
-    #[cfg(feature = "systems")]
+    #[cfg(feature = "computer-systems")]
     SystemNotSupported,
     /// Processors not available for this system
-    #[cfg(feature = "systems")]
+    #[cfg(feature = "computer-systems")]
     ProcessorsNotAvailable,
     /// Storage not available for this system
-    #[cfg(feature = "systems")]
+    #[cfg(feature = "computer-systems")]
     StorageNotAvailable,
     /// Memory not available for this system
-    #[cfg(feature = "systems")]
+    #[cfg(feature = "computer-systems")]
     MemoryNotAvailable,
     /// Metrics not available for this entity
     MetricsNotAvailable,
@@ -95,19 +95,19 @@ impl<B: Bmc> Display for Error<B> {
             Self::ChassisNotSupported => {
                 write!(f, "Chassis is not supported by system")
             }
-            #[cfg(feature = "systems")]
+            #[cfg(feature = "computer-systems")]
             Self::SystemNotSupported => {
                 write!(f, "Computer system is not supported by system")
             }
-            #[cfg(feature = "systems")]
+            #[cfg(feature = "computer-systems")]
             Self::ProcessorsNotAvailable => {
                 write!(f, "Processors are not available for this system")
             }
-            #[cfg(feature = "systems")]
+            #[cfg(feature = "computer-systems")]
             Self::StorageNotAvailable => {
                 write!(f, "Storage is not available for this system")
             }
-            #[cfg(feature = "systems")]
+            #[cfg(feature = "computer-systems")]
             Self::MemoryNotAvailable => {
                 write!(f, "Memory is not available for this system")
             }

@@ -30,10 +30,10 @@ use crate::account::AccountService;
 use crate::account::SlotDefinedConfig as SlotDefinedUserAccountsConfig;
 #[cfg(feature = "chassis")]
 use crate::chassis::ChassisCollection;
+#[cfg(feature = "computer-systems")]
+use crate::computer_system::SystemCollection;
 #[cfg(feature = "managers")]
 use crate::manager::ManagerCollection;
-#[cfg(feature = "systems")]
-use crate::system::SystemCollection;
 #[cfg(feature = "update-service")]
 use crate::update_service::UpdateService;
 
@@ -91,7 +91,7 @@ impl<B: Bmc> ServiceRoot<B> {
     /// # Errors
     ///
     /// Returns error if system list is not available in BMC
-    #[cfg(feature = "systems")]
+    #[cfg(feature = "computer-systems")]
     pub async fn systems(&self) -> Result<SystemCollection<B>, Error<B>> {
         SystemCollection::new(&self.bmc, self).await
     }

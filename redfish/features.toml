@@ -89,7 +89,7 @@ patterns = [
 ]
 
 [[features]]
-name = "systems"
+name = "computer-systems"
 csdl_files = [
     "ComputerSystem_v1.xml",
     "ComputerSystemCollection_v1.xml",

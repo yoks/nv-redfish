@@ -22,16 +22,16 @@ use nv_redfish_core::Bmc;
 use nv_redfish_core::NavProperty;
 use std::sync::Arc;
 
+#[cfg(feature = "memory")]
+use crate::computer_system::Memory;
+#[cfg(feature = "processors")]
+use crate::computer_system::Processor;
+#[cfg(feature = "storages")]
+use crate::computer_system::Storage;
 #[cfg(feature = "ethernet-interfaces")]
 use crate::ethernet_interface::EthernetInterfaceCollection;
 #[cfg(feature = "log-services")]
 use crate::log_service::LogService;
-#[cfg(feature = "memory")]
-use crate::system::Memory;
-#[cfg(feature = "processors")]
-use crate::system::Processor;
-#[cfg(feature = "storages")]
-use crate::system::Storage;
 
 /// Represents a computer system in the BMC.
 ///

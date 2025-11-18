@@ -26,6 +26,7 @@ std-redfish = [
     "assembly",
     "boot-options",
     "chassis",
+    "computer-systems",
     "ethernet-interfaces",
     "log-services",
     "managers",
@@ -36,7 +37,6 @@ std-redfish = [
     "processors",
     "sensors",
     "storages",
-    "systems",
     "thermal",
     "update-service",
 ]
@@ -45,6 +45,7 @@ accounts = []
 assembly = []
 boot-options = []
 chassis = []
+computer-systems = []
 ethernet-interfaces = []
 network-adapters = []
 log-services = []
@@ -55,7 +56,6 @@ power-supplies = []
 processors = []
 sensors = []
 storages = []
-systems = []
 thermal = []  # Support of legacy ThermalSubsystem
 update-service = []
 

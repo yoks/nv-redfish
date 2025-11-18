@@ -20,6 +20,7 @@ all-std-features = accounts \
                    assembly \
                    boot-options \
                    chassis \
+                   computer-systems \
                    ethernet-interfaces \
                    log-services \
                    memory \
@@ -29,7 +30,6 @@ all-std-features = accounts \
                    processors \
                    sensors \
                    storages \
-                   systems \
                    thermal \
                    update-service
 

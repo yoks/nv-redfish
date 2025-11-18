@@ -83,12 +83,12 @@ pub mod account;
 /// Chassis.
 #[cfg(feature = "chassis")]
 pub mod chassis;
+/// Computer System.
+#[cfg(feature = "computer-systems")]
+pub mod computer_system;
 /// Manager.
 #[cfg(feature = "managers")]
 pub mod manager;
-/// Computer System.
-#[cfg(feature = "systems")]
-pub mod system;
 /// Update Service.
 #[cfg(feature = "update-service")]
 pub mod update_service;

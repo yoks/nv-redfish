@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::computer_system::Drive;
 use crate::schema::redfish::storage::Storage as StorageSchema;
-use crate::system::Drive;
 use crate::Error;
 use crate::NvBmc;
 use crate::Resource;
