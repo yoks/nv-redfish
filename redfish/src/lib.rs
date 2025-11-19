@@ -95,12 +95,15 @@ pub mod update_service;
 
 #[cfg(feature = "assembly")]
 pub mod assembly;
-/// Ethernet interfaces
+/// Ethernet interfaces.
 #[cfg(feature = "ethernet-interfaces")]
 pub mod ethernet_interface;
 /// Log Service.
 #[cfg(feature = "log-services")]
 pub mod log_service;
+/// `PCIe` devices.
+#[cfg(feature = "pcie-devices")]
+pub mod pcie_device;
 /// Metrics and sensor abstraction.
 #[cfg(feature = "sensors")]
 pub mod sensor;

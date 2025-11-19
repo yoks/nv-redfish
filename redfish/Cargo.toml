@@ -34,6 +34,7 @@ std-redfish = [
     "network-adapters",
     "power",
     "power-supplies",
+    "pcie-devices",
     "processors",
     "sensors",
     "storages",
@@ -51,6 +52,7 @@ network-adapters = []
 log-services = []
 managers = []
 memory = []
+pcie-devices = []
 power = [] # Support of legacy PowerSubsystem
 power-supplies = []
 processors = []

@@ -83,6 +83,9 @@ pub enum Error<B: Bmc> {
     /// Boot options not available for this resource
     #[cfg(feature = "boot-options")]
     BootOptionsNotAvailable,
+    /// `PCIe` devices not available for this resource
+    #[cfg(feature = "pcie-devices")]
+    PcieDevicesNotAvailable,
     /// JSON parse error.
     Json(JsonError),
 }
@@ -168,6 +171,10 @@ impl<B: Bmc> Display for Error<B> {
             #[cfg(feature = "boot-options")]
             Self::BootOptionsNotAvailable => {
                 write!(f, "Boot options are not available")
+            }
+            #[cfg(feature = "pcie-devices")]
+            Self::PcieDevicesNotAvailable => {
+                write!(f, "PCIe devices are not available")
             }
         }
     }

@@ -149,6 +149,17 @@ patterns = [
 ]
 
 [[features]]
+name = "pcie-devices"
+csdl_files = [
+    "PCIeDevice_v1.xml",
+    "PCIeDeviceCollection_v1.xml",
+]
+patterns = [
+    "PCIeDevice.*",
+    "PCIeDeviceCollection.*",
+]
+
+[[features]]
 name = "processors"
 csdl_files = [
     "Processor_v1.xml",

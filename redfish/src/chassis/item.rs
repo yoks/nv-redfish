@@ -41,6 +41,8 @@ use crate::chassis::PowerSupply;
 use crate::chassis::Thermal;
 #[cfg(feature = "log-services")]
 use crate::log_service::LogService;
+#[cfg(feature = "pcie-devices")]
+use crate::pcie_device::PcieDeviceCollection;
 #[cfg(feature = "sensors")]
 use crate::schema::redfish::sensor::Sensor as SchemaSensor;
 #[cfg(feature = "sensors")]
@@ -299,6 +301,23 @@ impl<B: Bmc> Chassis<B> {
         } else {
             Err(Error::SensorsNotAvailable)
         }
+    }
+
+    /// Get `PCIe` devices for this computer system.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The systems does not have / provide pcie devices
+    /// - Fetching pcie devices data fails
+    #[cfg(feature = "pcie-devices")]
+    pub async fn pcie_devices(&self) -> Result<PcieDeviceCollection<B>, crate::Error<B>> {
+        let p = self
+            .data
+            .pcie_devices
+            .as_ref()
+            .ok_or(crate::Error::PcieDevicesNotAvailable)?;
+        PcieDeviceCollection::new(&self.bmc, p).await
     }
 }
 
