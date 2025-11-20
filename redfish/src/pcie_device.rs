@@ -16,6 +16,11 @@
 //! `PCIe` devices
 //!
 
+use crate::hardware_id::HardwareIdRef;
+use crate::hardware_id::Manufacturer as HardwareIdManufacturer;
+use crate::hardware_id::Model as HardwareIdModel;
+use crate::hardware_id::PartNumber as HardwareIdPartNumber;
+use crate::hardware_id::SerialNumber as HardwareIdSerialNumber;
 use crate::schema::redfish::pcie_device::PcieDevice as PcieDeviceSchema;
 use crate::schema::redfish::pcie_device_collection::PcieDeviceCollection as PcieDeviceCollectionSchema;
 use crate::Error;
@@ -62,9 +67,24 @@ impl<B: Bmc> PcieDeviceCollection<B> {
     }
 }
 
+#[doc(hidden)]
+pub enum PcieDeviceTag {}
+
+/// Chassis manufacturer.
+pub type Manufacturer<T> = HardwareIdManufacturer<T, PcieDeviceTag>;
+
+/// Chassis model.
+pub type Model<T> = HardwareIdModel<T, PcieDeviceTag>;
+
+/// Chassis part number.
+pub type PartNumber<T> = HardwareIdPartNumber<T, PcieDeviceTag>;
+
+/// Chassis serial number.
+pub type SerialNumber<T> = HardwareIdSerialNumber<T, PcieDeviceTag>;
+
 /// `PCIe` device.
 ///
-/// Provides functions to access PCIe device data.
+/// Provides functions to access `PCIe` device data.
 pub struct PcieDevice<B: Bmc> {
     data: Arc<PcieDeviceSchema>,
     _marker: PhantomData<B>,
@@ -89,6 +109,37 @@ impl<B: Bmc> PcieDevice<B> {
     #[must_use]
     pub fn raw(&self) -> Arc<PcieDeviceSchema> {
         self.data.clone()
+    }
+
+    /// Get hardware identifier of the `PCIe` device.
+    #[must_use]
+    pub fn hardware_id(&self) -> HardwareIdRef<'_, PcieDeviceTag> {
+        HardwareIdRef {
+            manufacturer: self
+                .data
+                .manufacturer
+                .as_ref()
+                .and_then(Option::as_ref)
+                .map(Manufacturer::new),
+            model: self
+                .data
+                .model
+                .as_ref()
+                .and_then(Option::as_ref)
+                .map(Model::new),
+            part_number: self
+                .data
+                .part_number
+                .as_ref()
+                .and_then(Option::as_ref)
+                .map(PartNumber::new),
+            serial_number: self
+                .data
+                .serial_number
+                .as_ref()
+                .and_then(Option::as_ref)
+                .map(SerialNumber::new),
+        }
     }
 }
 

@@ -33,6 +33,17 @@ pub type ResourceIdRef<'a> = TaggedType<&'a String, ResourceIdTag>;
 #[capability(inner_access, cloned)]
 pub enum ResourceIdTag {}
 
+/// Redfish resource name.
+pub type ResourceName = TaggedType<String, ResourceNameTag>;
+/// Reference to Redfish resource name.
+pub type ResourceNameRef<'a> = TaggedType<&'a String, ResourceNameTag>;
+#[doc(hidden)]
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[transparent(Debug, Display, FromStr, Serialize, Deserialize)]
+#[capability(inner_access, cloned)]
+pub enum ResourceNameTag {}
+
 /// Redfish resource description.
 pub type ResourceDescription = TaggedType<String, ResourceDescriptionTag>;
 /// Reference to Redfish resource description.
@@ -52,6 +63,11 @@ pub trait Resource {
     /// Identifier of the resource.
     fn id(&self) -> ResourceIdRef<'_> {
         ResourceIdRef::new(&self.resource_ref().id)
+    }
+
+    /// Name of the resource.
+    fn name(&self) -> ResourceNameRef<'_> {
+        ResourceNameRef::new(&self.resource_ref().name)
     }
 
     /// Description of the resource.

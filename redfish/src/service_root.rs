@@ -23,6 +23,7 @@ use nv_redfish_core::Bmc;
 use nv_redfish_core::NavProperty;
 use nv_redfish_core::ODataId;
 use std::sync::Arc;
+use tagged_types::TaggedType;
 
 #[cfg(feature = "accounts")]
 use crate::account::AccountService;
@@ -36,6 +37,24 @@ use crate::computer_system::SystemCollection;
 use crate::manager::ManagerCollection;
 #[cfg(feature = "update-service")]
 use crate::update_service::UpdateService;
+
+/// The vendor or manufacturer associated with Redfish service.
+pub type Vendor<T> = TaggedType<T, VendorTag>;
+#[doc(hidden)]
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[transparent(Debug, Display, Serialize, Deserialize)]
+#[capability(inner_access, cloned)]
+pub enum VendorTag {}
+
+/// The product associated with Redfish service..
+pub type Product<T> = TaggedType<T, ProductTag>;
+#[doc(hidden)]
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[transparent(Debug, Display, Serialize, Deserialize)]
+#[capability(inner_access, cloned)]
+pub enum ProductTag {}
 
 /// Represents `ServiceRoot` in the BMC model.
 #[derive(Clone)]
@@ -64,6 +83,24 @@ impl<B: Bmc> ServiceRoot<B> {
                 .unwrap_or_default(),
         );
         Ok(Self { root, bmc })
+    }
+
+    /// The vendor or manufacturer associated with this Redfish service.
+    pub fn vendor(&self) -> Option<Vendor<&String>> {
+        self.root
+            .vendor
+            .as_ref()
+            .and_then(Option::as_ref)
+            .map(Vendor::new)
+    }
+
+    /// The product associated with this Redfish service.
+    pub fn product(&self) -> Option<Product<&String>> {
+        self.root
+            .product
+            .as_ref()
+            .and_then(Option::as_ref)
+            .map(Product::new)
     }
 
     /// Get the account service belonging to the BMC.
