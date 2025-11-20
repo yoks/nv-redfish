@@ -16,13 +16,19 @@
 //! Redfish resource
 
 use crate::ResourceSchema;
-use crate::ResourceStatusSchema;
-use std::convert::identity;
 use tagged_types::TaggedType;
 
+#[cfg(feature = "resource-status")]
+use crate::ResourceStatusSchema;
+#[cfg(feature = "resource-status")]
+use std::convert::identity;
+
 #[doc(inline)]
+#[cfg(feature = "resource-status")]
 pub use crate::schema::redfish::resource::Health;
+
 #[doc(inline)]
+#[cfg(feature = "resource-status")]
 pub use crate::schema::redfish::resource::State;
 
 #[doc(inline)]
@@ -88,6 +94,7 @@ pub trait Resource {
 }
 
 /// The status and health of a resource and its children.
+#[cfg(feature = "resource-status")]
 #[derive(Clone, Debug)]
 pub struct Status {
     /// The state of the resource.
@@ -99,6 +106,7 @@ pub struct Status {
 }
 
 /// Represents Redfish resource that provides it's status.
+#[cfg(feature = "resource-status")]
 pub trait ResourceProvidesStatus {
     /// Required function. Must be implemented for Redfish resources
     /// that provides resource status.

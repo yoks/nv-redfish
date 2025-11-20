@@ -134,10 +134,13 @@ pub use protocol_features::ProtocolFeatures;
 #[doc(inline)]
 pub use resource::Resource;
 #[doc(inline)]
-pub use resource::ResourceProvidesStatus;
-#[doc(inline)]
 pub use service_root::ServiceRoot;
 
+#[doc(inline)]
+#[cfg(feature = "resource-status")]
+pub use resource::ResourceProvidesStatus;
+
 pub(crate) use crate::schema::redfish::resource::Resource as ResourceSchema;
+#[cfg(feature = "resource-status")]
 pub(crate) use crate::schema::redfish::resource::Status as ResourceStatusSchema;
 pub(crate) use bmc::NvBmc;
