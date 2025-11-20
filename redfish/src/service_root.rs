@@ -75,13 +75,18 @@ impl<B: Bmc> ServiceRoot<B> {
             .get(bmc.as_ref())
             .await
             .map_err(Error::Bmc)?;
-        let bmc = NvBmc::new(
-            bmc,
-            root.protocol_features_supported
-                .as_ref()
-                .map(ProtocolFeatures::new)
-                .unwrap_or_default(),
-        );
+        let mut protocol_features = root
+            .protocol_features_supported
+            .as_ref()
+            .map(ProtocolFeatures::new)
+            .unwrap_or_default();
+
+        if Self::expand_is_not_working_properly(&root) {
+            protocol_features.expand.expand_all = false;
+            protocol_features.expand.no_links = false;
+        }
+
+        let bmc = NvBmc::new(bmc, protocol_features);
         Ok(Self { root, bmc })
     }
 
@@ -203,6 +208,36 @@ impl<B: Bmc> ServiceRoot<B> {
             .as_ref()
             .and_then(Option::as_ref)
             .is_some_and(|v| v == "Dell")
+    }
+
+    /// In some cases thre is addtional fields in Links.ContainedBy in
+    /// Chassis resource, this flag aims to patch this invalid links
+    #[cfg(feature = "chassis")]
+    pub(crate) fn bug_invalid_contained_by_fields(&self) -> bool {
+        self.root
+            .vendor
+            .as_ref()
+            .and_then(Option::as_ref)
+            .is_some_and(|v| v == "AMI")
+            && self
+                .root
+                .redfish_version
+                .as_ref()
+                .is_some_and(|version| version == "1.11.0")
+    }
+
+    /// In some cases we expand is not working according to spec,
+    /// if it is the case for specific chassis, we would disable
+    /// expand api
+    fn expand_is_not_working_properly(root: &SchemaServiceRoot) -> bool {
+        root.vendor
+            .as_ref()
+            .and_then(Option::as_ref)
+            .is_some_and(|v| v == "AMI")
+            && root
+                .redfish_version
+                .as_ref()
+                .is_some_and(|version| version == "1.11.0")
     }
 }
 

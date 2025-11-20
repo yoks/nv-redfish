@@ -18,6 +18,8 @@ use crate::hardware_id::Manufacturer as HardwareIdManufacturer;
 use crate::hardware_id::Model as HardwareIdModel;
 use crate::hardware_id::PartNumber as HardwareIdPartNumber;
 use crate::hardware_id::SerialNumber as HardwareIdSerialNumber;
+use crate::patch_support::Payload;
+use crate::patch_support::ReadPatchFn;
 use crate::schema::redfish::chassis::Chassis as ChassisSchema;
 use crate::Error;
 use crate::NvBmc;
@@ -79,14 +81,17 @@ impl<B: Bmc> Chassis<B> {
     pub(crate) async fn new(
         bmc: &NvBmc<B>,
         nav: &NavProperty<ChassisSchema>,
+        read_patch_fn: Option<&ReadPatchFn>,
     ) -> Result<Self, Error<B>> {
-        nav.get(bmc.as_ref())
-            .await
-            .map_err(Error::Bmc)
-            .map(|data| Self {
-                bmc: bmc.clone(),
-                data,
-            })
+        if let Some(read_patch_fn) = read_patch_fn {
+            Payload::get(bmc.as_ref(), nav, read_patch_fn.as_ref()).await
+        } else {
+            nav.get(bmc.as_ref()).await.map_err(Error::Bmc)
+        }
+        .map(|data| Self {
+            bmc: bmc.clone(),
+            data,
+        })
     }
 
     /// Get the raw schema data for this chassis.
