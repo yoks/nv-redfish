@@ -24,6 +24,15 @@ patterns = [
 ]
 
 [[features]]
+name = "bios"
+csdl_files = [
+    "Bios_v1.xml",
+]
+patterns = [
+    "Bios.*",
+]
+
+[[features]]
 name = "boot_options"
 csdl_files = [
     "BootOption_v1.xml",

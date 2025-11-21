@@ -61,6 +61,7 @@ pub enum ProductTag {}
 pub struct ServiceRoot<B: Bmc> {
     /// Content of the root.
     pub root: Arc<SchemaServiceRoot>,
+    #[allow(dead_code)] // feature-enabled field
     bmc: NvBmc<B>,
 }
 

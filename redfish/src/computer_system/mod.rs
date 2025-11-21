@@ -20,6 +20,8 @@
 
 mod item;
 
+#[cfg(feature = "bios")]
+mod bios;
 #[cfg(feature = "boot-options")]
 mod boot_option;
 #[cfg(feature = "storages")]
@@ -43,6 +45,9 @@ pub use item::BootOptionReference;
 #[doc(inline)]
 pub use item::ComputerSystem;
 
+#[doc(inline)]
+#[cfg(feature = "bios")]
+pub use bios::Bios;
 #[doc(inline)]
 #[cfg(feature = "boot-options")]
 pub use boot_option::BootOption;

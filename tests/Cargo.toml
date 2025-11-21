@@ -15,12 +15,17 @@ path = "src/lib.rs"
 [dependencies]
 nv-redfish-core = { workspace = true }
 nv-redfish-bmc-mock = { workspace = true }
-nv-redfish = { workspace = true, features = [ "accounts" ] }
+nv-redfish = { workspace = true, features = [
+    "accounts",
+    "bios",
+    "computer-systems",
+    "update-service",
+] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 trybuild = { workspace = true }
 
 [build-dependencies]

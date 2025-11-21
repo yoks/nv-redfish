@@ -18,6 +18,7 @@ endef
 # are not distributed by the repo.
 all-std-features = accounts \
                    assembly \
+                   bios \
                    boot-options \
                    chassis \
                    computer-systems \
@@ -35,10 +36,15 @@ all-std-features = accounts \
 
 # Features that cannot be compiled standalone (no references from the tree).
 std-not-standalone-features = assembly \
+             bios \
              boot-options \
              ethernet-interfaces \
              log-services \
              network-adapters \
+             processors \
+             power \
+             power-supplies \
+             storages \
              sensors
 
 std-standalone-features = $(filter-out $(std-not-standalone-features),$(all-std-features))
@@ -50,9 +56,11 @@ compile-one-feature = $(indent)cargo build --features $1$(new-line)
 define build-and-test
 	cargo build
 	cargo build -p nv-redfish
+	cargo build -p nv-redfish-tests --tests
 	cargo test $1 -- --no-capture
 	cargo clippy $1
 	cargo build  $1
+	cargo build --features computer-systems,bios,boot-options,storages,memory,processors
 	cargo build --features oem-hpe,accounts
 	$(maybe-lenovo-build)
 	cargo build --features oem-hpe

@@ -30,6 +30,8 @@ use std::convert::identity;
 use std::sync::Arc;
 use tagged_types::TaggedType;
 
+#[cfg(feature = "bios")]
+use crate::computer_system::Bios;
 #[cfg(feature = "boot-options")]
 use crate::computer_system::BootOptionCollection;
 #[cfg(feature = "memory")]
@@ -165,6 +167,21 @@ impl<B: Bmc> ComputerSystem<B> {
             .as_ref()
             .and_then(|boot| boot.boot_order.as_ref().and_then(Option::as_ref))
             .map(|v| v.iter().map(BootOptionReference::new).collect::<Vec<_>>())
+    }
+
+    /// Bios associated with this system.
+    ///
+    /// Fetches the BIOS settings.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The system does not provide bios settings
+    /// - Fetching bios data fails
+    #[cfg(feature = "bios")]
+    pub async fn bios(&self) -> Result<Bios<B>, Error<B>> {
+        let bios_ref = self.data.bios.as_ref().ok_or(Error::BiosNotAvailable)?;
+        Bios::new(&self.bmc, bios_ref).await
     }
 
     /// Get processors associated with this system.

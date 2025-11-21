@@ -17,4 +17,4 @@ use std::collections::HashMap;
 
 /// Represents dynamic properties that can be assigned to Complex Type
 /// in CSDL.
-pub type DynamicProperties<T> = HashMap<String, T>;
+pub type DynamicProperties<T> = HashMap<String, Option<T>>;

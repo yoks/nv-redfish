@@ -86,6 +86,9 @@ pub enum Error<B: Bmc> {
     /// `PCIe` devices not available for this resource
     #[cfg(feature = "pcie-devices")]
     PcieDevicesNotAvailable,
+    /// BIOS settings not available for the computer system.
+    #[cfg(feature = "bios")]
+    BiosNotAvailable,
     /// JSON parse error.
     Json(JsonError),
 }
@@ -175,6 +178,10 @@ impl<B: Bmc> Display for Error<B> {
             #[cfg(feature = "pcie-devices")]
             Self::PcieDevicesNotAvailable => {
                 write!(f, "PCIe devices are not available")
+            }
+            #[cfg(feature = "bios")]
+            Self::BiosNotAvailable => {
+                write!(f, "Bios settings are not available")
             }
         }
     }

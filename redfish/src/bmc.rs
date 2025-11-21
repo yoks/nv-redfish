@@ -37,6 +37,7 @@ impl<B: Bmc> NvBmc<B> {
         }
     }
 
+    #[allow(dead_code)] // feature-enabled func
     pub fn as_ref(&self) -> &B {
         self.bmc.as_ref()
     }
@@ -47,6 +48,7 @@ impl<B: Bmc> NvBmc<B> {
     ///
     /// Returns `Error::Bmc` if failed to send request to the BMC.
     ///
+    #[allow(dead_code)] // feature-enabled func
     pub async fn expand_property<T>(&self, nav: &NavProperty<T>) -> Result<Arc<T>, Error<B>>
     where
         T: Expandable,

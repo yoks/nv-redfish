@@ -25,6 +25,7 @@ std-redfish = [
     "accounts",
     "assembly",
     "boot-options",
+    "bios",
     "chassis",
     "computer-systems",
     "ethernet-interfaces",
@@ -44,6 +45,7 @@ std-redfish = [
 
 accounts = []
 assembly = []
+bios = []
 boot-options = []
 chassis = []
 computer-systems = []
