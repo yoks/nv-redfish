@@ -227,6 +227,19 @@ impl<B: Bmc> ServiceRoot<B> {
                 .is_some_and(|version| version == "1.11.0")
     }
 
+    /// In some implementations BMC ReleaseDate is incorrectly set to
+    /// "0000-00-00T00:00:00+00:00" in ComputerSystem/LastResetTime
+    /// This prevents ComputerSystem to be correctly parsed because
+    /// this is invalid Edm.DateTimeOffset.
+    #[cfg(feature = "computer-systems")]
+    pub(crate) fn computer_systems_wrong_last_reset_time(&self) -> bool {
+        self.root
+            .vendor
+            .as_ref()
+            .and_then(Option::as_ref)
+            .is_some_and(|v| v == "Dell")
+    }
+
     /// In some cases we expand is not working according to spec,
     /// if it is the case for specific chassis, we would disable
     /// expand api

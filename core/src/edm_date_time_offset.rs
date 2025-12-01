@@ -48,12 +48,12 @@
 //!
 
 use core::str::FromStr;
-use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::fmt::Error as FmtError;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
+use std::time::Duration;
 use std::time::SystemTime;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;

@@ -64,17 +64,22 @@ impl FeaturesManifest {
     pub fn collect<'a>(
         &'a self,
         features: &[&String],
-    ) -> (Vec<&'a String>, Vec<&'a String>, Vec<&'a EntityTypeFilterPattern>) {
-        self.features
-            .iter()
-            .fold((Vec::new(), Vec::new(), Vec::new()), |(mut files, mut swordfish_files, mut patterns), f| {
+    ) -> (
+        Vec<&'a String>,
+        Vec<&'a String>,
+        Vec<&'a EntityTypeFilterPattern>,
+    ) {
+        self.features.iter().fold(
+            (Vec::new(), Vec::new(), Vec::new()),
+            |(mut files, mut swordfish_files, mut patterns), f| {
                 if features.contains(&&f.name) {
                     files.extend(f.csdl_files.iter());
                     swordfish_files.extend(f.swordfish_csdl_files.iter());
                     patterns.extend(f.patterns.iter());
                 }
                 (files, swordfish_files, patterns)
-            })
+            },
+        )
     }
 
     /// All vendors defined by the manifest.

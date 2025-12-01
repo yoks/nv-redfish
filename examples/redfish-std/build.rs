@@ -16,8 +16,8 @@
 use std::env::var;
 use std::path::PathBuf;
 
+use csdl_compiler::commands::{process_command, Commands, DEFAULT_ROOT};
 use csdl_compiler::Error;
-use csdl_compiler::commands::{Commands, DEFAULT_ROOT, process_command};
 use glob::glob;
 
 fn main() -> Result<(), Error> {

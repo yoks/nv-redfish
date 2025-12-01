@@ -18,6 +18,8 @@ use crate::hardware_id::Manufacturer as HardwareIdManufacturer;
 use crate::hardware_id::Model as HardwareIdModel;
 use crate::hardware_id::PartNumber as HardwareIdPartNumber;
 use crate::hardware_id::SerialNumber as HardwareIdSerialNumber;
+use crate::patch_support::Payload;
+use crate::patch_support::ReadPatchFn;
 use crate::resource::PowerState;
 use crate::schema::redfish::computer_system::ComputerSystem as ComputerSystemSchema;
 use crate::Error;
@@ -96,14 +98,17 @@ impl<B: Bmc> ComputerSystem<B> {
     pub(crate) async fn new(
         bmc: &NvBmc<B>,
         nav: &NavProperty<ComputerSystemSchema>,
+        read_patch_fn: Option<&ReadPatchFn>,
     ) -> Result<Self, Error<B>> {
-        nav.get(bmc.as_ref())
-            .await
-            .map_err(Error::Bmc)
-            .map(|data| Self {
-                bmc: bmc.clone(),
-                data,
-            })
+        if let Some(read_patch_fn) = read_patch_fn {
+            Payload::get(bmc.as_ref(), nav, read_patch_fn.as_ref()).await
+        } else {
+            nav.get(bmc.as_ref()).await.map_err(Error::Bmc)
+        }
+        .map(|data| Self {
+            bmc: bmc.clone(),
+            data,
+        })
     }
 
     /// Get the raw schema data for this computer system.
