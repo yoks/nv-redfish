@@ -366,8 +366,10 @@ where
                         .write()
                         .map_err(|e| C::Error::cache_error(e.to_string()))?;
 
-                    if let Some(ret) = cache.put_typed(id.clone(), Arc::clone(&entity)) {
-                        etags.remove(ret.id());
+                    if let Some(evicted_id) =
+                        cache.put_typed(id.clone(), Arc::clone(&entity))
+                    {
+                        etags.remove(&evicted_id);
                     }
                     etags.insert(id.clone(), etag.clone());
                 }

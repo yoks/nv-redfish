@@ -24,6 +24,26 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::hash::Hash;
 
+/// Information about an evicted cache entry.
+///
+/// When an entry is evicted from the cache, this struct holds both the key
+/// and value of the evicted entry. This is particularly useful for cleaning
+/// up related resources (like ETags) when entries are evicted.
+#[derive(Debug)]
+pub struct Evicted<K, V> {
+    /// The key of the evicted entry
+    pub key: K,
+    /// The value of the evicted entry
+    pub value: V,
+}
+
+impl<K, V> Evicted<K, V> {
+    /// Create a new Evicted struct
+    const fn new(key: K, value: V) -> Self {
+        Self { key, value }
+    }
+}
+
 /// A cache entry with reference bit for clock algorithm
 #[derive(Debug)]
 struct CacheEntry<K, V> {
@@ -316,8 +336,9 @@ where
     }
 
     /// Insert/update value in cache following the exact pseudocode
-    /// Returns `Option<V>` which denotes removed element from cache, if any
-    pub fn put(&mut self, key: K, value: V) -> Option<V> {
+    /// Returns `Option<Evicted<K, V>>` containing the evicted entry (key and value)
+    /// if an entry was evicted from the cache, or `None` if no eviction occurred.
+    pub fn put(&mut self, key: K, value: V) -> Option<Evicted<K, V>> {
         // Check if it's a cache hit first
         if let Some(location) = self.index.get(&key).copied() {
             match location {
@@ -342,12 +363,12 @@ where
             }
         }
 
-        let mut replaced_key = None;
+        let mut evicted = None;
         // Line 3: else /* cache miss */
         // Line 4: if (|T1| + |T2| = c) then
         if self.t1.len() + self.t2.len() == self.c {
             // Line 5: replace()
-            replaced_key = self.replace();
+            evicted = self.replace();
 
             // Line 6: if ((x is not in B1 ∪ B2) and (|T1| + |B1| = c)) then
             if !self.is_in_b1_or_b2(&key) && (self.t1.len() + self.b1.len() == self.c) {
@@ -416,11 +437,11 @@ where
                 // Should not happen - T1/T2 cases handled above
             }
         }
-        replaced_key
+        evicted.map(|e| Evicted::new(e.key, e.value))
     }
 
     /// Line 5: `replace()` - exact implementation of pseudocode
-    fn replace(&mut self) -> Option<V> {
+    fn replace(&mut self) -> Option<CacheEntry<K, V>> {
         // Line 23: repeat
         loop {
             // Line 24: if (|T1| >= max(1, p)) then
@@ -440,9 +461,9 @@ where
         // Line 39: until (found)
     }
 
-    /// Try to replace from T1, returns true if replacement was successful
+    /// Try to replace from T1, returns the evicted entry if replacement was successful
     #[allow(clippy::if_not_else)]
-    fn try_replace_from_t1(&mut self) -> Option<V> {
+    fn try_replace_from_t1(&mut self) -> Option<CacheEntry<K, V>> {
         if let Some(head_entry) = self.t1.get_head_page() {
             // Line 25: if (the page reference bit of head page in T1 is 0) then
             // ref_bit == false
@@ -456,11 +477,11 @@ where
                         if let Some(evicted) = evicted_key {
                             self.index.remove(&evicted);
                         }
-                        self.index.insert(entry.key, Location::B1(b1_slot));
+                        self.index.insert(entry.key.clone(), Location::B1(b1_slot));
                     } else {
                         self.index.remove(&entry.key);
                     }
-                    return Some(entry.value);
+                    return Some(entry);
                 }
             } else {
                 // Line 28-29: else Set the page reference bit of head page in T1 to 0, and make it the tail page in T2
@@ -475,9 +496,9 @@ where
         None
     }
 
-    /// Try to replace from T2, returns true if replacement was successful
+    /// Try to replace from T2, returns the evicted entry if replacement was successful
     #[allow(clippy::if_not_else)]
-    fn try_replace_from_t2(&mut self) -> Option<V> {
+    fn try_replace_from_t2(&mut self) -> Option<CacheEntry<K, V>> {
         if let Some(head_entry) = self.t2.get_head_page() {
             // Line 32: if (the page reference bit of head page in T2 is 0), then
             // ref_bit == false
@@ -491,11 +512,11 @@ where
                         if let Some(evicted) = evicted_key {
                             self.index.remove(&evicted);
                         }
-                        self.index.insert(entry.key, Location::B2(b2_slot));
+                        self.index.insert(entry.key.clone(), Location::B2(b2_slot));
                     } else {
                         self.index.remove(&entry.key);
                     }
-                    return Some(entry.value);
+                    return Some(entry);
                 }
             } else {
                 // Line 35-36: else Set the page reference bit of head page in T2 to 0, and make it the tail page in T2
@@ -550,15 +571,32 @@ where
         self.get(key)?.downcast_ref::<T>()
     }
 
-    pub(crate) fn put_typed<T: 'static + Send + Sync>(&mut self, key: K, value: T) -> Option<T> {
-        let ret = self.put(key, Box::new(value) as Box<dyn Any + Send + Sync>);
-        ret?.downcast::<T>().ok().map(|r| *r)
+    /// Put a typed value into the cache and return the evicted key if any.
+    ///
+    /// Returns `Some(key)` if an entry was evicted from the cache, `None` otherwise.
+    pub(crate) fn put_typed<T: 'static + Send + Sync>(&mut self, key: K, value: T) -> Option<K> {
+        let evicted = self.put(key, Box::new(value) as Box<dyn Any + Send + Sync>);
+        evicted.map(|e| e.key)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
+
+    #[derive(Debug, Clone)]
+    #[allow(dead_code)]
+    struct TypeA {
+        id: String,
+    }
+
+    #[derive(Debug, Clone)]
+    #[allow(dead_code)]
+    struct TypeB {
+        id: String,
+    }
 
     fn fill_cache_with_invariant_check<K, V>(
         cache: &mut CarCache<K, V>,
@@ -996,12 +1034,22 @@ mod tests {
     fn test_put_return_values_eviction() {
         let mut cache = CarCache::new(3);
 
-        assert_eq!(cache.put("a", 1), None);
-        assert_eq!(cache.put("b", 2), None);
-        assert_eq!(cache.put("c", 3), None);
+        assert!(cache.put("a", 1).is_none());
+        assert!(cache.put("b", 2).is_none());
+        assert!(cache.put("c", 3).is_none());
 
-        assert_eq!(cache.put("d", 4), Some(1));
-        assert_eq!(cache.put("e", 5), Some(2));
+        // When eviction occurs, we get back the Evicted struct with key and value
+        let evicted = cache.put("d", 4);
+        assert!(evicted.is_some());
+        let evicted = evicted.unwrap();
+        assert_eq!(evicted.key, "a");
+        assert_eq!(evicted.value, 1);
+
+        let evicted = cache.put("e", 5);
+        assert!(evicted.is_some());
+        let evicted = evicted.unwrap();
+        assert_eq!(evicted.key, "b");
+        assert_eq!(evicted.value, 2);
 
         assert_eq!(cache.get(&"a"), None);
         assert_eq!(cache.get(&"b"), None);
@@ -1014,16 +1062,18 @@ mod tests {
     fn test_put_return_values_t1_t2_eviction() {
         let mut cache = CarCache::new(4);
 
-        assert_eq!(cache.put("t1_a", 1), None);
-        assert_eq!(cache.put("t1_b", 2), None);
+        assert!(cache.put("t1_a", 1).is_none());
+        assert!(cache.put("t1_b", 2).is_none());
 
         cache.get(&"t1_a");
         cache.get(&"t1_b");
 
-        assert_eq!(cache.put("t1_c", 3), None);
-        assert_eq!(cache.put("t1_d", 4), None);
+        assert!(cache.put("t1_c", 3).is_none());
+        assert!(cache.put("t1_d", 4).is_none());
 
-        assert_eq!(cache.put("new1", 10), Some(3));
+        let evicted = cache.put("new1", 10);
+        assert!(evicted.is_some());
+        assert_eq!(evicted.unwrap().value, 3);
     }
 
     #[test]
@@ -1159,5 +1209,26 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_put_typed_works_across_types() {
+        let mut cache: TypeErasedCarCache<String> = CarCache::new(2);
+
+        let evicted_key = cache.put_typed("key1".to_string(), Arc::new(TypeA { id: "1".into() }));
+        assert!(evicted_key.is_none());
+
+        let evicted_key = cache.put_typed("key2".to_string(), Arc::new(TypeA { id: "2".into() }));
+        assert!(evicted_key.is_none());
+
+        let evicted_key = cache.put_typed("key3".to_string(), Arc::new(TypeB { id: "3".into() }));
+
+        assert!(evicted_key.is_some(),);
+
+        let evicted_key = evicted_key.unwrap();
+        assert!(evicted_key == "key1" || evicted_key == "key2",);
+
+        let key_in_cache = cache.get_typed::<Arc<TypeA>>(&evicted_key).is_some();
+        assert!(!key_in_cache,);
     }
 }
