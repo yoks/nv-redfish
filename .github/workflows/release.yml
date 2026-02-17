@@ -28,9 +28,15 @@ jobs:
         VERSION=${GITHUB_REF_NAME#v}
         echo "Publishing version $VERSION"
         
-        # Update version in Cargo.toml
-        # The user script used sed to update the workspace version
-        sed -i "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
+        # Update workspace version in Cargo.toml
+        sed -i -E '/^\[workspace\.package\]/,/^\[/{s/^version = .*/version = "'"$VERSION"'"/}' Cargo.toml
+
+        # Update workspace local crate dependency versions in Cargo.toml
+        sed -i -E 's/^(nv-redfish-core = \{ version = ")[^"]+(", path = "\.\/core" \})/\1'"$VERSION"'\2/' Cargo.toml
+        sed -i -E 's/^(nv-redfish-bmc-http = \{ version = ")[^"]+(", path = "\.\/bmc-http" \})/\1'"$VERSION"'\2/' Cargo.toml
+        sed -i -E 's/^(nv-redfish-bmc-mock = \{ version = ")[^"]+(", path = "\.\/bmc-mock" \})/\1'"$VERSION"'\2/' Cargo.toml
+        sed -i -E 's/^(nv-redfish = \{ version = ")[^"]+(", path = "\.\/redfish" \})/\1'"$VERSION"'\2/' Cargo.toml
+        sed -i -E 's/^(nv-redfish-csdl-compiler = \{ version = ")[^"]+(", path = "\.\/csdl-compiler" \})/\1'"$VERSION"'\2/' Cargo.toml
         
         echo "Publishing csdl-compiler..."
         cargo publish -p nv-redfish-csdl-compiler --all-features --allow-dirty
@@ -48,4 +54,3 @@ jobs:
         cargo publish -p nv-redfish-bmc-mock --all-features --allow-dirty
 
         echo "All crates published successfully!"
-
