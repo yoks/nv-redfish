@@ -1,0 +1,229 @@
+// SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Event Service entities and helpers.
+//!
+//! This module provides typed access to Redfish `EventService`.
+
+use crate::schema::redfish::event_service::EventService as EventServiceSchema;
+use crate::Error;
+use crate::NvBmc;
+use crate::Resource;
+use crate::ResourceSchema;
+use crate::ServiceRoot;
+use nv_redfish_core::Bmc;
+use nv_redfish_core::BoxTryStream;
+use nv_redfish_core::EntityTypeRef as _;
+use nv_redfish_core::ODataId;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde_json::Value as JsonValue;
+use std::sync::Arc;
+
+#[doc(inline)]
+pub use crate::schema::redfish::metric_report::MetricReport;
+
+#[doc(inline)]
+pub use crate::schema::redfish::event::Event;
+
+#[doc(inline)]
+pub use crate::schema::redfish::event::EventType;
+
+/// SSE payload that can contain either an `EventRecord` or a `MetricReport`.
+#[derive(Debug)]
+pub enum EventStreamPayload {
+    /// Event record payload.
+    Event(Event),
+    /// Metric report payload.
+    MetricReport(MetricReport),
+}
+
+impl<'de> Deserialize<'de> for EventStreamPayload {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = JsonValue::deserialize(deserializer)?;
+        let odata_type = value
+            .get("@odata.type")
+            .and_then(JsonValue::as_str)
+            .ok_or_else(|| serde::de::Error::missing_field("missing @odata.type in SSE payload"))?;
+
+        if odata_type.starts_with("#MetricReport.") {
+            let payload =
+                serde_json::from_value::<MetricReport>(value).map_err(serde::de::Error::custom)?;
+            Ok(Self::MetricReport(payload))
+        } else if odata_type.starts_with("#Event.") {
+            let payload =
+                serde_json::from_value::<Event>(value).map_err(serde::de::Error::custom)?;
+            Ok(Self::Event(payload))
+        } else {
+            Err(serde::de::Error::custom(format!(
+                "unsupported @odata.type in SSE payload: {odata_type}, should be either #Event.* or #MetricReport.*"
+            )))
+        }
+    }
+}
+
+/// Event service.
+///
+/// Provides functions to inspect event delivery capabilities and parse
+/// event payloads from `ServerSentEventUri`.
+pub struct EventService<B: Bmc> {
+    data: Arc<EventServiceSchema>,
+    bmc: NvBmc<B>,
+}
+
+impl<B: Bmc> EventService<B> {
+    /// Create a new event service handle.
+    pub(crate) async fn new(bmc: &NvBmc<B>, root: &ServiceRoot<B>) -> Result<Self, Error<B>> {
+        let service_ref = root
+            .root
+            .event_service
+            .as_ref()
+            .ok_or(Error::EventServiceNotSupported)?;
+        let data = service_ref.get(bmc.as_ref()).await.map_err(Error::Bmc)?;
+        Ok(Self {
+            data,
+            bmc: bmc.clone(),
+        })
+    }
+
+    /// Get the raw schema data for this event service.
+    #[must_use]
+    pub fn raw(&self) -> Arc<EventServiceSchema> {
+        self.data.clone()
+    }
+
+    /// `OData` identifier of the `EventService` in Redfish.
+    ///
+    /// Typically `/redfish/v1/EventService`.
+    #[must_use]
+    pub fn odata_id(&self) -> &ODataId {
+        self.data.id()
+    }
+
+    /// Get `ServerSentEventUri` if provided by the service.
+    ///
+    /// This is typically a relative path like `/redfish/v1/EventService/SSE`.
+    #[must_use]
+    pub fn server_sent_event_uri(&self) -> Result<&String, Error<B>> {
+        self.data
+            .server_sent_event_uri
+            .as_ref()
+            .ok_or(Error::EventServiceServerSentEventUriNotAvailable)
+    }
+
+    /// Open an SSE stream of Redfish event payloads.
+    ///
+    /// Payload kind is selected by `@odata.type`:
+    /// - `#Event.*` -> [`EventStreamPayload::Event`]
+    /// - `#MetricReport.*` -> [`EventStreamPayload::MetricReport`]
+    pub async fn events(&self) -> Result<BoxTryStream<EventStreamPayload, B::Error>, Error<B>> {
+        let stream_uri = self.server_sent_event_uri()?;
+
+        let stream_id = ODataId::from(stream_uri.to_string());
+        self.bmc
+            .as_ref()
+            .stream::<EventStreamPayload>(&stream_id)
+            .await
+            .map_err(Error::Bmc)
+    }
+}
+
+impl<B: Bmc> Resource for EventService<B> {
+    fn resource_ref(&self) -> &ResourceSchema {
+        &self.data.as_ref().base
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EventStreamPayload;
+
+    #[test]
+    fn event_stream_payload_deserializes_event_record() {
+        let value = serde_json::json!({
+            "@odata.id": "/redfish/v1/SSE",
+            "@odata.type": "#Event.v1_6_0.Event",
+            "Id": "1",
+            "Name": "Event Array",
+            "Context": "ABCDEFGH",
+            "Events": [
+                {
+                    "@odata.type": "#Event.v1_0_0.EventRecord",
+                    "@odata.id": "/redfish/v1/Systems/SomeSystem/Events/1",
+                    "MemberId": "1",
+                    "EventType": "Alert",
+                    "EventId": "1",
+                    "Severity": "Warning",
+                    "MessageSeverity": "Warning",
+                    "EventTimestamp": "2017-11-23T17:17:42-0600",
+                    "Message": "The LAN has been disconnected",
+                    "MessageId": "Alert.1.0.LanDisconnect",
+                    "MessageArgs": [
+                        "EthernetInterface 1",
+                        "/redfish/v1/Systems/1"
+                    ],
+                    "OriginOfCondition": {
+                        "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/1"
+                    },
+                    "Context": "ABCDEFGH"
+                }
+            ]
+        });
+
+        let payload: EventStreamPayload =
+            serde_json::from_value(value).expect("event payload must deserialize");
+        assert!(matches!(payload, EventStreamPayload::Event(_)));
+    }
+
+    #[test]
+    fn event_stream_payload_deserializes_metric_report() {
+        let value = serde_json::json!({
+                "@odata.id": "/redfish/v1/TelemetryService/MetricReports/AvgPlatformPowerUsage",
+                "@odata.type": "#MetricReport.v1_3_0.MetricReport",
+                "Id": "AvgPlatformPowerUsage",
+                "Name": "Average Platform Power Usage metric report",
+                "MetricReportDefinition": {
+                    "@odata.id": "/redfish/v1/TelemetryService/MetricReportDefinitions/AvgPlatformPowerUsage"
+                },
+                "MetricValues": [
+                    {
+                        "MetricId": "AverageConsumedWatts",
+                        "MetricValue": "100",
+                        "Timestamp": "2016-11-08T12:25:00-05:00",
+                        "MetricProperty": "/redfish/v1/Chassis/Tray_1/Power#/0/PowerConsumedWatts"
+                    },
+                    {
+                        "MetricId": "AverageConsumedWatts",
+                        "MetricValue": "94",
+                        "Timestamp": "2016-11-08T13:25:00-05:00",
+                        "MetricProperty": "/redfish/v1/Chassis/Tray_1/Power#/0/PowerConsumedWatts"
+                    },
+                    {
+                        "MetricId": "AverageConsumedWatts",
+                        "MetricValue": "100",
+                        "Timestamp": "2016-11-08T14:25:00-05:00",
+                        "MetricProperty": "/redfish/v1/Chassis/Tray_1/Power#/0/PowerConsumedWatts"
+                    }
+                ]
+        });
+
+        let payload: EventStreamPayload =
+            serde_json::from_value(value).expect("metric report payload must deserialize");
+        assert!(matches!(payload, EventStreamPayload::MetricReport(_)));
+    }
+}

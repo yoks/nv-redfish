@@ -99,6 +99,9 @@ pub mod assembly;
 /// Ethernet interfaces.
 #[cfg(feature = "ethernet-interfaces")]
 pub mod ethernet_interface;
+/// Event Service.
+#[cfg(feature = "event-service")]
+pub mod event_service;
 /// Log Service.
 #[cfg(feature = "log-services")]
 pub mod log_service;

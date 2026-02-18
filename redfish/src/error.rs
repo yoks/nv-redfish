@@ -65,6 +65,12 @@ pub enum Error<B: Bmc> {
     ActionNotAvailable,
     /// Sensors not available for this resource
     SensorsNotAvailable,
+    /// Event service not supported by BMC
+    #[cfg(feature = "event-service")]
+    EventServiceNotSupported,
+    /// Event service does not provide `ServerSentEventUri`
+    #[cfg(feature = "event-service")]
+    EventServiceServerSentEventUriNotAvailable,
     /// Log service not available for this resource
     #[cfg(feature = "log-services")]
     LogServiceNotAvailable,
@@ -160,6 +166,14 @@ impl<B: Bmc> Display for Error<B> {
             }
             Self::SensorsNotAvailable => {
                 write!(f, "Sensors is not available for this resource")
+            }
+            #[cfg(feature = "event-service")]
+            Self::EventServiceNotSupported => {
+                write!(f, "Event service is not supported by system")
+            }
+            #[cfg(feature = "event-service")]
+            Self::EventServiceServerSentEventUriNotAvailable => {
+                write!(f, "Event service does not provide ServerSentEventUri")
             }
             #[cfg(feature = "log-services")]
             Self::LogServiceNotAvailable => {

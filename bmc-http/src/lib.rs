@@ -24,6 +24,7 @@ use http::HeaderMap;
 use nv_redfish_core::query::ExpandQuery;
 use nv_redfish_core::Action;
 use nv_redfish_core::Bmc;
+use nv_redfish_core::BoxTryStream;
 use nv_redfish_core::Empty;
 use nv_redfish_core::EntityTypeRef;
 use nv_redfish_core::Expandable;
@@ -88,6 +89,14 @@ pub trait HttpClient: Send + Sync {
         credentials: &BmcCredentials,
         custom_headers: &HeaderMap,
     ) -> impl Future<Output = Result<Empty, Self::Error>> + Send;
+
+    /// Open an SSE stream
+    fn sse<T: Sized + for<'a> Deserialize<'a> + Send + 'static>(
+        &self,
+        url: Url,
+        credentials: &BmcCredentials,
+        custom_headers: &HeaderMap,
+    ) -> impl Future<Output = Result<BoxTryStream<T, Self::Error>, Self::Error>> + Send;
 }
 
 /// HTTP-based BMC implementation that wraps an [`HttpClient`].
@@ -486,5 +495,15 @@ where
             .with_path_and_query(&id.to_string(), &query.to_query_string());
 
         self.get_with_cache(endpoint_url, id).await
+    }
+
+    async fn stream<T: Sized + for<'a> Deserialize<'a> + Send + 'static>(
+        &self,
+        id: &ODataId,
+    ) -> Result<BoxTryStream<T, Self::Error>, Self::Error> {
+        let endpoint_url = self.redfish_endpoint.with_path(&id.to_string());
+        self.client
+            .sse(endpoint_url, &self.credentials, &self.custom_headers)
+            .await
     }
 }

@@ -12,6 +12,8 @@ categories.workspace = true
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+futures-core = { workspace = true }
+futures-util = { workspace = true }
 redfish-std = { path = "../redfish-std" }
 redfish-oem-contoso = { path = "../redfish-oem-contoso" }
 nv-redfish-core = { workspace = true }

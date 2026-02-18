@@ -26,6 +26,8 @@ use crate::account::SlotDefinedConfig as SlotDefinedUserAccountsConfig;
 use crate::chassis::ChassisCollection;
 #[cfg(feature = "computer-systems")]
 use crate::computer_system::SystemCollection;
+#[cfg(feature = "event-service")]
+use crate::event_service::EventService;
 #[cfg(feature = "managers")]
 use crate::manager::ManagerCollection;
 use crate::schema::redfish::service_root::ServiceRoot as SchemaServiceRoot;
@@ -142,6 +144,16 @@ impl<B: Bmc> ServiceRoot<B> {
     #[cfg(feature = "update-service")]
     pub async fn update_service(&self) -> Result<UpdateService<B>, Error<B>> {
         UpdateService::new(&self.bmc, self).await
+    }
+
+    /// Get event service in BMC
+    ///
+    /// # Errors
+    ///
+    /// Returns error if event service is not available in BMC
+    #[cfg(feature = "event-service")]
+    pub async fn event_service(&self) -> Result<EventService<B>, Error<B>> {
+        EventService::new(&self.bmc, self).await
     }
 
     /// Get manager collection in BMC

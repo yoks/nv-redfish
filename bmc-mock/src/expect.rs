@@ -39,6 +39,8 @@ pub enum ExpectedRequest {
         target: ActionTarget,
         request: JsonValue,
     },
+    /// Expected Stream.
+    Stream { id: ODataId },
 }
 
 /// Expectation for the tests.
@@ -88,6 +90,15 @@ impl<E> Expect<E> {
             request: ExpectedRequest::Action {
                 target: ActionTarget::new(uri.to_string()),
                 request: from_str(&request.to_string()).expect("invalid json"),
+            },
+            response: Ok(from_str(&response.to_string()).expect("invalid json")),
+        }
+    }
+
+    pub fn stream(uri: impl Display, response: impl Display) -> Self {
+        Expect {
+            request: ExpectedRequest::Stream {
+                id: uri.to_string().into(),
             },
             response: Ok(from_str(&response.to_string()).expect("invalid json")),
         }

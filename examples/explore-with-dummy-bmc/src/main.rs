@@ -17,6 +17,7 @@ use std::error::Error as StdError;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::sync::Arc;
 
+use futures_util::StreamExt;
 use nv_redfish_core::query::ExpandQuery;
 use nv_redfish_core::{
     Action, ActionError, Bmc, Creatable, Empty, EntityTypeRef, Expandable, NavProperty, ODataETag,
@@ -29,6 +30,7 @@ use redfish_std::redfish::manager_account::ManagerAccountCreate;
 use redfish_std::redfish::resource::ResetType;
 use redfish_std::redfish::service_root::ServiceRoot;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Debug)]
 pub enum Error {
@@ -568,6 +570,79 @@ impl Bmc for MockBmc {
         let result: R = serde_json::from_str("").map_err(Error::ParseError)?;
         Ok(result)
     }
+
+    async fn stream<T: Sized + for<'a> Deserialize<'a> + Send + 'static>(
+        &self,
+        _id: &ODataId,
+    ) -> Result<nv_redfish_core::BoxTryStream<T, Self::Error>, Self::Error> {
+        let payloads = vec![
+            serde_json::json!({
+                "@odata.type": "#Event.v1_6_0.Event",
+                "Id": "1",
+                "Name": "Event Array",
+                "Context": "ABCDEFGH",
+                "Events": [
+                    {
+                        "@odata.id": "/redfish/v1/SomeService",
+                        "@odata.type": "#Event.v1_0_0.EventRecord",
+                        "MemberId": "1",
+                        "EventType": "Alert",
+                        "EventId": "1",
+                        "Severity": "Warning",
+                        "MessageSeverity": "Warning",
+                        "Message": "The LAN has been disconnected",
+                        "MessageId": "Alert.1.0.LanDisconnect",
+                        "MessageArgs": [
+                            "EthernetInterface 1",
+                            "/redfish/v1/Systems/1"
+                        ],
+                        "OriginOfCondition": {
+                            "@odata.id": "/redfish/v1/Systems/1/EthernetInterfaces/1"
+                        },
+                        "Context": "ABCDEFGH"
+                    }
+                ]
+            }),
+            serde_json::json!({
+                "@odata.id": "/redfish/v1/TelemetryService/MetricReports/AvgPlatformPowerUsage",
+                "@odata.type": "#MetricReport.v1_3_0.MetricReport",
+                "Id": "AvgPlatformPowerUsage",
+                "Name": "Average Platform Power Usage metric report",
+                "MetricReportDefinition": {
+                    "@odata.id": "/redfish/v1/TelemetryService/MetricReportDefinitions/AvgPlatformPowerUsage"
+                },
+                "MetricValues": [
+                    {
+                        "MetricId": "AverageConsumedWatts",
+                        "MetricValue": "100",
+                        "Timestamp": "2016-11-08T12:25:00-05:00",
+                        "MetricProperty": "/redfish/v1/Chassis/Tray_1/Power#/0/PowerConsumedWatts"
+                    },
+                    {
+                        "MetricId": "AverageConsumedWatts",
+                        "MetricValue": "94",
+                        "Timestamp": "2016-11-08T13:25:00-05:00",
+                        "MetricProperty": "/redfish/v1/Chassis/Tray_1/Power#/0/PowerConsumedWatts"
+                    },
+                    {
+                        "MetricId": "AverageConsumedWatts",
+                        "MetricValue": "100",
+                        "Timestamp": "2016-11-08T14:25:00-05:00",
+                        "MetricProperty": "/redfish/v1/Chassis/Tray_1/Power#/0/PowerConsumedWatts"
+                    }
+                ]
+            }),
+        ];
+
+        let events: Vec<T> = payloads
+            .into_iter()
+            .map(|event| serde_json::from_value(event).map_err(Error::ParseError))
+            .collect::<Result<_, _>>()?;
+
+        Ok(Box::pin(futures_util::stream::iter(
+            events.into_iter().map(Ok),
+        )))
+    }
 }
 
 impl ActionError for Error {
@@ -757,5 +832,14 @@ async fn main() -> Result<(), Error> {
             .map(|b| b.to_string())
             .unwrap_or("-".to_string())
     );
+
+    println!("Read mock SSE stream:");
+    let stream_id = ODataId::from("/redfish/v1/EventService/SSE".to_string());
+    let mut event_stream = bmc.stream::<Value>(&stream_id).await?;
+    while let Some(event) = event_stream.next().await {
+        let event = event?;
+        println!("  {:?}", event);
+    }
+
     Ok(())
 }

@@ -71,6 +71,7 @@ define build-and-test
 	cargo build -p nv-redfish --features computer-systems,oem-nvidia-bluefield
 	cargo build -p nv-redfish --features oem-dell
 	cargo build -p nv-redfish --features oem-ami
+	cargo build -p nv-redfish --features event-service
 	$(foreach f,$(std-standalone-features),$(call compile-one-feature,$f))
 	cargo build -p nv-redfish --features ""
 	cargo doc $1

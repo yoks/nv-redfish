@@ -86,7 +86,9 @@ pub mod odata;
 pub mod query;
 
 use crate::query::ExpandQuery;
+use futures_core::TryStream;
 use serde::{Deserialize, Deserializer, Serialize};
+use std::pin::Pin;
 use std::{future::Future, sync::Arc};
 
 #[doc(inline)]
@@ -158,6 +160,10 @@ pub trait Expandable:
         bmc.expand::<Self>(self.id(), query)
     }
 }
+
+/// Boxed fallible stream used by BMC streaming APIs.
+pub type BoxTryStream<T, E> =
+    Pin<Box<dyn TryStream<Ok = T, Error = E, Item = Result<T, E>> + Send>>;
 
 /// Empty struct denoting a unit return type, used for Redfish responses that
 /// do not return any JSON data.

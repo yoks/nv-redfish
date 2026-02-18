@@ -36,7 +36,7 @@ A modular Redfish client stack for Rust.
 - core: `reqwest` (default) enables the HTTP client implementation.
 - redfish:
   - `std-redfish`: convenience bundle of common service features.
-  - Service features: `accounts`, `assembly`, `bios`, `boot-options`, `chassis`, `computer-systems`, `ethernet-interfaces`, `log-services`, `managers`, `memory`, `network-adapters`, `pcie-devices`, `power`, `power-supplies`, `processors`, `secure-boot`, `sensors`, `storages`, `thermal`, `update-service` (plus helper `resource-status`).
+  - Service features: `accounts`, `assembly`, `bios`, `boot-options`, `chassis`, `computer-systems`, `ethernet-interfaces`, `event-service`, `log-services`, `managers`, `memory`, `network-adapters`, `pcie-devices`, `power`, `power-supplies`, `processors`, `secure-boot`, `sensors`, `storages`, `thermal`, `update-service` (plus helper `resource-status`).
   - OEM vendor features: `oem`, `oem-ami`, `oem-dell`, `oem-hpe`, `oem-lenovo`, `oem-supermicro`, `oem-nvidia`.
   - OEM product features: `oem-nvidia-bluefield`, `oem-nvidia-baseboard`.
 

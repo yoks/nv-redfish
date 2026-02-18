@@ -16,8 +16,10 @@
 use crate::BmcCredentials;
 use crate::CacheableError;
 use crate::HttpClient;
+use futures_util::StreamExt;
 use http::header;
 use http::HeaderMap;
+use nv_redfish_core::BoxTryStream;
 use nv_redfish_core::Empty;
 use nv_redfish_core::ODataETag;
 use serde::de::DeserializeOwned;
@@ -30,6 +32,8 @@ pub enum BmcError {
     ReqwestError(reqwest::Error),
     JsonError(serde_path_to_error::Error<serde_json::Error>),
     InvalidResponse(Box<reqwest::Response>),
+    NotSupported,
+    SseStreamError(sse_stream::Error),
     CacheMiss,
     CacheError(String),
 }
@@ -67,6 +71,7 @@ impl std::fmt::Display for BmcError {
             Self::InvalidResponse(response) => {
                 write!(f, "Invalid HTTP response: {}", response.status())
             }
+            Self::NotSupported => write!(f, "Operation is not supported by this client build"),
             Self::CacheMiss => write!(f, "Resource not found in cache"),
             Self::CacheError(r) => write!(f, "Error occurred in cache {r:?}"),
             Self::JsonError(e) => write!(
@@ -76,6 +81,7 @@ impl std::fmt::Display for BmcError {
                 e.inner().column(),
                 e.path(),
             ),
+            Self::SseStreamError(e) => write!(f, "SSE stream decode error: {e}"),
         }
     }
 }
@@ -85,6 +91,8 @@ impl std::error::Error for BmcError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::ReqwestError(e) => Some(e),
+            Self::JsonError(e) => Some(e.inner()),
+            Self::SseStreamError(e) => Some(e),
             _ => None,
         }
     }
@@ -436,6 +444,42 @@ impl HttpClient for Client {
         }
 
         Ok(Empty {})
+    }
+
+    async fn sse<T: Sized + for<'a> serde::Deserialize<'a> + Send + 'static>(
+        &self,
+        url: Url,
+        credentials: &BmcCredentials,
+        custom_headers: &HeaderMap,
+    ) -> Result<BoxTryStream<T, Self::Error>, Self::Error> {
+        let response = self
+            .client
+            .get(url)
+            .basic_auth(&credentials.username, Some(credentials.password()))
+            .headers(custom_headers.clone())
+            .header(header::ACCEPT, "text/event-stream")
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(BmcError::InvalidResponse(Box::new(response)));
+        }
+
+        let stream = sse_stream::SseStream::from_byte_stream(response.bytes_stream()).filter_map(
+            |event| async move {
+                match event {
+                    Err(err) => Some(Err(BmcError::SseStreamError(err))),
+                    Ok(sse) => sse.data.map(|data| {
+                        serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_str(
+                            &data,
+                        ))
+                        .map_err(BmcError::JsonError)
+                    }),
+                }
+            },
+        );
+
+        Ok(Box::pin(stream))
     }
 }
 

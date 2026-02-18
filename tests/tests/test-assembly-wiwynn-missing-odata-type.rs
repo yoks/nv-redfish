@@ -57,7 +57,10 @@ async fn wiwynn_assembly_without_member_odata_type_is_supported() -> Result<(), 
         hw.part_number.map(|v| v.inner().as_str()),
         Some("B81.11801.0008")
     );
-    assert_eq!(hw.serial_number.map(|v| v.inner().as_str()), Some(DUMMY_SERIAL));
+    assert_eq!(
+        hw.serial_number.map(|v| v.inner().as_str()),
+        Some(DUMMY_SERIAL)
+    );
 
     Ok(())
 }

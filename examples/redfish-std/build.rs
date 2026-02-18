@@ -66,7 +66,14 @@ fn main() -> Result<(), Error> {
 
     process_command(&Commands::Compile {
         root: DEFAULT_ROOT.into(),
-        include_root_patterns: vec![],
+        include_root_patterns: [
+            "Event.v1_0_0.EventRecord",
+            "MetricReport.v1_0_0.MetricReport",
+        ]
+        .iter()
+        .map(|v| v.parse())
+        .collect::<Result<Vec<_>, _>>()
+        .expect("must be successfuly parsed"),
         output,
         csdls,
         entity_type_patterns: [
@@ -74,6 +81,7 @@ fn main() -> Result<(), Error> {
             "ChassisCollection.*",
             "Chassis.*",
             "AccountService.*",
+            "Event.*",
             "ManagerAccountCollection.*",
             "ManagerAccount.*",
             "Bios.*",

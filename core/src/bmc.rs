@@ -54,6 +54,7 @@ use serde::Serialize;
 
 use crate::query::ExpandQuery;
 use crate::Action;
+use crate::BoxTryStream;
 use crate::Empty;
 use crate::EntityTypeRef;
 use crate::Expandable;
@@ -129,4 +130,12 @@ pub trait Bmc: Send + Sync {
         action: &Action<T, R>,
         params: &T,
     ) -> impl Future<Output = Result<R, Self::Error>> + Send;
+
+    /// Stream data for the entity.
+    ///
+    /// `T` is structure that is used for the stream return type.
+    fn stream<T: Sized + for<'a> Deserialize<'a> + Send + 'static>(
+        &self,
+        id: &ODataId,
+    ) -> impl Future<Output = Result<BoxTryStream<T, Self::Error>, Self::Error>> + Send;
 }

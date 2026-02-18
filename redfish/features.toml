@@ -130,6 +130,27 @@ patterns = [
 ]
 
 [[features]]
+name = "event-service"
+csdl_files = [
+    "EventService_v1.xml",
+    "EventDestination_v1.xml",
+    "EventDestinationCollection_v1.xml",
+    "Event_v1.xml",
+    "MetricReport_v1.xml",
+    "MetricReportCollection_v1.xml",
+    "PhysicalContext_v1.xml",
+    "Schedule_v1.xml",
+]
+patterns = [
+    "EventService.*",
+    "Event.*",
+    "MetricReport.*",
+    "PhysicalContext.*",
+    "Schedule.*",
+]
+root_patterns = [ "Event.v1_0_0.Event", "MetricReport.v1_0_0.MetricReport" ]
+
+[[features]]
 name = "log-services"
 csdl_files = [
     "LogService_v1.xml",
@@ -145,7 +166,6 @@ patterns = [
     "LogEntryCollection.*",
     "Event.*.*"
 ]
-root_patterns = [ "Event.v1_0_0.Event" ]
 
 [[features]]
 name = "managers"

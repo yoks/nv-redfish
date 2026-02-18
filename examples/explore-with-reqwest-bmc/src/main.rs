@@ -77,7 +77,7 @@ async fn main() -> Result<(), BmcError> {
             let function_handles = function_handles
                 .expand(&bmc, ExpandQuery::default())
                 .await?;
-            println!("{function_handles:?}"); // memberrs populated
+            println!("{function_handles:?}"); // members populated
         }
     }
 

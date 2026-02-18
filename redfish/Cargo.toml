@@ -30,6 +30,7 @@ std-redfish = [
     "chassis",
     "computer-systems",
     "ethernet-interfaces",
+    "event-service",
     "log-services",
     "managers",
     "memory",
@@ -53,6 +54,7 @@ chassis = ["patch-payload-get", "nv-bmc-expand"]
 computer-systems = ["patch-payload-get", "patch-collection"]
 ethernet-interfaces = []
 network-adapters = []
+event-service = []
 log-services = []
 managers = []
 memory = []
@@ -96,6 +98,7 @@ nv-bmc-expand = []
 nv-redfish-core = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+futures-core = { workspace = true }
 tagged-types = { workspace = true }
 
 [build-dependencies]
