@@ -137,4 +137,3 @@ git rebase --signoff HEAD~3  # Last 3 commits
 ## License
 
 By contributing to NV-Redfish, you agree that your contributions will be licensed under the same license as the project (see LICENSE file).
-
