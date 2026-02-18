@@ -59,9 +59,8 @@ mod tests {
             .await;
 
         let bmc = create_test_bmc(&mock_server);
-        let stream_id = create_odata_id(SSE_URI);
         let mut stream = bmc
-            .stream::<JsonValue>(&stream_id)
+            .stream::<JsonValue>(SSE_URI)
             .await
             .expect("must open stream");
 
@@ -118,9 +117,8 @@ mod tests {
             .await;
 
         let bmc = create_test_bmc(&mock_server);
-        let stream_id = create_odata_id(SSE_URI);
         let mut stream = bmc
-            .stream::<StreamPayload>(&stream_id)
+            .stream::<StreamPayload>(SSE_URI)
             .await
             .expect("must open stream");
 

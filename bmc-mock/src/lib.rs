@@ -52,7 +52,7 @@ pub enum Error {
     UnexpectedUpdate(ODataId, String, ExpectedRequest),
     UnexpectedCreate(ODataId, String, ExpectedRequest),
     UnexpectedAction(ActionTarget, String, ExpectedRequest),
-    UnexpectedStream(ODataId, ExpectedRequest),
+    UnexpectedStream(String, ExpectedRequest),
 }
 
 impl Display for Error {
@@ -89,8 +89,8 @@ impl Display for Error {
                     "unexpected action: {id}; json: {json} expected: {expected:?}"
                 )
             }
-            Self::UnexpectedStream(id, expected) => {
-                write!(f, "unexpected stream: {id}; expected: {expected:?}")
+            Self::UnexpectedStream(uri, expected) => {
+                write!(f, "unexpected stream: {uri}; expected: {expected:?}")
             }
         }
     }
@@ -295,7 +295,7 @@ where
 
     async fn stream<T: Sized + for<'a> serde::Deserialize<'a> + Send + 'static>(
         &self,
-        in_id: &ODataId,
+        in_uri: &str,
     ) -> Result<nv_redfish_core::BoxTryStream<T, Self::Error>, Self::Error> {
         let expect = self
             .expect
@@ -305,16 +305,16 @@ where
             .ok_or(Error::NothingIsExpected)?;
         match expect {
             Expect {
-                request: ExpectedRequest::Stream { id },
+                request: ExpectedRequest::Stream { uri },
                 response,
-            } if id == *in_id => {
+            } if uri == *in_uri => {
                 let response = response.map_err(|err| Error::ErrorResponse(Box::new(err)))?;
                 let result: Vec<T> = from_value(response).map_err(Error::BadResponseJson)?;
                 Ok(Box::pin(futures_util::stream::iter(
                     result.into_iter().map(Ok),
                 )))
             }
-            _ => Err(Error::UnexpectedStream(in_id.clone(), expect.request)),
+            _ => Err(Error::UnexpectedStream(in_uri.to_string(), expect.request)),
         }
     }
 }

@@ -131,11 +131,11 @@ pub trait Bmc: Send + Sync {
         params: &T,
     ) -> impl Future<Output = Result<R, Self::Error>> + Send;
 
-    /// Stream data for the entity.
+    /// Stream data for the URI.
     ///
     /// `T` is structure that is used for the stream return type.
     fn stream<T: Sized + for<'a> Deserialize<'a> + Send + 'static>(
         &self,
-        id: &ODataId,
+        uri: &str,
     ) -> impl Future<Output = Result<BoxTryStream<T, Self::Error>, Self::Error>> + Send;
 }

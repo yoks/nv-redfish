@@ -573,7 +573,7 @@ impl Bmc for MockBmc {
 
     async fn stream<T: Sized + for<'a> Deserialize<'a> + Send + 'static>(
         &self,
-        _id: &ODataId,
+        _id: &str,
     ) -> Result<nv_redfish_core::BoxTryStream<T, Self::Error>, Self::Error> {
         let payloads = vec![
             serde_json::json!({
@@ -834,8 +834,7 @@ async fn main() -> Result<(), Error> {
     );
 
     println!("Read mock SSE stream:");
-    let stream_id = ODataId::from("/redfish/v1/EventService/SSE".to_string());
-    let mut event_stream = bmc.stream::<Value>(&stream_id).await?;
+    let mut event_stream = bmc.stream::<Value>("/redfish/v1/EventService/SSE").await?;
     while let Some(event) = event_stream.next().await {
         let event = event?;
         println!("  {:?}", event);

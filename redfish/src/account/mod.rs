@@ -41,8 +41,6 @@ use crate::Error;
 use crate::NvBmc;
 use crate::ServiceRoot;
 use nv_redfish_core::Bmc;
-use nv_redfish_core::EntityTypeRef as _;
-use nv_redfish_core::ODataId;
 use std::sync::Arc;
 
 #[doc(inline)]
@@ -108,12 +106,13 @@ impl<B: Bmc> AccountService<B> {
         })
     }
 
-    /// `OData` identifier of the `AccountService` in Redfish.
+    /// Get the raw schema data for this account service.
     ///
-    /// Typically `/redfish/v1/AccountService`.
+    /// Returns an `Arc` to the underlying schema, allowing cheap cloning
+    /// and sharing of the data.
     #[must_use]
-    pub fn odata_id(&self) -> &ODataId {
-        self.service.as_ref().id()
+    pub fn raw(&self) -> Arc<SchemaAccountService> {
+        self.service.clone()
     }
 
     /// Get the accounts collection.

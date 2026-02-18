@@ -40,7 +40,7 @@ pub enum ExpectedRequest {
         request: JsonValue,
     },
     /// Expected Stream.
-    Stream { id: ODataId },
+    Stream { uri: String },
 }
 
 /// Expectation for the tests.
@@ -98,7 +98,7 @@ impl<E> Expect<E> {
     pub fn stream(uri: impl Display, response: impl Display) -> Self {
         Expect {
             request: ExpectedRequest::Stream {
-                id: uri.to_string().into(),
+                uri: uri.to_string(),
             },
             response: Ok(from_str(&response.to_string()).expect("invalid json")),
         }

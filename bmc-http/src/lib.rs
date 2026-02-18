@@ -499,9 +499,9 @@ where
 
     async fn stream<T: Sized + for<'a> Deserialize<'a> + Send + 'static>(
         &self,
-        id: &ODataId,
+        uri: &str,
     ) -> Result<BoxTryStream<T, Self::Error>, Self::Error> {
-        let endpoint_url = self.redfish_endpoint.with_path(&id.to_string());
+        let endpoint_url = Url::parse(uri).unwrap_or_else(|_| self.redfish_endpoint.with_path(uri));
         self.client
             .sse(endpoint_url, &self.credentials, &self.custom_headers)
             .await

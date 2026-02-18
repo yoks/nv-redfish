@@ -25,9 +25,7 @@ use crate::NvBmc;
 use crate::Resource;
 use crate::ResourceSchema;
 use nv_redfish_core::Bmc;
-use nv_redfish_core::EntityTypeRef as _;
 use nv_redfish_core::NavProperty;
-use nv_redfish_core::ODataId;
 use std::sync::Arc;
 
 /// Log service.
@@ -103,14 +101,6 @@ impl<B: Bmc> LogService<B> {
             .map_err(Error::Bmc)?;
 
         self.expand_entries(&entries_collection.members).await
-    }
-
-    /// `OData` identifier of the `AccountService` in Redfish.
-    ///
-    /// Typically `/redfish/v1/Systems/System_0/LogServices/SEL"`.
-    #[must_use]
-    pub fn odata_id(&self) -> &ODataId {
-        self.data.id()
     }
 
     /// Clear all log entries.

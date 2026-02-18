@@ -23,10 +23,9 @@ use crate::NvBmc;
 use crate::Resource;
 use crate::ResourceSchema;
 use crate::ServiceRoot;
+use nv_redfish_core::odata::ODataType;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::BoxTryStream;
-use nv_redfish_core::EntityTypeRef as _;
-use nv_redfish_core::ODataId;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde_json::Value as JsonValue;
@@ -53,22 +52,20 @@ impl<'de> Deserialize<'de> for EventStreamPayload {
         D: Deserializer<'de>,
     {
         let value = JsonValue::deserialize(deserializer)?;
-        let odata_type = value
-            .get("@odata.type")
-            .and_then(JsonValue::as_str)
+        let odata_type = ODataType::parse_from(&value)
             .ok_or_else(|| serde::de::Error::missing_field("missing @odata.type in SSE payload"))?;
 
-        if odata_type.starts_with("#MetricReport.") {
+        if odata_type.type_name == "MetricReport" {
             let payload =
                 serde_json::from_value::<MetricReport>(value).map_err(serde::de::Error::custom)?;
             Ok(Self::MetricReport(payload))
-        } else if odata_type.starts_with("#Event.") {
+        } else if odata_type.type_name == "Event" {
             let payload =
                 serde_json::from_value::<Event>(value).map_err(serde::de::Error::custom)?;
             Ok(Self::Event(payload))
         } else {
             Err(serde::de::Error::custom(format!(
-                "unsupported @odata.type in SSE payload: {odata_type}, should be either #Event.* or #MetricReport.*"
+                "unsupported @odata.type in SSE payload: {}, should be either Event or MetricReport", odata_type.type_name
             )))
         }
     }
@@ -104,37 +101,21 @@ impl<B: Bmc> EventService<B> {
         self.data.clone()
     }
 
-    /// `OData` identifier of the `EventService` in Redfish.
-    ///
-    /// Typically `/redfish/v1/EventService`.
-    #[must_use]
-    pub fn odata_id(&self) -> &ODataId {
-        self.data.id()
-    }
-
-    /// Get `ServerSentEventUri` if provided by the service.
-    ///
-    /// This is typically a relative path like `/redfish/v1/EventService/SSE`.
-    #[must_use]
-    pub fn server_sent_event_uri(&self) -> Result<&String, Error<B>> {
-        self.data
-            .server_sent_event_uri
-            .as_ref()
-            .ok_or(Error::EventServiceServerSentEventUriNotAvailable)
-    }
-
     /// Open an SSE stream of Redfish event payloads.
     ///
     /// Payload kind is selected by `@odata.type`:
-    /// - `#Event.*` -> [`EventStreamPayload::Event`]
-    /// - `#MetricReport.*` -> [`EventStreamPayload::MetricReport`]
+    /// - `Event` -> [`EventStreamPayload::Event`]
+    /// - `MetricReport` -> [`EventStreamPayload::MetricReport`]
     pub async fn events(&self) -> Result<BoxTryStream<EventStreamPayload, B::Error>, Error<B>> {
-        let stream_uri = self.server_sent_event_uri()?;
+        let stream_uri = self
+            .data
+            .server_sent_event_uri
+            .as_ref()
+            .ok_or(Error::EventServiceServerSentEventUriNotAvailable)?;
 
-        let stream_id = ODataId::from(stream_uri.to_string());
         self.bmc
             .as_ref()
-            .stream::<EventStreamPayload>(&stream_id)
+            .stream::<EventStreamPayload>(stream_uri)
             .await
             .map_err(Error::Bmc)
     }
