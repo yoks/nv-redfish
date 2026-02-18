@@ -38,9 +38,6 @@ pub use crate::schema::redfish::metric_report::MetricReport;
 #[doc(inline)]
 pub use crate::schema::redfish::event::Event;
 
-#[doc(inline)]
-pub use crate::schema::redfish::event::EventType;
-
 /// SSE payload that can contain either an `EventRecord` or a `MetricReport`.
 #[derive(Debug)]
 pub enum EventStreamPayload {

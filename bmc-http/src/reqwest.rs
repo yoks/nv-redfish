@@ -32,7 +32,6 @@ pub enum BmcError {
     ReqwestError(reqwest::Error),
     JsonError(serde_path_to_error::Error<serde_json::Error>),
     InvalidResponse(Box<reqwest::Response>),
-    NotSupported,
     SseStreamError(sse_stream::Error),
     CacheMiss,
     CacheError(String),
@@ -71,7 +70,6 @@ impl std::fmt::Display for BmcError {
             Self::InvalidResponse(response) => {
                 write!(f, "Invalid HTTP response: {}", response.status())
             }
-            Self::NotSupported => write!(f, "Operation is not supported by this client build"),
             Self::CacheMiss => write!(f, "Resource not found in cache"),
             Self::CacheError(r) => write!(f, "Error occurred in cache {r:?}"),
             Self::JsonError(e) => write!(
