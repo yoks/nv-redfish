@@ -19,12 +19,15 @@
 
 mod patch;
 
+use crate::patch_support::ReadPatchFn;
 use crate::schema::redfish::event_service::EventService as EventServiceSchema;
 use crate::Error;
 use crate::NvBmc;
 use crate::Resource;
 use crate::ResourceSchema;
 use crate::ServiceRoot;
+use futures_util::future;
+use futures_util::TryStreamExt;
 use nv_redfish_core::odata::ODataType;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::BoxTryStream;
@@ -54,16 +57,14 @@ impl<'de> Deserialize<'de> for EventStreamPayload {
     where
         D: Deserializer<'de>,
     {
-        let mut value = JsonValue::deserialize(deserializer)?;
+        let value = JsonValue::deserialize(deserializer)?;
         let odata_type = ODataType::parse_from(&value)
             .ok_or_else(|| de::Error::missing_field("missing @odata.type in SSE payload"))?;
 
         if odata_type.type_name == "MetricReport" {
-            let payload =
-                serde_json::from_value::<MetricReport>(value).map_err(de::Error::custom)?;
+            let payload = serde_json::from_value::<MetricReport>(value).map_err(de::Error::custom)?;
             Ok(Self::MetricReport(payload))
         } else if odata_type.type_name == "Event" {
-            patch::normalize_event_payload(&mut value);
             let payload = serde_json::from_value::<Event>(value).map_err(de::Error::custom)?;
             Ok(Self::Event(payload))
         } else {
@@ -81,6 +82,7 @@ impl<'de> Deserialize<'de> for EventStreamPayload {
 pub struct EventService<B: Bmc> {
     data: Arc<EventServiceSchema>,
     bmc: NvBmc<B>,
+    sse_read_patches: Vec<ReadPatchFn>,
 }
 
 impl<B: Bmc> EventService<B> {
@@ -92,9 +94,36 @@ impl<B: Bmc> EventService<B> {
             .as_ref()
             .ok_or(Error::EventServiceNotSupported)?;
         let data = service_ref.get(bmc.as_ref()).await.map_err(Error::Bmc)?;
+
+        let mut sse_read_patches = Vec::new();
+        if root.event_service_sse_no_member_id() {
+            let patch: ReadPatchFn =
+                Arc::new(patch::patch_missing_event_record_member_id as fn(JsonValue) -> JsonValue);
+            sse_read_patches.push(patch);
+        }
+        if root.event_service_sse_wrong_event_type() {
+            let patch: ReadPatchFn =
+                Arc::new(patch::patch_unknown_event_type_to_other as fn(JsonValue) -> JsonValue);
+            sse_read_patches.push(patch);
+        }
+        if root.event_service_sse_no_odata_id() {
+            let patch_event_id: ReadPatchFn =
+                Arc::new(patch::patch_missing_event_odata_id as fn(JsonValue) -> JsonValue);
+            sse_read_patches.push(patch_event_id);
+            let patch_record_id: ReadPatchFn =
+                Arc::new(patch::patch_missing_event_record_odata_id as fn(JsonValue) -> JsonValue);
+            sse_read_patches.push(patch_record_id);
+        }
+        if root.event_service_sse_wrong_timestamp_offset() {
+            let patch: ReadPatchFn =
+                Arc::new(patch::patch_compact_event_timestamp_offset as fn(JsonValue) -> JsonValue);
+            sse_read_patches.push(patch);
+        }
+
         Ok(Self {
             data,
             bmc: bmc.clone(),
+            sse_read_patches,
         })
     }
 
@@ -115,18 +144,35 @@ impl<B: Bmc> EventService<B> {
     /// Returns an error if:
     /// - `ServerSentEventUri` is not present in `EventService`
     /// - opening or consuming the SSE stream through the underlying BMC transport fails
-    pub async fn events(&self) -> Result<BoxTryStream<EventStreamPayload, B::Error>, Error<B>> {
+    /// - deserializing patched SSE payload into [`EventStreamPayload`] fails
+    pub async fn events(&self) -> Result<BoxTryStream<EventStreamPayload, Error<B>>, Error<B>>
+    where
+        B: 'static,
+        B::Error: 'static,
+    {
         let stream_uri = self
             .data
             .server_sent_event_uri
             .as_ref()
             .ok_or(Error::EventServiceServerSentEventUriNotAvailable)?;
 
-        self.bmc
+        let stream = self
+            .bmc
             .as_ref()
-            .stream::<EventStreamPayload>(stream_uri)
+            .stream::<JsonValue>(stream_uri)
             .await
-            .map_err(Error::Bmc)
+            .map_err(Error::Bmc)?;
+
+        let sse_read_patches = self.sse_read_patches.clone();
+        let stream = stream.map_err(Error::Bmc).and_then(move |payload| {
+            let patched = sse_read_patches
+                .iter()
+                .fold(payload, |acc, patch| patch(acc));
+
+            future::ready(serde_json::from_value::<EventStreamPayload>(patched).map_err(Error::Json))
+        });
+
+        Ok(Box::pin(stream))
     }
 }
 
@@ -143,15 +189,18 @@ mod tests {
     #[test]
     fn event_stream_payload_deserializes_event_record() {
         let value = serde_json::json!({
+            "@odata.id": "/redfish/v1/EventService/SSE#/Event1",
             "@odata.type": "#Event.v1_6_0.Event",
             "Id": "1",
             "Name": "Event Array",
             "Context": "ABCDEFGH",
             "Events": [
                     {
+                    "@odata.id": "/redfish/v1/EventService/SSE#/Events/88",
+                    "MemberId": "88",
                     "EventId": "88",
                     "EventTimestamp": "2026-02-19T03:55:29+00:00",
-                    "EventType": "Event",
+                    "EventType": "Alert",
                     "LogEntry": {
                         "@odata.id": "/redfish/v1/Systems/System_0/LogServices/EventLog/Entries/1674"
                     },
