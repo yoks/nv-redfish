@@ -27,7 +27,7 @@ use crate::Resource;
 use crate::ResourceSchema;
 use crate::ServiceRoot;
 use futures_util::future;
-use futures_util::TryStreamExt;
+use futures_util::TryStreamExt as _;
 use nv_redfish_core::odata::ODataType;
 use nv_redfish_core::Bmc;
 use nv_redfish_core::BoxTryStream;
@@ -96,15 +96,16 @@ impl<B: Bmc> EventService<B> {
         let data = service_ref.get(bmc.as_ref()).await.map_err(Error::Bmc)?;
 
         let mut sse_read_patches = Vec::new();
+        let mut sse_event_record_patches = Vec::new();
         if root.event_service_sse_no_member_id() {
             let patch: ReadPatchFn =
                 Arc::new(patch::patch_missing_event_record_member_id as fn(JsonValue) -> JsonValue);
-            sse_read_patches.push(patch);
+            sse_event_record_patches.push(patch);
         }
         if root.event_service_sse_wrong_event_type() {
             let patch: ReadPatchFn =
                 Arc::new(patch::patch_unknown_event_type_to_other as fn(JsonValue) -> JsonValue);
-            sse_read_patches.push(patch);
+            sse_event_record_patches.push(patch);
         }
         if root.event_service_sse_no_odata_id() {
             let patch_event_id: ReadPatchFn =
@@ -112,12 +113,21 @@ impl<B: Bmc> EventService<B> {
             sse_read_patches.push(patch_event_id);
             let patch_record_id: ReadPatchFn =
                 Arc::new(patch::patch_missing_event_record_odata_id as fn(JsonValue) -> JsonValue);
-            sse_read_patches.push(patch_record_id);
+            sse_event_record_patches.push(patch_record_id);
         }
         if root.event_service_sse_wrong_timestamp_offset() {
             let patch: ReadPatchFn =
                 Arc::new(patch::patch_compact_event_timestamp_offset as fn(JsonValue) -> JsonValue);
-            sse_read_patches.push(patch);
+            sse_event_record_patches.push(patch);
+        }
+
+        if !sse_event_record_patches.is_empty() {
+            let patch_event_records: ReadPatchFn = Arc::new(move |payload| {
+                sse_event_record_patches
+                    .iter()
+                    .fold(payload, |acc, patch| patch(acc))
+            });
+            sse_read_patches.push(patch_event_records);
         }
 
         Ok(Self {

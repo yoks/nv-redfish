@@ -295,7 +295,7 @@ impl<B: Bmc> ServiceRoot<B> {
     /// SSE payload does not include `@odata.id`.
     #[cfg(feature = "event-service")]
     pub(crate) fn event_service_sse_no_odata_id(&self) -> bool {
-        true
+        self.root.vendor.as_ref().and_then(Option::as_ref).is_some()
     }
 
     /// In some cases we expand is not working according to spec,
