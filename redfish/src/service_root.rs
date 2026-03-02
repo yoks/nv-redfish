@@ -59,6 +59,15 @@ pub type Product<T> = TaggedType<T, ProductTag>;
 #[capability(inner_access, cloned)]
 pub enum ProductTag {}
 
+/// The version of Redfish schema.
+pub type RedfishVersion<'a> = TaggedType<&'a str, RedfishVersionTag>;
+#[doc(hidden)]
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[transparent(Debug, Display, Serialize, Deserialize)]
+#[capability(inner_access, cloned)]
+pub enum RedfishVersionTag {}
+
 /// Represents `ServiceRoot` in the BMC model.
 #[derive(Clone)]
 pub struct ServiceRoot<B: Bmc> {
@@ -95,6 +104,25 @@ impl<B: Bmc> ServiceRoot<B> {
         Ok(Self { root, bmc })
     }
 
+    /// Replace BMC in this root.
+    #[must_use]
+    pub fn replace_bmc(self, bmc: Arc<B>) -> Self {
+        let root = self.root;
+        let quirks = BmcQuirks::new(&root);
+        let mut protocol_features = root
+            .protocol_features_supported
+            .as_ref()
+            .map(ProtocolFeatures::new)
+            .unwrap_or_default();
+        if quirks.expand_is_not_working_properly() {
+            protocol_features.expand.expand_all = false;
+            protocol_features.expand.no_links = false;
+        }
+
+        let bmc = NvBmc::new(bmc, protocol_features, quirks);
+        Self { root, bmc }
+    }
+
     /// The vendor or manufacturer associated with this Redfish service.
     pub fn vendor(&self) -> Option<Vendor<&str>> {
         self.root
@@ -113,6 +141,14 @@ impl<B: Bmc> ServiceRoot<B> {
             .and_then(Option::as_ref)
             .map(String::as_str)
             .map(Product::new)
+    }
+
+    /// The vendor or manufacturer associated with this Redfish service.
+    pub fn redfish_version(&self) -> Option<RedfishVersion<'_>> {
+        self.root
+            .redfish_version
+            .as_deref()
+            .map(RedfishVersion::new)
     }
 
     /// Get the account service belonging to the BMC.
