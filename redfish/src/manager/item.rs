@@ -14,11 +14,10 @@
 // limitations under the License.
 
 use crate::bmc_quirks::BmcQuirks;
-use crate::patch_support::JsonValue;
 use crate::patch_support::Payload;
 use crate::patch_support::ReadPatchFn;
+use crate::patches::remove_invalid_resource_state;
 use crate::schema::redfish::manager::Manager as ManagerSchema;
-use crate::schema::redfish::resource::State as ResourceStateSchema;
 use crate::Error;
 use crate::NvBmc;
 use crate::Resource;
@@ -224,21 +223,5 @@ impl<B: Bmc> Manager<B> {
 impl<B: Bmc> Resource for Manager<B> {
     fn resource_ref(&self) -> &ResourceSchema {
         &self.data.as_ref().base
-    }
-}
-
-fn remove_invalid_resource_state(resource: JsonValue) -> JsonValue {
-    if let JsonValue::Object(mut obj) = resource {
-        if let Some(JsonValue::Object(ref mut status)) = obj.get_mut("Status") {
-            if status
-                .get("State")
-                .is_some_and(|v| serde_json::from_value::<ResourceStateSchema>(v.clone()).is_err())
-            {
-                status.remove("State");
-            }
-        }
-        JsonValue::Object(obj)
-    } else {
-        resource
     }
 }

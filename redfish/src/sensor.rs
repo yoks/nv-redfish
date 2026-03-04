@@ -27,11 +27,10 @@
 //! `Chassis/Power` and `Chassis/Thermal`, use those explicit endpoints instead.
 
 use crate::bmc_quirks::BmcQuirks;
-use crate::patch_support::JsonValue;
 use crate::patch_support::Payload;
 use crate::patch_support::ReadPatchFn;
+use crate::patches::remove_invalid_resource_state;
 use crate::schema::redfish::environment_metrics::EnvironmentMetrics;
-use crate::schema::redfish::resource::State as ResourceStateSchema;
 use crate::schema::redfish::sensor::Sensor as SchemaSensor;
 use crate::Error;
 use crate::NvBmc;
@@ -101,7 +100,7 @@ impl Config {
 /// call to [`fetch`](Self::fetch).
 pub struct SensorRef<B: Bmc> {
     bmc: NvBmc<B>,
-    sensor_ref: NavProperty<SchemaSensor>,
+    nav: NavProperty<SchemaSensor>,
     config: Config,
 }
 
@@ -110,16 +109,12 @@ impl<B: Bmc> SensorRef<B> {
     ///
     /// # Arguments
     ///
-    /// * `sensor_ref` - Navigation properties pointing to sensor
+    /// * `nav` - Navigation properties pointing to sensor
     /// * `bmc` - BMC client for fetching sensor data
     #[must_use]
-    pub(crate) fn new(bmc: NvBmc<B>, sensor_ref: NavProperty<SchemaSensor>) -> Self {
+    pub(crate) fn new(bmc: NvBmc<B>, nav: NavProperty<SchemaSensor>) -> Self {
         let config = Config::new(&bmc.quirks);
-        Self {
-            bmc,
-            sensor_ref,
-            config,
-        }
+        Self { bmc, nav, config }
     }
 
     /// Refresh sensor data from the BMC.
@@ -132,12 +127,9 @@ impl<B: Bmc> SensorRef<B> {
     /// Returns an error if sensor fetch fails.
     pub async fn fetch(&self) -> Result<Arc<SchemaSensor>, Error<B>> {
         if let Some(read_patch_fn) = &self.config.read_patch_fn {
-            Payload::get(self.bmc.as_ref(), &self.sensor_ref, read_patch_fn.as_ref()).await
+            Payload::get(self.bmc.as_ref(), &self.nav, read_patch_fn.as_ref()).await
         } else {
-            self.sensor_ref
-                .get(self.bmc.as_ref())
-                .await
-                .map_err(Error::Bmc)
+            self.nav.get(self.bmc.as_ref()).await.map_err(Error::Bmc)
         }
     }
 
@@ -146,7 +138,7 @@ impl<B: Bmc> SensorRef<B> {
     /// Typically `/redfish/v1/{Chassis}/Sensors/{ID}`.
     #[must_use]
     pub fn odata_id(&self) -> &ODataId {
-        self.sensor_ref.id()
+        self.nav.id()
     }
 }
 
@@ -184,20 +176,4 @@ pub(crate) async fn extract_environment_sensors<B: Bmc>(
             )
         })
         .map_err(Error::Bmc)
-}
-
-fn remove_invalid_resource_state(resource: JsonValue) -> JsonValue {
-    if let JsonValue::Object(mut obj) = resource {
-        if let Some(JsonValue::Object(ref mut status)) = obj.get_mut("Status") {
-            if status
-                .get("State")
-                .is_some_and(|v| serde_json::from_value::<ResourceStateSchema>(v.clone()).is_err())
-            {
-                status.remove("State");
-            }
-        }
-        JsonValue::Object(obj)
-    } else {
-        resource
-    }
 }
