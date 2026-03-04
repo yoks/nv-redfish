@@ -22,8 +22,8 @@ use crate::hardware_id::SerialNumber as HardwareIdSerialNumber;
 use crate::patch_support::JsonValue;
 use crate::patch_support::Payload;
 use crate::patch_support::ReadPatchFn;
+use crate::patches::remove_invalid_resource_state;
 use crate::schema::redfish::chassis::Chassis as ChassisSchema;
-use crate::schema::redfish::resource::State as ResourceStateSchema;
 use crate::Error;
 use crate::NvBmc;
 use crate::Resource;
@@ -414,21 +414,5 @@ fn add_default_chassis_name(v: JsonValue) -> JsonValue {
         JsonValue::Object(obj)
     } else {
         v
-    }
-}
-
-fn remove_invalid_resource_state(resource: JsonValue) -> JsonValue {
-    if let JsonValue::Object(mut obj) = resource {
-        if let Some(JsonValue::Object(ref mut status)) = obj.get_mut("Status") {
-            if status
-                .get("State")
-                .is_some_and(|v| serde_json::from_value::<ResourceStateSchema>(v.clone()).is_err())
-            {
-                status.remove("State");
-            }
-        }
-        JsonValue::Object(obj)
-    } else {
-        resource
     }
 }
