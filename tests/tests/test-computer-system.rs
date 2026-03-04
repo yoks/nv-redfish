@@ -20,6 +20,7 @@ use nv_redfish::computer_system::SystemCollection;
 use nv_redfish::ServiceRoot;
 use nv_redfish_core::ODataId;
 use nv_redfish_tests::ami_viking_service_root;
+use nv_redfish_tests::anonymous_1_9_service_root;
 use nv_redfish_tests::json_merge;
 use nv_redfish_tests::Bmc;
 use nv_redfish_tests::Expect;
@@ -59,6 +60,32 @@ async fn ami_viking_missing_root_systems_nav_workaround() -> Result<(), Box<dyn 
     let ids = computer_system_ids();
     let computer_system = computer_system(&ids, json!({}));
     let service_root = expect_viking_service_root_without_systems(bmc.clone(), &ids).await?;
+    bmc.expect(Expect::get(
+        &ids.systems_id,
+        json!({
+            ODATA_ID: &ids.systems_id,
+            ODATA_TYPE: &SYSTEM_COLLECTION_DATA_TYPE,
+            "Id": resource_name(&ids.systems_id),
+            "Name": "Computer System Collection",
+            "Members": [computer_system]
+        }),
+    ));
+
+    let systems = service_root.systems().await?.unwrap();
+    let members = systems.members().await?;
+    assert_eq!(members.len(), 1);
+
+    Ok(())
+}
+
+#[test]
+async fn anonymous_1_9_0_missing_root_systems_nav_workaround() -> Result<(), Box<dyn StdError>> {
+    // Platform under test: Liteon powershelf class (anonymous Redfish 1.9.0 root).
+    // Quirk under test: missing root Systems navigation property.
+    let bmc = Arc::new(Bmc::default());
+    let ids = computer_system_ids();
+    let computer_system = computer_system(&ids, json!({}));
+    let service_root = expect_anonymous_1_9_service_root_without_systems(bmc.clone(), &ids).await?;
     bmc.expect(Expect::get(
         &ids.systems_id,
         json!({
@@ -136,6 +163,17 @@ async fn expect_viking_service_root_without_systems(
     bmc.expect(Expect::get(
         &ids.root_id,
         ami_viking_service_root(&ids.root_id, json!({})),
+    ));
+    ServiceRoot::new(bmc).await.map_err(Into::into)
+}
+
+async fn expect_anonymous_1_9_service_root_without_systems(
+    bmc: Arc<Bmc>,
+    ids: &ComputerSystemIds,
+) -> Result<ServiceRoot<Bmc>, Box<dyn StdError>> {
+    bmc.expect(Expect::get(
+        &ids.root_id,
+        anonymous_1_9_service_root(&ids.root_id, json!({})),
     ));
     ServiceRoot::new(bmc).await.map_err(Into::into)
 }

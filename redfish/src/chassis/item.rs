@@ -23,6 +23,7 @@ use crate::patch_support::JsonValue;
 use crate::patch_support::Payload;
 use crate::patch_support::ReadPatchFn;
 use crate::schema::redfish::chassis::Chassis as ChassisSchema;
+use crate::schema::redfish::resource::State as ResourceStateSchema;
 use crate::Error;
 use crate::NvBmc;
 use crate::Resource;
@@ -88,6 +89,9 @@ impl Config {
         }
         if quirks.bug_missing_chassis_name_field() {
             patches.push(add_default_chassis_name);
+        }
+        if quirks.wrong_resource_status_state() {
+            patches.push(remove_invalid_resource_state);
         }
         let read_patch_fn = (!patches.is_empty())
             .then(|| Arc::new(move |v| patches.iter().fold(v, |acc, f| f(acc))) as ReadPatchFn);
@@ -410,5 +414,21 @@ fn add_default_chassis_name(v: JsonValue) -> JsonValue {
         JsonValue::Object(obj)
     } else {
         v
+    }
+}
+
+fn remove_invalid_resource_state(resource: JsonValue) -> JsonValue {
+    if let JsonValue::Object(mut obj) = resource {
+        if let Some(JsonValue::Object(ref mut status)) = obj.get_mut("Status") {
+            if status
+                .get("State")
+                .is_some_and(|v| serde_json::from_value::<ResourceStateSchema>(v.clone()).is_err())
+            {
+                status.remove("State");
+            }
+        }
+        JsonValue::Object(obj)
+    } else {
+        resource
     }
 }

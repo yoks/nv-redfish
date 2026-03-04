@@ -19,6 +19,7 @@
 use nv_redfish::ServiceRoot;
 use nv_redfish_core::ODataId;
 use nv_redfish_tests::ami_viking_service_root;
+use nv_redfish_tests::anonymous_1_9_service_root;
 use nv_redfish_tests::Bmc;
 use nv_redfish_tests::Expect;
 use nv_redfish_tests::ODATA_ID;
@@ -59,6 +60,43 @@ async fn ami_viking_missing_root_managers_nav_workaround() -> Result<(), Box<dyn
     Ok(())
 }
 
+#[test]
+async fn anonymous_1_9_0_wrong_manager_status_state_workaround() -> Result<(), Box<dyn StdError>> {
+    // Platform under test: Liteon powershelf class (anonymous Redfish 1.9.0 root).
+    // Quirk under test: invalid Manager.Status.State="Standby".
+    let bmc = Arc::new(Bmc::default());
+    let ids = ids();
+    let root = expect_anonymous_1_9_service_root(
+        bmc.clone(),
+        &ids,
+        json!({
+            "Managers": { ODATA_ID: &ids.managers_id }
+        }),
+    )
+    .await?;
+
+    bmc.expect(Expect::get(
+        &ids.managers_id,
+        json!({
+            ODATA_ID: &ids.managers_id,
+            ODATA_TYPE: MANAGER_COLLECTION_DATA_TYPE,
+            "Id": "Managers",
+            "Name": "Manager Collection",
+            "Members": [{ ODATA_ID: &ids.manager_id }]
+        }),
+    ));
+
+    let collection = root.managers().await?.unwrap();
+    bmc.expect(Expect::get(
+        &ids.manager_id,
+        manager_payload_with_state(&ids, "Standby"),
+    ));
+    let members = collection.members().await?;
+    assert_eq!(members.len(), 1);
+
+    Ok(())
+}
+
 struct Ids {
     root_id: ODataId,
     managers_id: String,
@@ -77,11 +115,27 @@ fn ids() -> Ids {
 }
 
 fn manager_payload(ids: &Ids) -> serde_json::Value {
+    manager_payload_with_state(ids, "Enabled")
+}
+
+fn manager_payload_with_state(ids: &Ids, state: &str) -> serde_json::Value {
     json!({
         ODATA_ID: &ids.manager_id,
         ODATA_TYPE: MANAGER_DATA_TYPE,
         "Id": "1",
         "Name": "Manager",
-        "Status": { "State": "Enabled" }
+        "Status": { "State": state }
     })
+}
+
+async fn expect_anonymous_1_9_service_root(
+    bmc: Arc<Bmc>,
+    ids: &Ids,
+    fields: serde_json::Value,
+) -> Result<ServiceRoot<Bmc>, Box<dyn StdError>> {
+    bmc.expect(Expect::get(
+        &ids.root_id,
+        anonymous_1_9_service_root(&ids.root_id, fields),
+    ));
+    ServiceRoot::new(bmc).await.map_err(Into::into)
 }

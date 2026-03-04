@@ -101,7 +101,16 @@ impl Payload {
         B: Bmc,
         F: FnOnce(JsonValue) -> JsonValue,
     {
-        serde_json::from_value(f(self.0.clone())).map_err(Error::Json)
+        let is_reference = self
+            .0
+            .as_object()
+            .is_some_and(|obj| obj.len() == 1 && obj.contains_key("@odata.id"));
+        if is_reference {
+            // Do not apply patches to the references.
+            serde_json::from_value(self.0.clone()).map_err(Error::Json)
+        } else {
+            serde_json::from_value(f(self.0.clone())).map_err(Error::Json)
+        }
     }
 }
 

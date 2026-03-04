@@ -33,6 +33,7 @@ enum Platform {
     Dell,
     AmiViking,
     Nvidia,
+    Anonymous1_9_0,
 }
 
 impl BmcQuirks {
@@ -44,6 +45,7 @@ impl BmcQuirks {
             Some("Dell") => Some(Platform::Dell),
             Some("AMI") if redfish_version_str == Some("1.11.0") => Some(Platform::AmiViking),
             Some("NVIDIA") => Some(Platform::Nvidia),
+            None if redfish_version_str == Some("1.9.0") => Some(Platform::Anonymous1_9_0),
             _ => None,
         };
         Self { platform }
@@ -96,8 +98,14 @@ impl BmcQuirks {
         feature = "managers",
         feature = "update-service",
     ))]
-    pub(crate) fn bug_missing_root_nav_properties(&self) -> bool {
-        self.platform == Some(Platform::AmiViking)
+    pub(crate) const fn bug_missing_root_nav_properties(&self) -> bool {
+        match self.platform {
+            // 1. There are situations when Viking doesn't provide any
+            //    navigation properties in root before BMC reset.
+            // 2. LiteonPowershelf doesn't provide Systems
+            Some(Platform::AmiViking | Platform::Anonymous1_9_0) => true,
+            _ => false,
+        }
     }
 
     /// Missing chassis type property in Chassis resource. This
@@ -157,6 +165,14 @@ impl BmcQuirks {
     #[allow(clippy::unused_self)]
     pub(crate) const fn event_service_sse_no_odata_id(&self) -> bool {
         true
+    }
+
+    /// Liteon provides invalid chassis/manager status state (Standby).
+    #[cfg(any(feature = "chassis", feature = "managers"))]
+    pub(crate) fn wrong_resource_status_state(&self) -> bool {
+        // Note that Liteon prefer not to tell about itself. So we
+        // apply patches for all platforms that are not identified.
+        self.platform == Some(Platform::Anonymous1_9_0)
     }
 
     /// In some cases we expand is not working according to spec,

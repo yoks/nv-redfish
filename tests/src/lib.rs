@@ -61,3 +61,22 @@ pub fn ami_viking_service_root(root_id: &ODataId, fields: Value) -> Value {
     });
     json_merge([&base, &fields])
 }
+
+/// Build a ServiceRoot payload for anonymous Redfish 1.9.0 platforms
+/// (Liteon powershelf class) merged with the provided `fields`.
+pub fn anonymous_1_9_service_root(root_id: &ODataId, fields: Value) -> Value {
+    let base = json!({
+        ODATA_ID: root_id,
+        ODATA_TYPE: "#ServiceRoot.v1_11_0.ServiceRoot",
+        "Id": "RootService",
+        "Name": "Root Service",
+        "RedfishVersion": "1.9.0",
+        "ProtocolFeaturesSupported": {
+            "ExpandQuery": {
+                "NoLinks": false
+            }
+        },
+        "Links": {},
+    });
+    json_merge([&base, &fields])
+}
