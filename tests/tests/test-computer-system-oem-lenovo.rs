@@ -223,7 +223,11 @@ async fn expect_service_root(
                 }
             },
             "Systems": { ODATA_ID: &ids.systems_id },
-            "Links": {},
+            "Links": {
+                "Sessions": {
+                    ODATA_ID: format!("{}/SessionService/Sessions", ids.root_id),
+                }
+            },
         }),
     ));
     ServiceRoot::new(bmc).await.map_err(Into::into)

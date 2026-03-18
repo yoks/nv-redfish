@@ -142,7 +142,11 @@ async fn get_account_service(
                 ODATA_ID: &account_service_id,
             },
             "Vendor": vendor,
-            "Links": {},
+            "Links": {
+                "Sessions": {
+                    ODATA_ID: format!("{root_id}/SessionService/Sessions"),
+                }
+            },
         }),
     ));
     let service_root = ServiceRoot::new(bmc.clone()).await?;

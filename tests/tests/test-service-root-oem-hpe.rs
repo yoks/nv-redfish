@@ -139,7 +139,11 @@ fn root_payload(hpe_oem: Option<Value>) -> Value {
                 "NoLinks": true
             }
         },
-        "Links": {},
+        "Links": {
+            "Sessions": {
+                ODATA_ID: format!("{root_id}/SessionService/Sessions"),
+            }
+        },
     });
     let oem = hpe_oem
         .map(|hpe| {

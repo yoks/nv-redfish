@@ -28,6 +28,7 @@ nv-redfish = { workspace = true, features = [
     "oem-nvidia-bluefield",
     "oem-nvidia-baseboard",
     "oem-supermicro",
+    "session-service",
     "update-service",
 ] }
 serde = { workspace = true, features = ["derive"] }

@@ -303,6 +303,19 @@ patterns = [
 ]
 
 [[features]]
+name = "session-service"
+csdl_files = [
+    "SessionService_v1.xml",
+    "SessionCollection_v1.xml",
+    "Session_v1.xml",
+]
+patterns = [
+    "SessionService.*",
+    "SessionCollection.*",
+    "Session.*",
+]
+
+[[features]]
 name = "storages"
 csdl_files = [
     "Drive_v1.xml",

@@ -147,7 +147,11 @@ async fn expect_service_root(
                 }
             },
             "Chassis": { ODATA_ID: &ids.chassis_collection_id },
-            "Links": {},
+            "Links": {
+                "Sessions": {
+                    ODATA_ID: format!("{}/SessionService/Sessions", ids.root_id),
+                }
+            },
         }),
     ));
 

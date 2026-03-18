@@ -57,7 +57,11 @@ pub fn ami_viking_service_root(root_id: &ODataId, fields: Value) -> Value {
         },
         "Vendor": "AMI",
         "RedfishVersion": "1.11.0",
-        "Links": {},
+        "Links": {
+            "Sessions": {
+                ODATA_ID: format!("{root_id}/SessionService/Sessions"),
+            }
+        },
     });
     json_merge([&base, &fields])
 }
@@ -76,7 +80,11 @@ pub fn anonymous_1_9_service_root(root_id: &ODataId, fields: Value) -> Value {
                 "NoLinks": false
             }
         },
-        "Links": {},
+        "Links": {
+            "Sessions": {
+                ODATA_ID: format!("{root_id}/SessionService/Sessions"),
+            }
+        },
     });
     json_merge([&base, &fields])
 }

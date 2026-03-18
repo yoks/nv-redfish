@@ -117,7 +117,11 @@ async fn expect_service_root(
                 }
             },
             "Managers": { ODATA_ID: &ids.manager_collection_id },
-            "Links": {},
+            "Links": {
+                "Sessions": {
+                    ODATA_ID: format!("{}/SessionService/Sessions", ids.root_id),
+                }
+            },
         }),
     ));
 

@@ -284,7 +284,11 @@ async fn expect_nvswitch_service_root(
                         "NoLinks": true
                     }
                 },
-                "Links": {}
+                "Links": {
+                    "Sessions": {
+                        ODATA_ID: format!("{}/SessionService/Sessions", ids.root_id),
+                    }
+                },
             }),
             &fields,
         ]),

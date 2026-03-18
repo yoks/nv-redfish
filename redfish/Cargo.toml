@@ -48,6 +48,7 @@ std-redfish = [
     "processors",
     "secure-boot",
     "sensors",
+    "session-service",
     "storages",
     "telemetry-service",
     "thermal",
@@ -76,6 +77,7 @@ processors = []
 resource-status = []
 secure-boot = []
 sensors = []
+session-service = ["nv-bmc-expand"]
 storages = []
 thermal = []  # Support of legacy ThermalSubsystem
 update-service = ["patch-payload-get", "patch-collection"]

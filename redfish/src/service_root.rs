@@ -42,6 +42,8 @@ use crate::oem::hpe::HpeiLoServiceExt;
 use crate::telemetry_service::TelemetryService;
 #[cfg(feature = "update-service")]
 use crate::update_service::UpdateService;
+#[cfg(feature = "session-service")]
+use crate::session_service::SessionService;
 
 /// The vendor or manufacturer associated with Redfish service.
 pub type Vendor<T> = TaggedType<T, VendorTag>;
@@ -220,6 +222,18 @@ impl<B: Bmc> ServiceRoot<B> {
     #[cfg(feature = "telemetry-service")]
     pub async fn telemetry_service(&self) -> Result<Option<TelemetryService<B>>, Error<B>> {
         TelemetryService::new(&self.bmc, self).await
+    }
+
+    /// Get session service in BMC
+    ///
+    /// Returns `Ok(None)` when the BMC does not expose SessionService.
+    ///
+    /// # Errors
+    ///
+    /// Returns error if retrieving session service data fails.
+    #[cfg(feature = "session-service")]
+    pub async fn session_service(&self) -> Result<Option<SessionService<B>>, Error<B>> {
+        SessionService::new(&self.bmc, self).await
     }
 
     /// Get manager collection in BMC

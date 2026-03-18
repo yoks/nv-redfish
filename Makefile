@@ -31,6 +31,7 @@ all-std-features = accounts \
                    processors \
                    secure-boot \
                    sensors \
+                   session-service \
                    storages \
                    thermal \
                    update-service \

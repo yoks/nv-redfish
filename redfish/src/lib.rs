@@ -32,13 +32,15 @@
 //!   lightweight as possible.
 //!
 //! Features
-//! - `accounts`: enables the `AccountService` wrappers (implemented).
-//! - OEM-specific feature flags (planned) enable vendor extensions when needed.
+//! - Service feature flags such as `accounts`, `session-service`,
+//!   `update-service`, and others enable typed wrappers for specific Redfish
+//!   services and resources.
+//! - OEM-specific feature flags enable vendor extensions when needed.
 //!
 //! Status
-//! - Currently, the `accounts` service is implemented. More services and OEM
-//!   extensions will be added to support a variety of vendors in a compatible
-//!   manner.
+//! - The crate exposes typed wrappers for a growing subset of standard Redfish
+//!   services and resources, plus selected OEM extensions.
+//! - Additional services and OEM extensions continue to be added over time.
 //!
 
 #![recursion_limit = "256"]
@@ -119,6 +121,9 @@ pub mod pcie_device;
 /// Metrics and sensor abstraction.
 #[cfg(feature = "sensors")]
 pub mod sensor;
+/// Session Service.
+#[cfg(feature = "session-service")]
+pub mod session_service;
 /// Telemetry Service.
 #[cfg(feature = "telemetry-service")]
 pub mod telemetry_service;
