@@ -1,0 +1,18 @@
+error[E0432]: unresolved import `nv_redfish_scraper::RuntimeEvent`
+ --> tests/trybuild/default_no_runtime_event.rs:1:5
+  |
+1 | use nv_redfish_scraper::RuntimeEvent;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `RuntimeEvent` in the root
+  |
+note: found an item that was configured out
+ --> src/lib.rs
+  |
+  | #[cfg(feature = "runtime-events")]
+  |       -------------------------- the item is gated behind the `runtime-events` feature
+  | pub use event::RuntimeEvent;
+  |                ^^^^^^^^^^^^
+help: a similar name exists in the module
+  |
+1 - use nv_redfish_scraper::RuntimeEvent;
+1 + use nv_redfish_scraper::RuntimeError;
+  |

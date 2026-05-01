@@ -1,0 +1,5 @@
+error[E0432]: unresolved import `nv_redfish_scraper::adapter::redfish::DetachedCommand`
+ --> tests/trybuild/no_detached_redfish_command.rs:1:5
+  |
+1 | use nv_redfish_scraper::adapter::redfish::DetachedCommand;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `DetachedCommand` in `adapter::redfish`

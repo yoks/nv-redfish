@@ -1,0 +1,13 @@
+error[E0432]: unresolved import `nv_redfish_scraper::adapter::redfish`
+ --> tests/trybuild/default_no_redfish_adapter.rs:1:34
+  |
+1 | use nv_redfish_scraper::adapter::redfish::BmcId;
+  |                                  ^^^^^^^ could not find `redfish` in `adapter`
+  |
+note: found an item that was configured out
+ --> src/adapter/mod.rs
+  |
+  | #[cfg(feature = "redfish-adapter")]
+  |       --------------------------- the item is gated behind the `redfish-adapter` feature
+  | pub mod redfish;
+  |         ^^^^^^^
