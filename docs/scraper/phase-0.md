@@ -234,7 +234,9 @@ Requirements:
   ordering,
 - failed work carries the generic error value without requiring formatting
   traits,
-- output queue behavior is observable through stats.
+- output queue behavior is observable through stats,
+- bounded output queues report pressure through bounded length plus dropped or
+  rejected counts.
 
 ### Runtime events
 
@@ -415,7 +417,9 @@ Tests:
 - disabled runtime event build does not compile event emission paths,
 - lagging generator can emit lag event when enabled,
 - queue pressure can emit pressure event when enabled,
-- work started/completed/failed events preserve causal ordering when enabled,
+- work started/completed events exactly bracket successful work output when
+  enabled,
+- work started/failed events exactly bracket failed work output when enabled,
 - lag and queue pressure runtime events are ordered with work outputs.
 
 ### Stats tests
@@ -426,7 +430,9 @@ Tests:
 
 - runtime exposes per-target, per-class, and per-generator stats,
 - generator stats report lag, missed intervals, and actual interval,
-- periodic overload is not represented as stale queued job depth.
+- periodic overload is not represented as stale queued job depth,
+- bounded output queue pressure reports dropped or rejected outputs instead of
+  unbounded queue growth.
 
 ### Feature-gating tests
 
@@ -453,13 +459,19 @@ File: `tests/redfish_adapter_api.rs`
 Tests:
 
 - adapter generator builders close over typed `nv-redfish` objects,
+- service-root builders produce runtime generators, not just marker objects,
 - invalid object and command pairings are not expressible,
 - Redfish resource event contains required identity fields,
 - Redfish event payload does not contain execution handles,
 - generated `EntityPayload` boundary preserves schema payload identity,
+- generated `EntityPayload` implements the scraper payload boundary and serde
+  when generated support is enabled,
 - expanded payload preservation is represented in the event API,
 - child events can carry `parent_odata_id`,
 - reconstruction records preserve hierarchy identity without execution handles,
+- reconstruction records can be derived from resource events,
+- serialized Redfish resource events contain read-side fields and metadata but
+  not execution handles,
 - Redfish events and reconstruction records are serializable when `serde` is
   enabled.
 

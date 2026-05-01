@@ -187,7 +187,7 @@ impl<'a> StructDef<'a> {
         tokens.extend([
             doc_format_and_generate(self.name, &self.odata),
             quote! {
-                #[derive(Deserialize, Debug)]
+                #[derive(Serialize, Deserialize, Debug)]
                 pub struct #name { #content }
                 #[doc = "SAFETY: All generated data types are Send"]
                 unsafe impl Send for #name {}
@@ -256,7 +256,7 @@ impl<'a> StructDef<'a> {
 
         let name = self.name.for_excerpt_copy(excerpt_copy);
         tokens.extend([quote! {
-            #[derive(Deserialize, Debug)]
+            #[derive(Serialize, Deserialize, Debug)]
             pub struct #name { #content }
         }]);
     }

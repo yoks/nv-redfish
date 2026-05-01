@@ -120,10 +120,63 @@ fn work_started_completed_and_output_preserve_causal_order() {
     let _ = tokio_test::block_on(runtime.run_once(Instant::now()));
     let outputs = runtime.drain_outputs();
 
-    assert!(
-        outputs.len() >= 3,
-        "runtime events should bracket work output when runtime-events is enabled"
+    assert_eq!(
+        outputs.len(),
+        3,
+        "runtime events should bracket exactly one work output"
     );
+    assert!(matches!(
+        outputs.first(),
+        Some(RuntimeOutput::Runtime(RuntimeEvent::WorkStarted(id))) if id == &GeneratorId::new("generator")
+    ));
+    assert!(matches!(
+        outputs.get(1),
+        Some(RuntimeOutput::Work(Ok(success))) if success.events()[0].name() == "event"
+    ));
+    assert!(matches!(
+        outputs.get(2),
+        Some(RuntimeOutput::Runtime(RuntimeEvent::WorkCompleted(id))) if id == &GeneratorId::new("generator")
+    ));
+}
+
+#[test]
+#[cfg(feature = "runtime-events")]
+fn work_started_failed_and_output_preserve_causal_order() {
+    let mut runtime: Runtime<FakeEvent, FakeError> = Runtime::new(RuntimeConfig::default());
+    let target_id = TargetId::new("target");
+    let generator_id = GeneratorId::new("generator");
+    let (generator, _) = FakeGenerator::new(
+        target_id.clone(),
+        generator_id.clone(),
+        ClassId::new("class"),
+        CostUnits::new(1),
+        vec![Readiness::ready(CostUnits::new(1))],
+        vec![Err(FakeError::new("failed"))],
+    );
+
+    runtime
+        .add_target(target_id.clone(), TargetLimits::default())
+        .expect("target should be added");
+    runtime
+        .add_generator(
+            &target_id,
+            generator_id,
+            GeneratorConfig::default(),
+            generator,
+        )
+        .expect("generator should be added");
+
+    let _ = tokio_test::block_on(runtime.run_once(Instant::now()));
+    let outputs = runtime.drain_outputs();
+
+    assert!(matches!(
+        outputs.as_slice(),
+        [
+            RuntimeOutput::Runtime(RuntimeEvent::WorkStarted(_)),
+            RuntimeOutput::Work(Err(_)),
+            RuntimeOutput::Runtime(RuntimeEvent::WorkFailed(_)),
+        ]
+    ));
 }
 
 #[test]

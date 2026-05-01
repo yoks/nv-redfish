@@ -143,6 +143,9 @@ pub(crate) mod patch_support;
 #[cfg(feature = "impl-entity-link")]
 pub mod entity_link;
 
+/// Generated Redfish entity payload enum.
+pub mod entity_payload;
+
 /// Redfish protocol features.
 pub(crate) mod protocol_features;
 
@@ -162,6 +165,8 @@ pub use nv_redfish_bmc_http as bmc_http;
 #[doc(inline)]
 pub use compiled_schema::redfish as schema;
 
+#[doc(inline)]
+pub use entity_payload::EntityPayload;
 #[doc(inline)]
 pub use error::Error;
 #[doc(inline)]

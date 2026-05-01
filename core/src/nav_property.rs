@@ -46,6 +46,7 @@ use serde::de;
 use serde::de::Deserializer;
 use serde::Deserialize;
 use serde::Serialize;
+use serde::Serializer;
 use std::sync::Arc;
 
 /// Reference variant of the navigation property (only `@odata.id`
@@ -95,6 +96,18 @@ pub struct ReferenceLeaf {
 #[derive(Debug)]
 pub struct Expanded<T>(Arc<T>);
 
+impl<T> Serialize for Expanded<T>
+where
+    T: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
 /// Deserializer that wraps the expanded property value into an `Arc`.
 impl<'de, T> Deserialize<'de> for Expanded<T>
 where
@@ -118,6 +131,21 @@ pub enum NavProperty<T: EntityTypeRef> {
     /// Reference variant (only `@odata.id` is included in the
     /// response).
     Reference(Reference),
+}
+
+impl<T> Serialize for NavProperty<T>
+where
+    T: EntityTypeRef + Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Expanded(expanded) => expanded.serialize(serializer),
+            Self::Reference(reference) => reference.serialize(serializer),
+        }
+    }
 }
 
 impl<'de, T> Deserialize<'de> for NavProperty<T>

@@ -163,3 +163,47 @@ fn queue_pressure_is_reflected_in_stats() {
     assert_eq!(stats.dropped(), 0);
     assert_eq!(stats.rejected(), 0);
 }
+
+#[test]
+fn bounded_output_queue_reports_pressure_without_unbounded_growth() {
+    let mut runtime: Runtime<FakeEvent, FakeError> =
+        Runtime::new(RuntimeConfig::new(4).with_output_queue_bound(1));
+    let target_id = TargetId::new("target");
+
+    runtime
+        .add_target(target_id.clone(), TargetLimits::new(4))
+        .expect("target should be added");
+
+    for name in ["first", "second"] {
+        let generator_id = GeneratorId::new(format!("generator-{name}"));
+        let (generator, _) = FakeGenerator::new(
+            target_id.clone(),
+            generator_id.clone(),
+            ClassId::new("class"),
+            CostUnits::new(1),
+            vec![Readiness::ready(CostUnits::new(1))],
+            vec![Ok(vec![FakeEvent::new(name)])],
+        );
+        runtime
+            .add_generator(
+                &target_id,
+                generator_id,
+                GeneratorConfig::default(),
+                generator,
+            )
+            .expect("generator should be added");
+        let _ = tokio_test::block_on(runtime.run_once(Instant::now()));
+    }
+
+    let stats = runtime.output_queue_stats();
+    assert_eq!(
+        stats.len(),
+        1,
+        "bounded output queue must not grow past configured capacity"
+    );
+    assert_eq!(
+        stats.dropped() + stats.rejected(),
+        1,
+        "queue pressure must be visible as dropped or rejected output"
+    );
+}

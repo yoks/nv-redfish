@@ -15,6 +15,15 @@
 
 //! Redfish adapter API boundary.
 
+use crate::generator::Generator;
+use crate::generator::ScheduledWork;
+use crate::generator::WorkCompletion;
+use crate::generator::WorkMeta;
+use crate::ids::ClassId;
+use crate::ids::GeneratorId;
+use crate::ids::TargetId;
+use crate::scheduler::CostUnits;
+use crate::scheduler::Readiness;
 use core::fmt;
 use nv_redfish::core::ODataETag;
 use nv_redfish::core::ODataId;
@@ -23,6 +32,7 @@ use nv_redfish::ServiceRoot;
 use std::error::Error as StdError;
 use std::marker::PhantomData;
 use std::time::Duration;
+use std::time::Instant;
 use std::time::SystemTime;
 
 /// Opaque application identity for a BMC.
@@ -264,6 +274,20 @@ impl fmt::Display for RedfishAdapterError {
 
 impl StdError for RedfishAdapterError {}
 
+impl EntityPayload for nv_redfish::EntityPayload {
+    fn entity_kind(&self) -> &str {
+        self.kind()
+    }
+
+    fn odata_id(&self) -> Option<&ODataId> {
+        self.resource_odata_id()
+    }
+
+    fn etag(&self) -> Option<&ODataETag> {
+        self.resource_etag()
+    }
+}
+
 /// Stored Redfish resource identity used by optional reconstruction helpers.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct ReconstructionRecord<P = NoEntityPayload> {
@@ -288,6 +312,20 @@ impl<P> ReconstructionRecord<P> {
             parent_odata_id,
             payload,
         }
+    }
+
+    /// Creates a reconstruction record from a public resource event.
+    #[must_use]
+    pub fn from_resource_event(event: RedfishResourceEvent<P>) -> Self {
+        let RedfishResourceEvent {
+            bmc_id,
+            odata_id,
+            parent_odata_id,
+            payload,
+            ..
+        } = event;
+
+        Self::new(bmc_id, odata_id, parent_odata_id, payload)
     }
 
     /// Returns the source BMC id.
@@ -342,6 +380,59 @@ impl<B: Bmc> ServiceRootGeneratorBuilder<B> {
     pub const fn service_root(&self) -> &ServiceRoot<B> {
         &self.service_root
     }
+
+    /// Builds a runtime generator over the captured service root.
+    #[must_use]
+    pub fn build(self) -> impl Generator<RedfishEvent, RedfishAdapterError> {
+        ServiceRootGenerator::new(self.bmc_id, self.service_root)
+    }
+}
+
+struct ServiceRootGenerator<B: Bmc> {
+    bmc_id: BmcId,
+    service_root: ServiceRoot<B>,
+    dispatched: bool,
+}
+
+impl<B: Bmc> ServiceRootGenerator<B> {
+    const fn new(bmc_id: BmcId, service_root: ServiceRoot<B>) -> Self {
+        Self {
+            bmc_id,
+            service_root,
+            dispatched: false,
+        }
+    }
+}
+
+impl<B: Bmc> Generator<RedfishEvent, RedfishAdapterError> for ServiceRootGenerator<B> {
+    fn update_ready(&mut self, _now: Instant) -> Readiness {
+        if self.dispatched {
+            Readiness::not_ready(None)
+        } else {
+            Readiness::ready(CostUnits::new(1))
+        }
+    }
+
+    fn take_next(&mut self) -> Option<ScheduledWork<RedfishEvent, RedfishAdapterError>> {
+        if self.dispatched {
+            return None;
+        }
+
+        self.dispatched = true;
+        let _service_root = self.service_root.clone();
+        let meta = WorkMeta::new(
+            TargetId::new(self.bmc_id.as_str().to_owned()),
+            GeneratorId::new("redfish.service-root"),
+            ClassId::new("redfish.discovery"),
+            CostUnits::new(1),
+        );
+
+        Some(ScheduledWork::new(meta, async {
+            Err(RedfishAdapterError::NotImplemented)
+        }))
+    }
+
+    fn on_complete(&mut self, _completion: &WorkCompletion) {}
 }
 
 /// Typed marker used by compile-time tests for object-bound builders.

@@ -1,0 +1,20 @@
+[package]
+name = "sensor-stream-cli"
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+edition.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+futures-util = { workspace = true }
+nv-redfish = { workspace = true, features = ["bmc-http", "std-redfish"] }
+nv-redfish-bmc-http = { workspace = true }
+nv-redfish-scraper = { workspace = true }
+serde = { workspace = true, features = ["derive", "std"] }
+serde_json = { workspace = true, features = ["std"] }
+tokio = { workspace = true, features = ["full"] }
+url = { workspace = true }

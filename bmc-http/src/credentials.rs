@@ -24,6 +24,8 @@ use std::fmt;
 /// - Prefer short-lived instances and avoid logging credentials.
 #[derive(Clone)]
 pub enum BmcCredentials {
+    /// Do not send authentication headers.
+    None,
     /// Use HTTP Basic authentication with username and password.
     UsernamePassword {
         /// Username to access BMC.
@@ -39,6 +41,12 @@ pub enum BmcCredentials {
 }
 
 impl BmcCredentials {
+    /// Create empty credentials for unauthenticated Redfish endpoints.
+    #[must_use]
+    pub const fn none() -> Self {
+        Self::None
+    }
+
     /// Create username/password credentials.
     #[must_use]
     pub const fn username_password(username: String, password: Option<String>) -> Self {
@@ -61,6 +69,7 @@ impl BmcCredentials {
 impl fmt::Debug for BmcCredentials {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::None => f.debug_struct("BmcCredentials::None").finish(),
             Self::UsernamePassword { username, .. } => f
                 .debug_struct("BmcCredentials::UsernamePassword")
                 .field("username", username)
@@ -77,6 +86,7 @@ impl fmt::Debug for BmcCredentials {
 impl fmt::Display for BmcCredentials {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::None => write!(f, "BmcCredentials::None"),
             Self::UsernamePassword { username, .. } => {
                 write!(
                     f,

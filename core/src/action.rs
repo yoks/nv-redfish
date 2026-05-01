@@ -57,7 +57,7 @@ use serde::Serialize;
 use std::marker::PhantomData;
 
 /// Type for the `target` field of an Action.
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct ActionTarget(String);
 
@@ -80,17 +80,17 @@ impl Display for ActionTarget {
 ///
 /// `T` is the type for parameters.
 /// `R` is the type for the return value.
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Action<T, R> {
     /// Path that is used to trigger the action.
     #[serde(rename = "target")]
     pub target: ActionTarget,
     // TODO: we can retrieve constraints on attributes here.
     /// Establishes a dependency on the `T` (parameters) type.
-    #[serde(skip_deserializing)]
+    #[serde(skip)]
     _marker: PhantomData<T>,
     /// Establishes a dependency on the `R` (return value) type.
-    #[serde(skip_deserializing)]
+    #[serde(skip)]
     _marker_retval: PhantomData<R>,
 }
 

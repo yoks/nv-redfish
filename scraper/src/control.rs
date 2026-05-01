@@ -159,16 +159,13 @@ impl StdError for ControlError {}
 
 /// Error returned by runtime execution operations.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum RuntimeError {
-    /// The requested runtime behavior is not implemented yet.
-    NotImplemented,
+pub struct RuntimeError {
+    _private: (),
 }
 
 impl fmt::Display for RuntimeError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::NotImplemented => formatter.write_str("runtime behavior is not implemented"),
-        }
+        formatter.write_str("runtime execution failed")
     }
 }
 

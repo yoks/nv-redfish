@@ -214,6 +214,20 @@ fn reconstruction_record_preserves_hierarchy_identity_without_execution_handles(
 }
 
 #[test]
+fn reconstruction_record_can_be_derived_from_resource_event() {
+    let tests = trybuild::TestCases::new();
+
+    tests.pass("tests/trybuild/reconstruction_record_from_event.rs");
+}
+
+#[test]
+fn typed_service_root_builder_produces_runtime_generator() {
+    let tests = trybuild::TestCases::new();
+
+    tests.pass("tests/trybuild/typed_service_root_builder_produces_generator.rs");
+}
+
+#[test]
 #[cfg(feature = "serde")]
 fn redfish_events_are_serializable_when_serde_feature_is_enabled() {
     fn assert_serialize<T: serde::Serialize>() {}
@@ -223,4 +237,48 @@ fn redfish_events_are_serializable_when_serde_feature_is_enabled() {
     assert_serialize::<RedfishResourceEvent<FakePayload>>();
     assert_serialize::<RedfishEvent<FakePayload>>();
     assert_serialize::<ReconstructionRecord<FakePayload>>();
+}
+
+#[test]
+#[cfg(feature = "serde")]
+fn serialized_redfish_resource_event_contains_only_read_side_fields() {
+    let event = RedfishEvent::Resource(RedfishResourceEvent::new(
+        BmcId::new("bmc-a"),
+        ODataId::from("/redfish/v1/Chassis/1".to_owned()),
+        Some(ODataId::from("/redfish/v1/Chassis".to_owned())),
+        ChangeKind::FetchFailed,
+        Some(FakePayload::new(
+            "Chassis",
+            "/redfish/v1/Chassis/1",
+            "etag-1",
+        )),
+        ResourceMetadata::new(
+            SystemTime::UNIX_EPOCH,
+            Duration::from_millis(7),
+            42,
+            Some("timeout".to_owned()),
+        ),
+    ));
+
+    let json = serde_json::to_value(&event).expect("event should serialize");
+
+    assert_eq!(json["Resource"]["bmc_id"], "bmc-a");
+    assert_eq!(json["Resource"]["odata_id"], "/redfish/v1/Chassis/1");
+    assert_eq!(json["Resource"]["parent_odata_id"], "/redfish/v1/Chassis");
+    assert_eq!(json["Resource"]["change"], "FetchFailed");
+    assert_eq!(json["Resource"]["metadata"]["generation"], 42);
+    assert_eq!(json["Resource"]["metadata"]["error"], "timeout");
+    assert_eq!(json["Resource"]["payload"]["kind"], "Chassis");
+    assert!(
+        json.get("bmc").is_none(),
+        "serialized events must not expose execution handles"
+    );
+}
+
+#[test]
+#[cfg(feature = "serde")]
+fn generated_entity_payload_contract_is_available() {
+    let tests = trybuild::TestCases::new();
+
+    tests.pass("tests/trybuild/generated_entity_payload_contract.rs");
 }
