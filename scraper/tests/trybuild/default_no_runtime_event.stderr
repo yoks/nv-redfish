@@ -1,18 +1,20 @@
-error[E0432]: unresolved import `nv_redfish_scraper::RuntimeEvent`
- --> tests/trybuild/default_no_runtime_event.rs:1:5
-  |
-1 | use nv_redfish_scraper::RuntimeEvent;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `RuntimeEvent` in the root
-  |
-note: found an item that was configured out
- --> src/lib.rs
-  |
-  | #[cfg(feature = "runtime-events")]
-  |       -------------------------- the item is gated behind the `runtime-events` feature
-  | pub use event::RuntimeEvent;
-  |                ^^^^^^^^^^^^
-help: a similar name exists in the module
-  |
-1 - use nv_redfish_scraper::RuntimeEvent;
-1 + use nv_redfish_scraper::RuntimeError;
-  |
+error[E0308]: mismatched types
+  --> tests/trybuild/default_no_runtime_event.rs:10:52
+   |
+10 |         nv_redfish_scraper::RuntimeOutput::Runtime(());
+   |         ------------------------------------------ ^^ expected `Infallible`, found `()`
+   |         |
+   |         arguments to this enum variant are incorrect
+   |
+help: the type constructed contains `()` due to the type of the argument passed
+  --> tests/trybuild/default_no_runtime_event.rs:10:9
+   |
+10 |         nv_redfish_scraper::RuntimeOutput::Runtime(());
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^--^
+   |                                                    |
+   |                                                    this argument influences the type of `Runtime`
+note: tuple variant defined here
+  --> src/output.rs
+   |
+   |     Runtime(R),
+   |     ^^^^^^^

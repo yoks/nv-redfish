@@ -13,126 +13,75 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Ordered runtime output types.
+//! Runtime output and ordered work-result types.
+//!
+//! Output is delivered through a single ordered stream consumed via
+//! [`crate::Runtime::next`]. The combined stream preserves causal ordering
+//! across successful work, failed work, and runtime events.
+//!
+//! None of the wrappers here derive `Clone`, `Debug`, `Eq`, or `PartialEq`,
+//! because that would impose those bounds on the user-supplied event type
+//! `Ev` and error type `Err`. Manual implementations are provided where the
+//! runtime needs them and they do not require bounds on the generic
+//! parameters.
 
 use crate::event::RuntimeEventType;
+use crate::ids::GeneratorId;
 use crate::stats::WorkStats;
 
-/// Work result carried by a runtime output item.
-pub type WorkResult<E, Err> = Result<WorkSuccess<E>, WorkError<Err>>;
-
-/// Successful scheduled work output.
-pub struct WorkSuccess<E> {
-    events: Vec<E>,
-    stats: WorkStats,
+/// Successful work output: a vector of events with runtime-owned stats.
+///
+/// Multiple events from one work item preserve order. An empty event vector
+/// is allowed and still constitutes a successful output.
+pub struct WorkSuccess<Ev> {
+    /// Events produced by the work item, in order.
+    pub events: Vec<Ev>,
+    /// Runtime-owned statistics for this work item.
+    pub stats: WorkStats,
+    /// The generator that produced the work.
+    pub generator_id: GeneratorId,
 }
 
-impl<E> WorkSuccess<E> {
-    /// Creates successful work output.
-    #[must_use]
-    pub const fn new(events: Vec<E>, stats: WorkStats) -> Self {
-        Self { events, stats }
-    }
-
-    /// Returns events produced by the work item.
-    #[must_use]
-    pub fn events(&self) -> &[E] {
-        &self.events
-    }
-
-    /// Consumes the wrapper and returns produced events.
-    #[must_use]
-    pub fn into_events(self) -> Vec<E> {
-        self.events
-    }
-
-    /// Returns runtime-owned work statistics.
-    #[must_use]
-    pub const fn stats(&self) -> &WorkStats {
-        &self.stats
-    }
-}
-
-/// Failed scheduled work output.
+/// Failed work output: the error value plus runtime-owned stats.
 pub struct WorkError<Err> {
-    error: Err,
-    stats: WorkStats,
+    /// The error returned by the work future.
+    pub error: Err,
+    /// Runtime-owned statistics for this work item.
+    pub stats: WorkStats,
+    /// The generator that produced the work.
+    pub generator_id: GeneratorId,
 }
 
-impl<Err> WorkError<Err> {
-    /// Creates failed work output.
-    #[must_use]
-    pub const fn new(error: Err, stats: WorkStats) -> Self {
-        Self { error, stats }
-    }
+/// Result alias used inside [`RuntimeOutput::Work`].
+pub type WorkResult<Ev, Err> = Result<WorkSuccess<Ev>, WorkError<Err>>;
 
-    /// Returns the adapter or application error value.
-    #[must_use]
-    pub const fn error(&self) -> &Err {
-        &self.error
-    }
-
-    /// Consumes the wrapper and returns the error value.
-    #[must_use]
-    pub fn into_error(self) -> Err {
-        self.error
-    }
-
-    /// Returns runtime-owned work statistics.
-    #[must_use]
-    pub const fn stats(&self) -> &WorkStats {
-        &self.stats
-    }
-}
-
-/// Ordered output item emitted by the runtime.
-pub enum RuntimeOutput<E, Err, R = RuntimeEventType> {
-    /// Output from scheduled work.
-    Work(WorkResult<E, Err>),
-    /// Out-of-band runtime event, when compiled in.
+/// Single ordered output value emitted by the runtime.
+///
+/// `R` defaults to [`crate::RuntimeEventType`] which is
+/// [`core::convert::Infallible`] when the `runtime-events` feature is
+/// disabled, making `RuntimeOutput::Runtime(_)` impossible to construct.
+pub enum RuntimeOutput<Ev, Err, R = RuntimeEventType> {
+    /// Application or adapter work output.
+    Work(WorkResult<Ev, Err>),
+    /// Out-of-band runtime event. Only constructible when `runtime-events`
+    /// is enabled (otherwise `R = Infallible`).
     Runtime(R),
+    /// Sticky terminal output emitted after graceful shutdown drains in-flight
+    /// work and prior queued output. Subsequent `next()` calls return this
+    /// variant immediately.
+    Shutdown,
 }
 
-/// Output queue statistics.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// Output queue pressure and drop accounting.
+///
+/// Bounded output queues report pressure through a bounded length plus a
+/// dropped-or-rejected count, never through unbounded queue growth.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct OutputQueueStats {
-    len: usize,
-    dropped: u64,
-    rejected: u64,
-}
-
-impl OutputQueueStats {
-    /// Creates output queue statistics.
-    #[must_use]
-    pub const fn new(len: usize, dropped: u64, rejected: u64) -> Self {
-        Self {
-            len,
-            dropped,
-            rejected,
-        }
-    }
-
-    /// Returns the current queue length.
-    #[must_use]
-    pub const fn len(&self) -> usize {
-        self.len
-    }
-
-    /// Returns whether the queue is empty.
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-
-    /// Returns the number of dropped outputs.
-    #[must_use]
-    pub const fn dropped(&self) -> u64 {
-        self.dropped
-    }
-
-    /// Returns the number of rejected outputs.
-    #[must_use]
-    pub const fn rejected(&self) -> u64 {
-        self.rejected
-    }
+    /// Current number of queued outputs awaiting consumption.
+    pub queued: usize,
+    /// Configured upper bound on the queue, if any.
+    pub capacity: Option<usize>,
+    /// Number of outputs dropped or rejected due to capacity pressure.
+    pub dropped: u64,
 }

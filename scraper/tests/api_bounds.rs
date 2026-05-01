@@ -13,84 +13,130 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Public-API boundary tests.
+//!
+//! These tests assert that the public scraper API does not impose accidental
+//! `Clone`, `Debug`, `Eq`, `PartialEq`, `Send`, `Sync`, `Display`, or `Error`
+//! bounds on the user-supplied event type `Ev` or error type `Err`, and that
+//! identifier types remain opaque.
+
 mod support;
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
+
 use nv_redfish_scraper::ClassId;
-use nv_redfish_scraper::GeneratorConfig;
 use nv_redfish_scraper::GeneratorId;
 use nv_redfish_scraper::Runtime;
 use nv_redfish_scraper::RuntimeConfig;
 use nv_redfish_scraper::RuntimeOutput;
 use nv_redfish_scraper::TargetId;
 use nv_redfish_scraper::TargetLimits;
-use nv_redfish_scraper::WorkError;
-use nv_redfish_scraper::WorkStats;
 use nv_redfish_scraper::WorkSuccess;
-use support::fake_error::NonFormattingError;
-use support::fake_event::NonTraitEvent;
+
+use support::fake_error::FakeError;
+use support::fake_event::FakeEvent;
 
 #[test]
-fn runtime_output_accepts_event_without_clone_debug_eq_or_partial_eq() {
-    let event = NonTraitEvent::new("event");
-    let output: RuntimeOutput<NonTraitEvent, ()> =
-        RuntimeOutput::Work(Ok(WorkSuccess::new(vec![event], WorkStats::default())));
-
-    match output {
-        RuntimeOutput::Work(Ok(success)) => {
-            assert_eq!(success.events()[0].name(), "event");
-        }
-        RuntimeOutput::Work(Err(_)) => {
-            panic!("expected success output");
-        }
-        RuntimeOutput::Runtime(_) => {
-            panic!("did not expect runtime output");
-        }
-    }
+fn runtime_accepts_event_and_error_types_without_extra_bounds() {
+    // Compiles iff Runtime<FakeEvent, FakeError> does not require Clone,
+    // Debug, Eq, PartialEq, Display, or Error on the type parameters.
+    let _runtime: Runtime<FakeEvent, FakeError> = Runtime::new(RuntimeConfig::default());
 }
 
 #[test]
-fn work_error_accepts_error_without_formatting_traits() {
-    let error = NonFormattingError::new("error");
-    let output: RuntimeOutput<(), NonFormattingError> =
-        RuntimeOutput::Work(Err(WorkError::new(error, WorkStats::default())));
-
-    match output {
-        RuntimeOutput::Work(Err(error)) => {
-            assert_eq!(error.error().name(), "error");
-        }
-        RuntimeOutput::Work(Ok(_)) => {
-            panic!("expected error output");
-        }
-        RuntimeOutput::Runtime(_) => {
-            panic!("did not expect runtime output");
-        }
-    }
+fn runtime_handle_is_cloneable() {
+    let runtime: Runtime<FakeEvent, FakeError> = Runtime::new(RuntimeConfig::default());
+    let h1 = runtime.handle();
+    let h2 = h1.clone();
+    drop(h1);
+    drop(h2);
 }
 
 #[test]
-fn public_ids_are_opaque_and_intentionally_displayable() {
-    let target_id = TargetId::new("target-a");
-    let generator_id = GeneratorId::new("generator-a");
-    let class_id = ClassId::new("class-a");
-
-    assert_eq!(target_id.as_str(), "target-a");
-    assert_eq!(generator_id.to_string(), "generator-a");
-    assert_eq!(class_id.as_str(), "class-a");
+fn runtime_output_does_not_require_clone_on_event_or_error() {
+    // Construct an output value without using Clone or Debug bounds.
+    let runtime: Runtime<FakeEvent, FakeError> = Runtime::new(RuntimeConfig::default());
+    let t = runtime
+        .add_target(TargetLimits::default())
+        .expect("add target");
+    let g = runtime
+        .add_generator(
+            t,
+            Box::new(support::fake_generator::FakeGenerator::new([])),
+            nv_redfish_scraper::GeneratorConfig::default(),
+        )
+        .expect("add generator");
+    let success: WorkSuccess<FakeEvent> = WorkSuccess {
+        events: vec![FakeEvent::new(7)],
+        stats: nv_redfish_scraper::WorkStats::default(),
+        generator_id: g,
+    };
+    let _: RuntimeOutput<FakeEvent, FakeError> = RuntimeOutput::Work(Ok(success));
 }
 
 #[test]
-fn common_runtime_api_compiles_without_redfish_features() {
-    let mut runtime: Runtime<NonTraitEvent, NonFormattingError> =
-        Runtime::new(RuntimeConfig::default());
-    let target_id = TargetId::new("target");
-    let generator_id = GeneratorId::new("generator");
+fn ids_are_hash_eq_ord_clone_copy() {
+    let runtime: Runtime<FakeEvent, FakeError> = Runtime::new(RuntimeConfig::default());
+    let t1 = runtime
+        .add_target(TargetLimits::default())
+        .expect("add target");
+    let t2 = runtime
+        .add_target(TargetLimits::default())
+        .expect("add target");
+    assert_ne!(t1, t2, "newly allocated target ids are unique");
+    assert!(t1 < t2, "target ids preserve allocation order");
 
-    assert!(runtime
-        .add_target(target_id.clone(), TargetLimits::default())
-        .is_ok());
-    assert!(runtime.trigger_generator(&generator_id).is_err());
-    assert_eq!(runtime.stats().target_count(), 1);
+    // Hash trait works on TargetId.
+    let mut h = DefaultHasher::new();
+    t1.hash(&mut h);
+    let _ = h.finish();
 
-    let config = GeneratorConfig::default();
-    assert!(config.enabled());
+    // Copy works (no compile error implies Copy).
+    let copied: TargetId = t1;
+    assert_eq!(copied, t1);
+
+    // GeneratorId carries its parent TargetId.
+    let g = runtime
+        .add_generator(
+            t1,
+            Box::new(support::fake_generator::FakeGenerator::new([])),
+            nv_redfish_scraper::GeneratorConfig::default(),
+        )
+        .expect("add generator");
+    assert_eq!(g.target_id(), t1);
+
+    let _ = std::mem::size_of::<GeneratorId>();
 }
+
+#[test]
+fn class_id_is_opaque_but_constructible_from_string() {
+    let a = ClassId::new("sensors");
+    let b = ClassId::new(String::from("sensors"));
+    assert_eq!(a, b);
+    assert_eq!(a.as_str(), "sensors");
+    let mut h = DefaultHasher::new();
+    a.hash(&mut h);
+    let _ = h.finish();
+}
+
+#[test]
+fn ids_have_intentional_display_format() {
+    // TargetId Display uses a short prefix; the exact format is intentional
+    // (not derive-default) and proves the type is not transparent.
+    let runtime: Runtime<FakeEvent, FakeError> = Runtime::new(RuntimeConfig::default());
+    let t = runtime
+        .add_target(TargetLimits::default())
+        .expect("add target");
+    let s = format!("{}", t);
+    assert!(s.starts_with("target:"), "TargetId Display = {}", s);
+
+    let d = format!("{:?}", t);
+    assert!(d.starts_with("TargetId("), "TargetId Debug = {}", d);
+
+    let cls = ClassId::new("a");
+    assert_eq!(format!("{}", cls), "class:a");
+    assert_eq!(format!("{:?}", cls), "ClassId(\"a\")");
+}
+

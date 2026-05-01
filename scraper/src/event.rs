@@ -13,47 +13,91 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Optional runtime event types.
+//! Runtime event types.
+//!
+//! Runtime events describe out-of-band scheduler, executor, and queue facts
+//! such as lag, starvation, throttling, and queue pressure. They are
+//! compile-time feature gated. When the `runtime-events` feature is disabled,
+//! [`RuntimeEventType`] is [`Infallible`] and emission paths are not compiled.
 
-#[cfg(feature = "runtime-events")]
-use crate::ids::GeneratorId;
-#[cfg(feature = "runtime-events")]
-use crate::ids::TargetId;
-#[cfg(feature = "runtime-events")]
-use crate::stats::RuntimeStats;
 #[cfg(not(feature = "runtime-events"))]
 use core::convert::Infallible;
 
-/// Runtime event payload type selected by Cargo features.
+/// Concrete payload carried by [`crate::RuntimeOutput::Runtime`].
+///
+/// When the `runtime-events` feature is enabled, this aliases the
+/// [`RuntimeEvent`] enum. Otherwise it aliases [`Infallible`], making the
+/// `Runtime` variant uninhabited and therefore impossible to construct from
+/// outside the crate.
 #[cfg(feature = "runtime-events")]
 pub type RuntimeEventType = RuntimeEvent;
 
-/// Runtime event payload type selected by Cargo features.
+/// Concrete payload carried by [`crate::RuntimeOutput::Runtime`].
 #[cfg(not(feature = "runtime-events"))]
 pub type RuntimeEventType = Infallible;
 
-/// Runtime-owned out-of-band event.
 #[cfg(feature = "runtime-events")]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum RuntimeEvent {
-    /// A generator is lagging behind its requested interval.
-    GeneratorLagging(GeneratorId),
-    /// A generator recovered from lag.
-    GeneratorRecovered(GeneratorId),
-    /// A generator was ready but starved by scheduling constraints.
-    GeneratorStarved(GeneratorId),
-    /// A target was throttled by local limits.
-    TargetThrottled(TargetId),
-    /// Dispatch was throttled by global limits.
-    GlobalThrottled,
-    /// The output queue reached pressure thresholds.
-    EventQueuePressure,
-    /// Work started.
-    WorkStarted(GeneratorId),
-    /// Work completed successfully.
-    WorkCompleted(GeneratorId),
-    /// Work failed.
-    WorkFailed(GeneratorId),
-    /// Scheduler statistics snapshot.
-    SchedulerStatisticsSnapshot(RuntimeStats),
+mod with_events {
+    use crate::ids::GeneratorId;
+    use crate::ids::TargetId;
+
+    /// Out-of-band scheduler, executor, and queue events emitted by the
+    /// runtime when the `runtime-events` feature is enabled.
+    ///
+    /// These events are interleaved with work outputs in [`crate::Runtime::next`]
+    /// preserving causal ordering. They never carry user work payloads.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    #[non_exhaustive]
+    pub enum RuntimeEvent {
+        /// A generator is lagging behind its requested rate.
+        GeneratorLagging {
+            /// The lagging generator.
+            generator_id: GeneratorId,
+        },
+        /// A previously-lagging generator has caught up.
+        GeneratorRecovered {
+            /// The recovered generator.
+            generator_id: GeneratorId,
+        },
+        /// A generator is being starved by other flows.
+        GeneratorStarved {
+            /// The starved generator.
+            generator_id: GeneratorId,
+        },
+        /// A target is being throttled by per-target capacity.
+        TargetThrottled {
+            /// The throttled target.
+            target_id: TargetId,
+        },
+        /// The runtime is being throttled by global capacity.
+        GlobalThrottled,
+        /// The output queue is under pressure.
+        EventQueuePressure {
+            /// Current queue depth.
+            queued: usize,
+        },
+        /// Work was dispatched and started executing.
+        WorkStarted {
+            /// The generator that produced the work.
+            generator_id: GeneratorId,
+        },
+        /// Work completed successfully. Brackets the corresponding
+        /// `RuntimeOutput::Work(Ok(_))` together with [`RuntimeEvent::WorkStarted`].
+        WorkCompleted {
+            /// The generator that produced the work.
+            generator_id: GeneratorId,
+        },
+        /// Work failed. Brackets the corresponding `RuntimeOutput::Work(Err(_))`
+        /// together with [`RuntimeEvent::WorkStarted`].
+        WorkFailed {
+            /// The generator that produced the work.
+            generator_id: GeneratorId,
+        },
+        /// A point-in-time snapshot of scheduler statistics. Phase 0 reserves
+        /// the variant; concrete payload fields are added in later phases.
+        SchedulerStatsSnapshot,
+    }
 }
+
+#[cfg(feature = "runtime-events")]
+pub use with_events::RuntimeEvent;

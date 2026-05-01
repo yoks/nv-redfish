@@ -13,31 +13,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+//! Fake event type used to prove the public API does not impose accidental
+//! `Clone`, `Debug`, `Eq`, `PartialEq`, `Display`, or `Error` bounds on the
+//! application work event type `Ev`.
+
+/// Zero-bound fake event with an opaque integer id.
+///
+/// Intentionally derives nothing. Tests that need to assert no accidental
+/// trait bounds use this type as the runtime's `Ev` parameter.
 pub struct FakeEvent {
-    name: &'static str,
+    id: u64,
 }
 
 impl FakeEvent {
-    pub const fn new(name: &'static str) -> Self {
-        Self { name }
+    /// Construct a new fake event with the given id.
+    pub fn new(id: u64) -> Self {
+        Self { id }
     }
 
-    pub const fn name(&self) -> &'static str {
-        self.name
-    }
-}
-
-pub struct NonTraitEvent {
-    name: &'static str,
-}
-
-impl NonTraitEvent {
-    pub const fn new(name: &'static str) -> Self {
-        Self { name }
-    }
-
-    pub const fn name(&self) -> &'static str {
-        self.name
+    /// Return the fake event id.
+    pub fn id(&self) -> u64 {
+        self.id
     }
 }

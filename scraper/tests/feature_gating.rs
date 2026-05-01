@@ -13,57 +13,81 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[test]
-#[cfg(not(feature = "redfish-adapter"))]
-fn runtime_only_build_does_not_enable_redfish_adapter_api() {
-    assert!(!cfg!(feature = "redfish-adapter"));
-}
+//! Feature-gating tests.
+//!
+//! Verifies the dependency direction of feature flags both ways:
+//! * Without `redfish-adapter`, the adapter module is unreachable.
+//! * With `redfish-adapter`, the adapter module is reachable.
+//! * Without `runtime-events`, the `Runtime` variant of `RuntimeOutput`
+//!   cannot be constructed with an inhabited payload.
+//! * The Redfish adapter never exposes a detached fetch entry point.
 
-#[test]
-#[cfg(not(feature = "redfish-adapter"))]
-fn redfish_adapter_module_is_absent_without_feature() {
-    let tests = trybuild::TestCases::new();
-
-    tests.compile_fail("tests/trybuild/default_no_redfish_adapter.rs");
-}
-
-#[test]
-#[cfg(not(feature = "runtime-events"))]
-fn concrete_runtime_event_type_is_absent_without_feature() {
-    let tests = trybuild::TestCases::new();
-
-    tests.compile_fail("tests/trybuild/default_no_runtime_event.rs");
-}
-
-#[test]
 #[cfg(feature = "redfish-adapter")]
-fn redfish_adapter_feature_exposes_adapter_module() {
-    let bmc_id = nv_redfish_scraper::adapter::redfish::BmcId::new("bmc");
-
-    assert_eq!(bmc_id.as_str(), "bmc");
+#[test]
+fn adapter_module_is_reachable_with_feature() {
+    let _ = nv_redfish_scraper::adapter::redfish::BmcId::new("bmc");
 }
 
+#[cfg(all(
+    not(feature = "redfish-adapter"),
+    not(feature = "runtime-events"),
+))]
 #[test]
-#[cfg(not(feature = "runtime-events"))]
-fn runtime_events_are_disabled_by_default() {
-    assert!(!cfg!(feature = "runtime-events"));
+fn trybuild_default_feature_gating() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/trybuild/default_no_redfish_adapter.rs");
+    t.compile_fail("tests/trybuild/default_no_runtime_event.rs");
 }
 
-#[test]
-#[cfg(feature = "runtime-events")]
-fn runtime_events_feature_exposes_runtime_event_type() {
-    let event = nv_redfish_scraper::RuntimeEvent::GlobalThrottled;
-
-    assert!(matches!(
-        event,
-        nv_redfish_scraper::RuntimeEvent::GlobalThrottled
-    ));
-}
-
-#[test]
+// With the adapter enabled the module exists but the API must not expose any
+// detached fetch entry point. This trybuild case is run only in the
+// adapter-enabled configuration so the failure cleanly identifies the
+// missing function rather than the missing module.
 #[cfg(feature = "redfish-adapter")]
-fn detached_redfish_command_language_is_not_available() {
-    let tests = trybuild::TestCases::new();
+#[test]
+fn trybuild_no_detached_redfish_command() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/trybuild/no_detached_redfish_command.rs");
+}
 
-    tests.compile_fail("tests/trybuild/no_detached_redfish_command.rs");
+// `runtime-events` alone must not pull in the Redfish adapter module.
+// Run only when `runtime-events` is the only of the two relevant features
+// enabled, so the test failure points at the missing adapter module.
+#[cfg(all(
+    feature = "runtime-events",
+    not(feature = "redfish-adapter"),
+))]
+#[test]
+fn trybuild_runtime_events_alone_does_not_enable_adapter() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/trybuild/runtime_events_alone_does_not_enable_adapter.rs");
+}
+
+// With `redfish-adapter` enabled but no per-capability feature, the
+// per-capability builders must be hidden. Gate this driver on having the
+// adapter enabled but every adapter-capability feature off.
+#[cfg(all(
+    feature = "redfish-adapter",
+    not(feature = "adapter-service-root"),
+    not(feature = "adapter-chassis"),
+    not(feature = "adapter-sensors"),
+    not(feature = "adapter-computer-systems"),
+))]
+#[test]
+fn trybuild_adapter_without_capability_hides_per_cap_builder() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/trybuild/adapter_without_capability_hides_per_cap_builder.rs");
+}
+
+// With `adapter-service-root` enabled but `adapter-chassis` off, the
+// chassis builder must not be reachable.
+#[cfg(all(
+    feature = "redfish-adapter",
+    feature = "adapter-service-root",
+    not(feature = "adapter-chassis"),
+))]
+#[test]
+fn trybuild_adapter_with_one_cap_hides_others() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/trybuild/adapter_with_one_cap_hides_others.rs");
 }

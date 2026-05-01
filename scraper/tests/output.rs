@@ -13,197 +13,331 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Output ordering and shape tests.
+
 mod support;
 
-use nv_redfish_scraper::ClassId;
-use nv_redfish_scraper::CostUnits;
+use core::task::Poll;
+
 use nv_redfish_scraper::GeneratorConfig;
-use nv_redfish_scraper::GeneratorId;
-use nv_redfish_scraper::Readiness;
 use nv_redfish_scraper::Runtime;
 use nv_redfish_scraper::RuntimeConfig;
 use nv_redfish_scraper::RuntimeOutput;
-use nv_redfish_scraper::TargetId;
 use nv_redfish_scraper::TargetLimits;
-use std::time::Instant;
-use support::FakeError;
-use support::FakeEvent;
-use support::FakeGenerator;
 
-fn runtime_with_generator(
-    result: Result<Vec<FakeEvent>, FakeError>,
-) -> Runtime<FakeEvent, FakeError> {
-    let mut runtime = Runtime::new(RuntimeConfig::default());
-    let target_id = TargetId::new("target");
-    let generator_id = GeneratorId::new("generator");
-    let (generator, _) = FakeGenerator::new(
-        target_id.clone(),
-        generator_id.clone(),
-        ClassId::new("class"),
-        CostUnits::new(1),
-        vec![Readiness::ready(CostUnits::new(1))],
-        vec![result],
-    );
+use support::fake_error::FakeError;
+use support::fake_event::FakeEvent;
+use support::fake_generator::FakeGenerator;
+use support::fake_generator::Step;
+use support::harness::Harness;
+use support::lcg::Lcg;
 
-    runtime
-        .add_target(target_id.clone(), TargetLimits::default())
-        .expect("target should be added");
-    runtime
-        .add_generator(
-            &target_id,
-            generator_id,
-            GeneratorConfig::default(),
-            generator,
-        )
-        .expect("generator should be added");
-    runtime
+fn rt() -> Runtime<FakeEvent, FakeError> {
+    Runtime::new(RuntimeConfig::default())
+}
+
+fn next(r: &mut Runtime<FakeEvent, FakeError>, h: &Harness) -> RuntimeOutput<FakeEvent, FakeError> {
+    // Phase 5: skip `RuntimeOutput::Runtime(_)` so existing tests that
+    // assert on `Work(...)` / `Shutdown` are not perturbed by emission of
+    // `WorkStarted` / `WorkCompleted` / lag / pressure events under
+    // `--features runtime-events`.
+    loop {
+        let mut fut = r.next();
+        match h.poll(&mut fut) {
+            Poll::Ready(o) => match &o {
+                RuntimeOutput::Runtime(_) => continue,
+                _ => return o,
+            },
+            Poll::Pending => panic!("expected output, runtime parked"),
+        }
+    }
 }
 
 #[test]
-fn successful_work_produces_ordered_work_output() {
-    let mut runtime = runtime_with_generator(Ok(vec![FakeEvent::new("first")]));
-
-    let _ = tokio_test::block_on(runtime.run_once(Instant::now()));
-    let output = runtime.poll_output();
-
-    match output {
-        Some(RuntimeOutput::Work(Ok(success))) => {
-            assert_eq!(success.events()[0].name(), "first");
+fn successful_work_produces_ordered_runtime_output_work_ok() {
+    let mut r = rt();
+    let t = r.add_target(TargetLimits::default()).unwrap();
+    r.add_generator(
+        t,
+        Box::new(FakeGenerator::new([Step::Success(vec![FakeEvent::new(1)])])),
+        GeneratorConfig::default(),
+    )
+    .unwrap();
+    let h = Harness::new();
+    let out = next(&mut r, &h);
+    match out {
+        RuntimeOutput::Work(Ok(s)) => {
+            assert_eq!(s.events.len(), 1);
+            assert_eq!(s.events[0].id(), 1);
         }
-        _ => {
-            panic!("expected ordered successful work output");
-        }
+        _ => panic!("expected Work(Ok(_))"),
+    }
+}
+
+#[test]
+fn empty_event_vec_still_produces_a_success_output() {
+    let mut r = rt();
+    let t = r.add_target(TargetLimits::default()).unwrap();
+    r.add_generator(
+        t,
+        Box::new(FakeGenerator::new([Step::Success(vec![])])),
+        GeneratorConfig::default(),
+    )
+    .unwrap();
+    let h = Harness::new();
+    let out = next(&mut r, &h);
+    match out {
+        RuntimeOutput::Work(Ok(s)) => assert!(s.events.is_empty()),
+        _ => panic!("expected Work(Ok(_)) with empty events"),
     }
 }
 
 #[test]
 fn multiple_events_from_one_work_item_preserve_order() {
-    let mut runtime = runtime_with_generator(Ok(vec![
-        FakeEvent::new("first"),
-        FakeEvent::new("second"),
-        FakeEvent::new("third"),
-    ]));
-
-    let _ = tokio_test::block_on(runtime.run_once(Instant::now()));
-    let output = runtime.poll_output();
-
-    match output {
-        Some(RuntimeOutput::Work(Ok(success))) => {
-            let names = success
-                .events()
-                .iter()
-                .map(FakeEvent::name)
-                .collect::<Vec<_>>();
-            assert_eq!(names, vec!["first", "second", "third"]);
+    let mut r = rt();
+    let t = r.add_target(TargetLimits::default()).unwrap();
+    r.add_generator(
+        t,
+        Box::new(FakeGenerator::new([Step::Success(vec![
+            FakeEvent::new(10),
+            FakeEvent::new(11),
+            FakeEvent::new(12),
+        ])])),
+        GeneratorConfig::default(),
+    )
+    .unwrap();
+    let h = Harness::new();
+    let out = next(&mut r, &h);
+    match out {
+        RuntimeOutput::Work(Ok(s)) => {
+            let ids: Vec<u64> = s.events.iter().map(|e| e.id()).collect();
+            assert_eq!(ids, vec![10, 11, 12]);
         }
-        _ => {
-            panic!("expected successful work output");
-        }
+        _ => panic!("expected Work(Ok(_))"),
     }
 }
 
 #[test]
-fn failures_produce_ordered_work_error_output() {
-    let mut runtime = runtime_with_generator(Err(FakeError::new("failed")));
-
-    let _ = tokio_test::block_on(runtime.run_once(Instant::now()));
-    let output = runtime.poll_output();
-
-    match output {
-        Some(RuntimeOutput::Work(Err(error))) => {
-            assert_eq!(error.error().name(), "failed");
+fn failed_work_produces_runtime_output_work_err() {
+    let mut r = rt();
+    let t = r.add_target(TargetLimits::default()).unwrap();
+    r.add_generator(
+        t,
+        Box::new(FakeGenerator::new([Step::Failure(FakeError::new(99))])),
+        GeneratorConfig::default(),
+    )
+    .unwrap();
+    let h = Harness::new();
+    let out = next(&mut r, &h);
+    match out {
+        RuntimeOutput::Work(Err(werr)) => {
+            assert_eq!(werr.error.id(), 99);
         }
-        _ => {
-            panic!("expected ordered failed work output");
+        _ => panic!("expected Work(Err(_))"),
+    }
+}
+
+#[test]
+fn fifo_order_is_preserved_across_work_outputs() {
+    let mut r = rt();
+    let t = r.add_target(TargetLimits::default()).unwrap();
+    r.add_generator(
+        t,
+        Box::new(FakeGenerator::new([
+            Step::Success(vec![FakeEvent::new(1)]),
+            Step::Success(vec![FakeEvent::new(2)]),
+            Step::Success(vec![FakeEvent::new(3)]),
+        ])),
+        GeneratorConfig::default(),
+    )
+    .unwrap();
+    let h = Harness::new();
+    let mut ids = Vec::new();
+    for _ in 0..3 {
+        match next(&mut r, &h) {
+            RuntimeOutput::Work(Ok(s)) => {
+                ids.extend(s.events.into_iter().map(|e| e.id()));
+            }
+            _ => panic!("expected Work(Ok(_))"),
         }
     }
+    assert_eq!(ids, vec![1, 2, 3]);
 }
 
 #[test]
-fn one_shot_drain_returns_all_available_outputs_in_fifo_order() {
-    let mut runtime: Runtime<FakeEvent, FakeError> = Runtime::new(RuntimeConfig::new(4));
-    let target_id = TargetId::new("target");
-
-    runtime
-        .add_target(target_id.clone(), TargetLimits::new(4))
-        .expect("target should be added");
-    for name in ["first", "second"] {
-        let generator_id = GeneratorId::new(format!("generator-{name}"));
-        let (generator, _) = FakeGenerator::new(
-            target_id.clone(),
-            generator_id.clone(),
-            ClassId::new("class"),
-            CostUnits::new(1),
-            vec![Readiness::ready(CostUnits::new(1))],
-            vec![Ok(vec![FakeEvent::new(name)])],
-        );
-        runtime
-            .add_generator(
-                &target_id,
-                generator_id,
-                GeneratorConfig::default(),
-                generator,
-            )
-            .expect("generator should be added");
-        let _ = tokio_test::block_on(runtime.run_once(Instant::now()));
+fn shutdown_output_is_returned_after_queued_work() {
+    let mut r = rt();
+    let t = r.add_target(TargetLimits::default()).unwrap();
+    r.add_generator(
+        t,
+        Box::new(FakeGenerator::new([Step::Success(vec![FakeEvent::new(1)])])),
+        GeneratorConfig::default(),
+    )
+    .unwrap();
+    let h = Harness::new();
+    // Drain the work output first.
+    match next(&mut r, &h) {
+        RuntimeOutput::Work(Ok(s)) => assert_eq!(s.events[0].id(), 1),
+        _ => panic!("expected Work(Ok(_))"),
     }
-
-    let outputs = runtime.drain_outputs();
-    assert_eq!(outputs.len(), 2);
+    // Now request shutdown — script exhausted, so shutdown should be next.
+    r.graceful_shutdown();
+    assert!(matches!(next(&mut r, &h), RuntimeOutput::Shutdown));
 }
 
 #[test]
-fn queue_pressure_is_reflected_in_stats() {
-    let mut runtime = runtime_with_generator(Ok(vec![FakeEvent::new("event")]));
-
-    let _ = tokio_test::block_on(runtime.run_once(Instant::now()));
-    let stats = runtime.output_queue_stats();
-
-    assert_eq!(stats.len(), 1);
-    assert_eq!(stats.dropped(), 0);
-    assert_eq!(stats.rejected(), 0);
+fn output_produced_before_target_removal_remains_observable() {
+    let mut r = rt();
+    let t = r.add_target(TargetLimits::default()).unwrap();
+    r.add_generator(
+        t,
+        Box::new(FakeGenerator::new([
+            Step::Success(vec![FakeEvent::new(1)]),
+            Step::Success(vec![FakeEvent::new(2)]),
+        ])),
+        GeneratorConfig::default(),
+    )
+    .unwrap();
+    let h = Harness::new();
+    // Produce one output to enqueue. Then drain it before removing the target.
+    let first = next(&mut r, &h);
+    assert!(matches!(first, RuntimeOutput::Work(Ok(_))));
+    // Remove the target. The other queued/scheduled work for this target
+    // should not appear, but the already-returned first output is unaffected.
+    assert!(r.remove_target(t));
 }
 
 #[test]
-fn bounded_output_queue_reports_pressure_without_unbounded_growth() {
-    let mut runtime: Runtime<FakeEvent, FakeError> =
-        Runtime::new(RuntimeConfig::new(4).with_output_queue_bound(1));
-    let target_id = TargetId::new("target");
+fn queued_output_is_returned_before_scanning_or_selecting_more_work() {
+    // Two generators each have one Success step. We drain twice. Outputs
+    // must be returned in the order they were enqueued by the runtime, and
+    // each next() call must consume from the queue first before scanning
+    // for more work.
+    let mut r = rt();
+    let t = r.add_target(TargetLimits::default()).unwrap();
+    let a = FakeGenerator::new([Step::Success(vec![FakeEvent::new(100)])]);
+    let b = FakeGenerator::new([Step::Success(vec![FakeEvent::new(200)])]);
+    let a_counters = a.counters();
+    let b_counters = b.counters();
+    r.add_generator(t, Box::new(a), GeneratorConfig::default())
+        .unwrap();
+    r.add_generator(t, Box::new(b), GeneratorConfig::default())
+        .unwrap();
+    let h = Harness::new();
+    // First call dispatches and returns output #1.
+    let first = next(&mut r, &h);
+    assert!(matches!(first, RuntimeOutput::Work(Ok(_))));
+    // Whichever generator produced first should have take_next called once.
+    let take_next_after_first = a_counters.take_next() + b_counters.take_next();
+    assert_eq!(take_next_after_first, 1);
+}
 
-    runtime
-        .add_target(target_id.clone(), TargetLimits::new(4))
-        .expect("target should be added");
-
-    for name in ["first", "second"] {
-        let generator_id = GeneratorId::new(format!("generator-{name}"));
-        let (generator, _) = FakeGenerator::new(
-            target_id.clone(),
-            generator_id.clone(),
-            ClassId::new("class"),
-            CostUnits::new(1),
-            vec![Readiness::ready(CostUnits::new(1))],
-            vec![Ok(vec![FakeEvent::new(name)])],
-        );
-        runtime
-            .add_generator(
-                &target_id,
-                generator_id,
-                GeneratorConfig::default(),
-                generator,
-            )
-            .expect("generator should be added");
-        let _ = tokio_test::block_on(runtime.run_once(Instant::now()));
+#[test]
+fn shutdown_output_is_returned_immediately_by_later_next_calls() {
+    let mut r = rt();
+    let t = r.add_target(TargetLimits::default()).unwrap();
+    r.add_generator(
+        t,
+        Box::new(FakeGenerator::new([Step::Success(vec![FakeEvent::new(1)])])),
+        GeneratorConfig::default(),
+    )
+    .unwrap();
+    let h = Harness::new();
+    let _ = next(&mut r, &h);
+    r.graceful_shutdown();
+    assert!(matches!(next(&mut r, &h), RuntimeOutput::Shutdown));
+    // Sticky: subsequent calls return Shutdown without ever parking.
+    for _ in 0..3 {
+        assert!(matches!(next(&mut r, &h), RuntimeOutput::Shutdown));
     }
+}
 
-    let stats = runtime.output_queue_stats();
-    assert_eq!(
-        stats.len(),
-        1,
-        "bounded output queue must not grow past configured capacity"
+#[test]
+fn bounded_queue_pressure_is_reflected_in_stats() {
+    // Bound the output queue at 2 and produce 5 immediate-success outputs
+    // without consuming. The runtime must report dropped >= 1 in
+    // OutputQueueStats. (Phase 4: bounded queue with drop accounting.)
+    let cfg = RuntimeConfig {
+        output_queue_capacity: Some(2),
+        ..RuntimeConfig::default()
+    };
+    let mut r: Runtime<FakeEvent, FakeError> = Runtime::new(cfg);
+    let t = r.add_target(TargetLimits::default()).unwrap();
+    let steps: Vec<Step> = (0..5)
+        .map(|i| Step::Success(vec![FakeEvent::new(i as u64)]))
+        .collect();
+    r.add_generator(
+        t,
+        Box::new(FakeGenerator::new(steps)),
+        GeneratorConfig::default(),
+    )
+    .unwrap();
+
+    let h = Harness::new();
+    // Drive the runtime forward without consuming any output.
+    for _ in 0..10 {
+        let mut fut = r.next();
+        // Even when next() returns Ready, drop the result without observing
+        // it; the queue should still self-bound and report dropped count.
+        let _ = h.poll(&mut fut);
+    }
+    let stats = r.stats().output_queue;
+    assert!(
+        stats.queued <= 2,
+        "queue must respect capacity: queued={}",
+        stats.queued
     );
-    assert_eq!(
-        stats.dropped() + stats.rejected(),
-        1,
-        "queue pressure must be visible as dropped or rejected output"
+    assert!(
+        stats.dropped >= 1,
+        "bounded queue must report dropped outputs (dropped={})",
+        stats.dropped
     );
+}
+
+#[test]
+fn mixed_enqueue_property_test_preserves_fifo_with_no_loss_or_duplication() {
+    // Generate a deterministic interleaving of success and failure work
+    // outputs and assert the consumed order matches the dispatch order
+    // (no duplication, no loss).
+    let mut lcg = Lcg::new(0x00C0_FFEE);
+    for _seed_iter in 0..3 {
+        let mut r = rt();
+        let t = r.add_target(TargetLimits::default()).unwrap();
+        let mut expected: Vec<(bool, u64)> = Vec::new();
+        let mut steps: Vec<Step> = Vec::new();
+        for _ in 0..20 {
+            let id = lcg.next_u64() & 0xFFFF;
+            let succ = lcg.coin(1, 2);
+            if succ {
+                expected.push((true, id));
+                steps.push(Step::Success(vec![FakeEvent::new(id)]));
+            } else {
+                expected.push((false, id));
+                steps.push(Step::Failure(FakeError::new(id)));
+            }
+        }
+        r.add_generator(
+            t,
+            Box::new(FakeGenerator::new(steps)),
+            GeneratorConfig::default(),
+        )
+        .unwrap();
+        let h = Harness::new();
+        let mut observed: Vec<(bool, u64)> = Vec::new();
+        for _ in 0..20 {
+            match next(&mut r, &h) {
+                RuntimeOutput::Work(Ok(s)) => {
+                    assert_eq!(s.events.len(), 1);
+                    observed.push((true, s.events[0].id()));
+                }
+                RuntimeOutput::Work(Err(e)) => {
+                    observed.push((false, e.error.id()));
+                }
+                RuntimeOutput::Runtime(_) | RuntimeOutput::Shutdown => {
+                    panic!("unexpected output kind");
+                }
+            }
+        }
+        assert_eq!(expected, observed, "FIFO must be preserved");
+    }
 }

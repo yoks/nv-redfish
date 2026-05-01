@@ -13,31 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+//! Fake error type used to prove the public API does not impose accidental
+//! `Display` or `std::error::Error` bounds on the application work error
+//! type `Err`.
+
+/// Zero-bound fake error with an opaque integer id.
+///
+/// Intentionally derives nothing and does not implement `Display` or
+/// `std::error::Error`. Tests that need to assert no accidental trait
+/// bounds use this type as the runtime's `Err` parameter.
 pub struct FakeError {
-    name: &'static str,
+    id: u64,
 }
 
 impl FakeError {
-    pub const fn new(name: &'static str) -> Self {
-        Self { name }
+    /// Construct a new fake error with the given id.
+    pub fn new(id: u64) -> Self {
+        Self { id }
     }
 
-    pub const fn name(&self) -> &'static str {
-        self.name
-    }
-}
-
-pub struct NonFormattingError {
-    name: &'static str,
-}
-
-impl NonFormattingError {
-    pub const fn new(name: &'static str) -> Self {
-        Self { name }
-    }
-
-    pub const fn name(&self) -> &'static str {
-        self.name
+    /// Return the fake error id.
+    pub fn id(&self) -> u64 {
+        self.id
     }
 }

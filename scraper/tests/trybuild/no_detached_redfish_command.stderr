@@ -1,5 +1,5 @@
-error[E0432]: unresolved import `nv_redfish_scraper::adapter::redfish::DetachedCommand`
- --> tests/trybuild/no_detached_redfish_command.rs:1:5
-  |
-1 | use nv_redfish_scraper::adapter::redfish::DetachedCommand;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `DetachedCommand` in `adapter::redfish`
+error[E0425]: cannot find value `fetch_arbitrary_resource` in module `nv_redfish_scraper::adapter::redfish`
+  --> tests/trybuild/no_detached_redfish_command.rs:10:51
+   |
+10 |     let _ = nv_redfish_scraper::adapter::redfish::fetch_arbitrary_resource;
+   |                                                   ^^^^^^^^^^^^^^^^^^^^^^^^ not found in `nv_redfish_scraper::adapter::redfish`

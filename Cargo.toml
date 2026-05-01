@@ -10,7 +10,6 @@ members = [
    "examples/service-root-parser",
    "examples/explore-with-dummy-bmc",
    "examples/explore-with-reqwest-bmc",
-   "examples/sensor-stream-cli",
    "examples/event-stream-console",
    "examples/readme-minimal",
    "scraper",

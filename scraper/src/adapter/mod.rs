@@ -13,8 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Adapter APIs that bind the runtime to concrete protocols.
+//! Feature-gated adapters that bind the generic runtime to concrete data
+//! sources.
+//!
+//! The Redfish adapter binds the runtime to `nv-redfish` typed objects. It is
+//! compiled only when the `redfish-adapter` feature is enabled. Per-capability
+//! features further gate which builders are compiled.
 
-/// Redfish adapter API.
-#[cfg(feature = "redfish-adapter")]
 pub mod redfish;

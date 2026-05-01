@@ -1,0 +1,14 @@
+error[E0425]: cannot find value `build_chassis_generator` in module `nv_redfish_scraper::adapter::redfish`
+ --> tests/trybuild/adapter_with_one_cap_hides_others.rs:9:51
+  |
+9 |     let _ = nv_redfish_scraper::adapter::redfish::build_chassis_generator::<()>;
+  |                                                   ^^^^^^^^^^^^^^^^^^^^^^^ not found in `nv_redfish_scraper::adapter::redfish`
+  |
+note: found an item that was configured out
+ --> src/adapter/redfish.rs
+  |
+  | #[cfg(feature = "adapter-chassis")]
+  |       --------------------------- the item is gated behind the `adapter-chassis` feature
+  | #[must_use]
+  | pub fn build_chassis_generator<B>(
+  |        ^^^^^^^^^^^^^^^^^^^^^^^

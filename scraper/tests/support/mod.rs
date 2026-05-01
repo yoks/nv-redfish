@@ -13,14 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
+//! Shared integration-test helpers for the scraper crate.
+//!
+//! Each integration test file pulls these in with `mod support;`.
 
+#![allow(dead_code)] // helpers are shared across many integration test files
+
+pub mod controlled;
 pub mod fake_error;
 pub mod fake_event;
 pub mod fake_generator;
-
-pub use fake_error::FakeError;
-pub use fake_event::FakeEvent;
-pub use fake_generator::FakeGenerator;
-pub use fake_generator::FakeGeneratorHandle;
+pub mod fake_payload;
+pub mod harness;
+pub mod lcg;

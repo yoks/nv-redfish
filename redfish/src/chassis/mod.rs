@@ -88,6 +88,19 @@ pub struct ChassisCollection<B: Bmc> {
 }
 
 impl<B: Bmc> ChassisCollection<B> {
+    /// Get the raw schema data for this chassis collection.
+    ///
+    /// Returns an `Arc` to the underlying schema, allowing cheap cloning
+    /// and sharing of the data. The returned schema implements
+    /// [`crate::core::EntityTypeRef`], so callers can read the
+    /// `@odata.id` and `@odata.etag` of the collection root via
+    /// [`crate::core::EntityTypeRef::id`] and
+    /// [`crate::core::EntityTypeRef::etag`].
+    #[must_use]
+    pub fn raw(&self) -> Arc<ChassisCollectionSchema> {
+        self.collection.clone()
+    }
+
     pub(crate) async fn new(
         bmc: &NvBmc<B>,
         root: &ServiceRoot<B>,

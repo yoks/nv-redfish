@@ -29,6 +29,8 @@ make one focused group of tests pass at a time.
 - Do not add Carbide-specific reports, models, metrics, DB/API/Vault logic, or
   mutations.
 - Do not add placeholder runtime knobs that are not exercised by tests.
+- Do not add a separate one-shot execution API or batch drain API when
+  `next().await` is the runtime driver and output consumer.
 
 ## Deliverable shape
 
@@ -165,41 +167,111 @@ Requirements:
 Required public runtime shape:
 
 ```rust
-Runtime<E, Err>
+Runtime<Ev, Err>
 RuntimeConfig
 TargetLimits
 GeneratorConfig
-RuntimeHandle<E, Err>
+RuntimeHandle<Ev, Err>
 ```
 
 The runtime API should support:
 
-- `add_target`,
-- `remove_target`,
-- `update_target_limits`,
-- `pause_target`,
-- `resume_target`,
-- `add_generator`,
-- `remove_generator`,
-- `update_generator`,
-- `pause_generator`,
-- `resume_generator`,
-- `trigger_generator`,
-- one-shot execution,
-- polling or draining ordered outputs,
+- `Runtime::next(&mut self).await` as the ordered output consumer and runtime
+  driver,
+- graceful shutdown,
+- adding targets,
+- removing targets,
+- updating target limits,
+- pausing and resuming targets,
+- adding generators,
+- removing generators,
+- updating generators,
+- pausing and resuming generators,
+- triggering generators,
 - statistics snapshots.
 
 The runtime must not mention Redfish, BMCs, transports, generated schema types,
 or application domain models.
+
+### `next().await` Runtime Driver
+
+`Runtime::next(&mut self).await` is the Phase 0 runtime step and output
+interface.
+
+Required behavior:
+
+1. If the output queue already contains an item, return the oldest item
+   immediately.
+2. Otherwise, scan schedulable generators in scheduler order.
+3. Skip generators that are not ready.
+4. Call `take_next` only on the selected ready generator.
+5. If `take_next` returns `None`, continue scanning during the same `next` call.
+6. If a work item is returned, execute at most that one work item.
+7. Enqueue the resulting `RuntimeOutput::Work`.
+8. Report completion to the originating generator exactly once.
+9. Return the oldest queued output.
+10. If no output is queued and no work can be selected, wait for a wake source
+    instead of returning an idle value or spinning.
+
+Phase 0 exposes `next().await` as the public runtime execution and output API.
+Tests should consume runtime output by awaiting `next()`.
+
+Wake sources include control-plane changes and newly enqueued outputs. Later
+phases may add timer wakeups, shutdown wakeups, or other control triggers.
+
+### Async And Sync Interaction
+
+Control APIs remain synchronous. They may briefly lock runtime state, but they
+must not wait for work futures.
+
+`next().await` must not hold runtime-state locks while awaiting scheduled work.
+Control-plane changes must be able to occur while selected work is in flight.
+
+When `next().await` cannot make progress, it should park the current task using
+executor-friendly waker logic rather than blocking an executor thread.
+
+### Graceful shutdown
+
+Phase 0 should expose a graceful shutdown API on the runtime control surface:
+
+```rust
+graceful_shutdown()
+```
+
+The exact receiver follows the chosen control API shape, but the operation must
+be synchronous and idempotent.
+
+Required behavior:
+
+- the first call starts graceful shutdown,
+- later calls do nothing,
+- after shutdown starts, mutating control APIs reject new target and generator
+  changes,
+- active generators are removed from scheduler selection,
+- no new work is selected after shutdown starts,
+- already selected or in-flight work is allowed to complete,
+- work output from already selected or in-flight work remains ordered before
+  shutdown completion,
+- completion is still reported exactly once for completed in-flight work,
+- `Runtime::next(&mut self).await` continues returning already queued output
+  before shutdown completion,
+- once shutdown has drained in-flight work and prior queued output, `next()`
+  returns the runtime shutdown output,
+- after shutdown output has been returned once, later `next()` calls return the
+  shutdown output immediately.
+
+Shutdown is a runtime lifecycle output, not an application work event. If runtime
+events are enabled, do not also emit a separate runtime event just to say
+shutdown completed unless a later requirements document adds that event.
 
 ### Generator and scheduled work
 
 Required public concepts:
 
 ```rust
-Generator<E, Err>
-ScheduledWork<E, Err>
-ScheduledWorkResult<E, Err>
+Generator<Ev, Err>
+ScheduledWork<Ev, Err>
+ScheduledWorkResult<Ev, Err>
 WorkMeta
 Readiness
 CostUnits
@@ -221,7 +293,7 @@ Required public concepts:
 
 ```rust
 RuntimeOutput<E, Err, R = RuntimeEventType>
-WorkResult<E, Err>
+WorkResult<Ev, Err>
 WorkSuccess<E>
 WorkError<Err>
 OutputQueueStats
@@ -230,10 +302,12 @@ OutputQueueStats
 Requirements:
 
 - output order is FIFO across work success, work failure, and runtime events,
+- runtime shutdown is observable through the ordered output API,
 - successful work can contain multiple events and preserves per-work event
   ordering,
 - failed work carries the generic error value without requiring formatting
   traits,
+- `next().await` is the consumer-facing ordered output API,
 - output queue behavior is observable through stats,
 - bounded output queues report pressure through bounded length plus dropped or
   rejected counts.
@@ -328,6 +402,42 @@ Requirements:
 
 Phase 0 should add tests by behavior domain, not implementation phase.
 
+The test suite is the implementation contract. It must cover the full public
+behavior envelope, not only the happy path. If behavior has observable variants,
+there should be tests for success, failure, empty state, missing object, removed
+object, feature-disabled, feature-enabled, and ordering/concurrency edge cases
+where applicable.
+
+The suite should use whatever test technique best captures the requirement:
+
+- deterministic fake generators for normal runtime behavior,
+- test-controlled futures for in-flight and wakeup behavior,
+- fake events and fake errors for payload behavior,
+- mocks or spy objects when call counts and call ordering matter,
+- compile-fail tests for feature gates and unavailable APIs,
+- property-based tests for scheduler/order/state-machine invariants when
+  enumerating examples would leave gaps.
+
+Tests must assert invariants directly. A test that only proves "something was
+returned" is not sufficient when the requirement is about identity, order,
+single execution, callback count, feature gating, or absence of accidental trait
+bounds.
+
+Minimum cross-cutting invariants:
+
+- every emitted work output has the runtime-provided generator id that produced
+  it,
+- `generator_id.target_id()` is correct for every generated id,
+- output order is FIFO and causal across work, runtime events, and shutdown,
+- `take_next` is called only for selected generators,
+- completion is called exactly once per executed work item,
+- output is enqueued before completion callback,
+- removed generators are never queried for readiness again,
+- no runtime state lock is held while awaiting scheduled work,
+- pending `next().await` calls wake only from real wake sources,
+- feature-disabled code paths do not compile hidden runtime-event or adapter
+  APIs.
+
 ### API bounds tests
 
 File: `tests/api_bounds.rs`
@@ -338,8 +448,20 @@ Tests:
 - runtime output works with event payloads that are not `Debug`,
 - runtime output works with event payloads that are not `Eq` or `PartialEq`,
 - work errors carry error values that are not formatting-friendly,
+- scheduled work can use non-`'static` futures when the runtime lifetime permits
+  it,
+- public payload types do not gain accidental `Send`, `Sync`, `Clone`, `Debug`,
+  `Eq`, `PartialEq`, `Display`, or `Error` bounds unless a documented API
+  requires them,
+- `Runtime` is not accidentally cloneable if the chosen public API requires one
+  consumer,
+- runtime control handles are cloneable if the chosen public API includes a
+  handle,
 - public ids remain opaque,
-- common API examples compile without Redfish dependencies.
+- raw id internals are not constructible through public API,
+- common API examples compile without Redfish dependencies,
+- runtime-only tests compile with default features,
+- runtime-only tests compile with `--all-features`.
 
 ### Control tests
 
@@ -348,16 +470,38 @@ File: `tests/control.rs`
 Tests:
 
 - add target,
+- add multiple targets and verify monotonic id allocation,
+- remove missing target returns the documented false/error shape,
 - remove target,
+- remove target twice returns the documented false/error shape on the second
+  call,
 - pause and resume target,
 - update target limits,
 - add generator under target,
+- add generator under missing target fails with the documented error,
+- add generator under removed target fails with the documented error,
 - remove generator,
+- remove missing generator returns the documented false/error shape,
+- remove generator twice returns the documented false/error shape on the second
+  call,
 - pause and resume generator,
 - trigger generator,
 - removing a target removes attached generators,
 - removed generators are never queried again,
-- queued outputs survive target or generator removal.
+- removed targets remove every attached generator in deterministic order,
+- queued outputs survive target or generator removal,
+- graceful shutdown drains already selected or in-flight work,
+- graceful shutdown rejects later mutating control operations,
+- graceful shutdown with no targets produces the documented shutdown output,
+- graceful shutdown is idempotent,
+- graceful shutdown does not drop already queued work outputs,
+- graceful shutdown does not select new work after shutdown starts,
+- removing a generator while work is in flight does not cancel that work,
+- removing a target while child work is in flight waits internally for child
+  completion/finalization,
+- control-plane changes wake a pending `next().await` when they make progress
+  possible,
+- control-plane changes that cannot make progress do not cause busy-polling.
 
 ### Scheduling tests
 
@@ -365,11 +509,23 @@ File: `tests/scheduling.rs`
 
 Tests:
 
-- no work is dispatched when no target is ready,
-- ready generator dispatches one work item,
-- `run_once` dispatches at most one selected work item,
+- no work is produced when no target is ready,
+- `next().await` parks when no output and no ready work exist,
+- ready generator produces one work output through `next().await`,
+- `next().await` executes at most one selected work item before returning output,
 - generator readiness is queried before selection,
 - generator creates work only after selection,
+- not-ready generators are skipped without calling `take_next`,
+- if a ready generator returns `None` from `take_next`, scanning continues in
+  the same `next` call,
+- stale or removed scheduler entries are skipped and not queried,
+- round-robin order is deterministic across at least two full cycles,
+- round-robin cursor advances when a generator is not ready,
+- round-robin cursor advances when `take_next` returns `None`,
+- round-robin cursor resumes after the generator that produced work,
+- insertion during runtime operation participates only according to documented
+  scheduler semantics,
+- removal during runtime operation does not corrupt scheduler cursor state,
 - target in-flight limits are respected,
 - global in-flight limits are respected,
 - work cost participates in admission,
@@ -377,7 +533,10 @@ Tests:
 - class weights or service shares affect selection,
 - target fairness prevents one target from consuming all dispatches,
 - tree changes invalidate stale readiness,
-- periodic generators do not accumulate one stale job per missed interval.
+- periodic generators do not accumulate one stale job per missed interval,
+- property-based scheduler tests generate add/remove/ready/not-ready/none/work
+  operation sequences and assert deterministic order, no duplicate candidates in
+  one scan, no removed ids returned, and cursor progress.
 
 ### Output tests
 
@@ -386,12 +545,22 @@ File: `tests/output.rs`
 Tests:
 
 - successful work produces ordered `RuntimeOutput::Work`,
+- successful work with an empty event vector still produces a success output,
 - multiple events from one work item preserve order,
 - failures produce ordered `RuntimeOutput::Work(Err(_))`,
+- failed work carries the original generic error value,
+- failed work still counts as executed work for completion and ordering,
 - runtime events are ordered with work outputs when enabled,
-- one-shot drain returns all available outputs,
-- stream or polling API observes FIFO order,
-- bounded queue pressure is reflected in stats.
+- `next().await` observes FIFO order,
+- queued output is returned before scanning/selecting more work,
+- output produced before generator removal remains observable,
+- output produced before target removal remains observable,
+- shutdown output is returned only after older queued output and in-flight work
+  output,
+- shutdown output is returned immediately by later `next()` calls,
+- bounded queue pressure is reflected in stats,
+- property-based output tests generate mixed work success/failure/runtime-event
+  enqueue sequences and assert FIFO preservation and no lost/duplicated output.
 
 ### Completion tests
 
@@ -402,9 +571,18 @@ Tests:
 - completion is reported exactly once after success,
 - completion is reported exactly once after failure,
 - output is enqueued before generator completion callback,
+- completion includes the correct runtime-provided generator id,
+- completion outcome is `Succeeded` for `Ok(Vec<_>)`,
+- completion outcome is `Failed` for `Err(_)`,
+- completion is not called when no work is selected,
+- completion is not called when `take_next` returns `None`,
+- completion is still called once when removal is requested while work is in
+  flight,
 - in-flight counters are released after completion,
 - generator lag state can be updated from completion,
-- failed work does not lose runtime-owned stats.
+- failed work does not lose runtime-owned stats,
+- completion callbacks cannot observe missing queued output when they inspect
+  shared test state.
 
 ### Runtime event tests
 
@@ -415,6 +593,12 @@ Tests:
 - runtime event feature exposes `RuntimeEvent`,
 - disabled runtime event feature uses `Infallible`,
 - disabled runtime event build does not compile event emission paths,
+- default-feature builds cannot name or construct concrete runtime events,
+- all-features builds emit target/generator control-plane events in the
+  documented order when those events are part of the public API,
+- runtime events contain runtime ids only and do not carry user work payloads,
+- runtime events are not emitted for failed control operations,
+- runtime events are not emitted when the feature is disabled,
 - lagging generator can emit lag event when enabled,
 - queue pressure can emit pressure event when enabled,
 - work started/completed events exactly bracket successful work output when
@@ -429,10 +613,15 @@ File: `tests/stats.rs`
 Tests:
 
 - runtime exposes per-target, per-class, and per-generator stats,
+- stats for missing/removed targets and generators follow the documented
+  behavior,
 - generator stats report lag, missed intervals, and actual interval,
 - periodic overload is not represented as stale queued job depth,
 - bounded output queue pressure reports dropped or rejected outputs instead of
-  unbounded queue growth.
+  unbounded queue growth,
+- stats update on success and failure,
+- stats update after removal and shutdown,
+- stats snapshots are internally consistent under generated operation sequences.
 
 ### Feature-gating tests
 
@@ -447,7 +636,12 @@ Tests:
 - runtime-only build does not depend on `nv-redfish`,
 - `redfish-adapter` module is absent without the feature,
 - concrete `RuntimeEvent` type is absent without the runtime event feature,
-- detached Redfish command language types are absent.
+- detached Redfish command language types are absent,
+- default features do not pull `nv-redfish` or generated schema dependencies,
+- `runtime-events` alone does not enable Redfish adapter APIs,
+- Redfish adapter features do not expose disabled capability builders,
+- mutually independent feature combinations compile or fail exactly as
+  documented.
 
 These use `trybuild` where normal integration tests cannot express compile-fail
 expectations.
@@ -461,8 +655,11 @@ Tests:
 - adapter generator builders close over typed `nv-redfish` objects,
 - service-root builders produce runtime generators, not just marker objects,
 - invalid object and command pairings are not expressible,
+- builders cannot be called when their capability feature is disabled,
 - Redfish resource event contains required identity fields,
 - Redfish event payload does not contain execution handles,
+- public Redfish events do not expose `B`, `ServiceRoot<B>`, `Chassis<B>`, or
+  other execution handles,
 - generated `EntityPayload` boundary preserves schema payload identity,
 - generated `EntityPayload` implements the scraper payload boundary and serde
   when generated support is enabled,
@@ -485,11 +682,55 @@ File: `tests/discovery_flow.rs`
 Tests:
 
 - application can start with one service-root-like generator,
-- application can consume output and add more generators,
+- application can consume output through `next().await` and add more generators,
+- application can consume a failed discovery work output and choose not to add
+  more generators,
+- application can remove discovery generators after consuming their output,
+- application can shut down after partial discovery and still receive queued
+  outputs first,
 - application can request narrow scraping only,
 - not requested, requested missing, requested failed, and requested successful
   states are distinguishable,
-- runtime remains policy-free during application-driven discovery.
+- runtime remains policy-free during application-driven discovery,
+- final fake report is built from consumed outputs in deterministic order,
+- fake events do not include target ids solely to satisfy runtime bookkeeping.
+
+### State-machine and property tests
+
+File: `tests/state_machine.rs` or behavior-domain files when clearer.
+
+Use property-based tests when a small number of example tests can miss ordering
+or lifecycle bugs. These tests should generate valid sequences of public
+operations and assert invariants after every step.
+
+Operation families:
+
+- add target,
+- remove target,
+- add generator,
+- remove generator,
+- mark fake generator ready/not ready,
+- make fake generator return work/none/error,
+- call `next().await` with a bounded test executor step,
+- complete a test-controlled in-flight future,
+- request graceful shutdown,
+- enable or disable runtime event expectations through feature-gated test
+  builds.
+
+Required invariants:
+
+- ids are unique and never reused,
+- removed generators are never selected,
+- removed targets cannot receive new generators,
+- at most one work item is executed per `next().await`,
+- queued outputs are never lost or duplicated,
+- completion count equals executed work count per generator,
+- shutdown output is last and sticky,
+- scheduler candidates never contain removed ids,
+- the model's expected output log matches consumed runtime output.
+
+Property tests must be deterministic on failure: record or print the random seed
+and minimized operation sequence.
 
 ## Phase 0 acceptance criteria
 
@@ -504,6 +745,9 @@ Tests:
 - Public Rust files contain the required license header.
 - Crate root uses the scraper lint posture from the style guide.
 - Runtime modules compile without `nv-redfish`.
+- Runtime output is consumed through `Runtime::next(&mut self).await`.
+- Graceful shutdown is exposed and observed through the ordered output API.
+- There is no separate public one-shot execution or batch drain API in Phase 0.
 - Redfish adapter code is isolated behind adapter features.
 - Tests are grouped by behavior domain.
 - No behavior tests are ignored merely because implementation is missing.

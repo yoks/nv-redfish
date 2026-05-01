@@ -1,0 +1,14 @@
+error[E0425]: cannot find value `build_service_root_generator` in module `nv_redfish_scraper::adapter::redfish`
+ --> tests/trybuild/adapter_without_capability_hides_per_cap_builder.rs:9:51
+  |
+9 |     let _ = nv_redfish_scraper::adapter::redfish::build_service_root_generator::<()>;
+  |                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in `nv_redfish_scraper::adapter::redfish`
+  |
+note: found an item that was configured out
+ --> src/adapter/redfish.rs
+  |
+  | #[cfg(feature = "adapter-service-root")]
+  |       -------------------------------- the item is gated behind the `adapter-service-root` feature
+  | #[must_use]
+  | pub fn build_service_root_generator<B>(
+  |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

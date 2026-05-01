@@ -13,59 +13,115 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Opaque identifiers used by the generic runtime.
+//! Opaque scraper identifier types.
+//!
+//! Identifiers are intentionally opaque. They are allocated by the runtime
+//! ([`TargetId`], [`GeneratorId`]) or constructed from an application-supplied
+//! name ([`ClassId`]). The internal representation is private; only the
+//! intentional accessors documented on each type are public.
+//!
+//! Identifiers do not expose Redfish semantics. The runtime treats targets as
+//! opaque scheduling units — for Redfish use cases a target is typically a BMC,
+//! but the runtime does not know that.
 
-use core::fmt;
+use core::fmt::Debug;
+use core::fmt::Display;
+use core::fmt::Formatter;
+use core::fmt::Result as FmtResult;
+use std::sync::Arc;
 
-macro_rules! opaque_id {
-    ($name:ident, $doc:literal) => {
-        #[doc = $doc]
-        #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-        pub struct $name(String);
+/// Opaque identifier of a runtime target.
+///
+/// The scheduler treats targets as opaque scheduling units. The runtime
+/// allocates [`TargetId`] values via [`crate::Runtime::add_target`].
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TargetId(u64);
 
-        impl $name {
-            /// Creates an identifier from an application-owned string.
-            #[must_use]
-            pub fn new(value: impl Into<String>) -> Self {
-                Self(value.into())
-            }
-
-            /// Returns the application-owned identifier text.
-            #[must_use]
-            pub fn as_str(&self) -> &str {
-                &self.0
-            }
-        }
-
-        impl From<String> for $name {
-            fn from(value: String) -> Self {
-                Self::new(value)
-            }
-        }
-
-        impl From<&str> for $name {
-            fn from(value: &str) -> Self {
-                Self::new(value)
-            }
-        }
-
-        impl fmt::Display for $name {
-            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                self.0.fmt(formatter)
-            }
-        }
-    };
+impl TargetId {
+    pub(crate) const fn from_seq(seq: u64) -> Self {
+        Self(seq)
+    }
 }
 
-opaque_id!(
-    TargetId,
-    "Opaque identifier for a runtime target, such as a BMC in Redfish use cases."
-);
-opaque_id!(
-    GeneratorId,
-    "Opaque identifier for a generator leaf in the scheduler tree."
-);
-opaque_id!(
-    ClassId,
-    "Opaque identifier for a scheduler service class or traffic class."
-);
+impl Debug for TargetId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "TargetId({})", self.0)
+    }
+}
+
+impl Display for TargetId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "target:{}", self.0)
+    }
+}
+
+/// Opaque identifier of a runtime generator.
+///
+/// A [`GeneratorId`] always carries its parent [`TargetId`]. This is the only
+/// intentional semantic accessor exposed on the id; the rest of the
+/// representation is private.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GeneratorId {
+    target: TargetId,
+    seq: u64,
+}
+
+impl GeneratorId {
+    pub(crate) const fn new(target: TargetId, seq: u64) -> Self {
+        Self { target, seq }
+    }
+
+    /// Recover the parent [`TargetId`] of this generator id.
+    #[must_use]
+    pub const fn target_id(self) -> TargetId {
+        self.target
+    }
+}
+
+impl Debug for GeneratorId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "GeneratorId({}/{})", self.target.0, self.seq)
+    }
+}
+
+impl Display for GeneratorId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "generator:{}/{}", self.target.0, self.seq)
+    }
+}
+
+/// Opaque class identifier used to group generators with similar service
+/// requirements for scheduling purposes.
+///
+/// Class names are application-defined and have no scheduler semantics beyond
+/// equality and weighting (configured separately by the runtime). The
+/// underlying string representation is not exposed except via [`ClassId::as_str`].
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct ClassId {
+    inner: Arc<str>,
+}
+
+impl ClassId {
+    /// Construct a [`ClassId`] from any string-like value.
+    pub fn new(name: impl Into<Arc<str>>) -> Self {
+        Self { inner: name.into() }
+    }
+
+    /// Borrow the class name as a string slice.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.inner
+    }
+}
+
+impl Debug for ClassId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "ClassId({:?})", &*self.inner)
+    }
+}
+
+impl Display for ClassId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "class:{}", &*self.inner)
+    }
+}

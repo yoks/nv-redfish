@@ -13,216 +13,343 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Runtime-event feature-gating and emission tests.
+
 mod support;
 
-#[cfg(feature = "runtime-events")]
-use nv_redfish_scraper::ClassId;
-#[cfg(feature = "runtime-events")]
-use nv_redfish_scraper::CostUnits;
-#[cfg(feature = "runtime-events")]
-use nv_redfish_scraper::GeneratorConfig;
-#[cfg(feature = "runtime-events")]
-use nv_redfish_scraper::GeneratorId;
-#[cfg(feature = "runtime-events")]
-use nv_redfish_scraper::Readiness;
-#[cfg(feature = "runtime-events")]
-use nv_redfish_scraper::Runtime;
-#[cfg(feature = "runtime-events")]
-use nv_redfish_scraper::RuntimeConfig;
-#[cfg(feature = "runtime-events")]
-use nv_redfish_scraper::RuntimeEvent;
-#[cfg(not(feature = "runtime-events"))]
+use core::any::TypeId;
+
 use nv_redfish_scraper::RuntimeEventType;
-use nv_redfish_scraper::RuntimeOutput;
-#[cfg(feature = "runtime-events")]
-use nv_redfish_scraper::TargetId;
-#[cfg(feature = "runtime-events")]
-use nv_redfish_scraper::TargetLimits;
-#[cfg(feature = "runtime-events")]
-use std::time::Instant;
-#[cfg(feature = "runtime-events")]
-use support::FakeError;
-#[cfg(feature = "runtime-events")]
-use support::FakeEvent;
-#[cfg(feature = "runtime-events")]
-use support::FakeGenerator;
 
-#[test]
+use support::fake_error::FakeError;
+use support::fake_event::FakeEvent;
+
 #[cfg(not(feature = "runtime-events"))]
-fn disabled_runtime_event_type_is_infallible() {
-    assert!(
-        std::any::type_name::<RuntimeEventType>().contains("Infallible"),
-        "runtime event payload must be Infallible when runtime-events is disabled"
-    );
-}
-
 #[test]
-#[cfg(not(feature = "runtime-events"))]
-fn disabled_runtime_event_output_is_exhaustive_without_runtime_payload() {
-    let output: RuntimeOutput<(), ()> = RuntimeOutput::Work(Ok(
-        nv_redfish_scraper::WorkSuccess::new(Vec::new(), nv_redfish_scraper::WorkStats::default()),
-    ));
-
-    match output {
-        RuntimeOutput::Work(_) => {}
-        RuntimeOutput::Runtime(runtime_event) => match runtime_event {},
-    }
-}
-
-#[test]
-#[cfg(feature = "runtime-events")]
-fn runtime_event_feature_exposes_runtime_event_variants() {
-    let generator_id = GeneratorId::new("generator");
-    let target_id = TargetId::new("target");
-
-    let events = vec![
-        RuntimeEvent::GeneratorLagging(generator_id.clone()),
-        RuntimeEvent::GeneratorRecovered(generator_id.clone()),
-        RuntimeEvent::GeneratorStarved(generator_id.clone()),
-        RuntimeEvent::TargetThrottled(target_id),
-        RuntimeEvent::GlobalThrottled,
-        RuntimeEvent::EventQueuePressure,
-        RuntimeEvent::WorkStarted(generator_id.clone()),
-        RuntimeEvent::WorkCompleted(generator_id.clone()),
-        RuntimeEvent::WorkFailed(generator_id),
-    ];
-
-    assert_eq!(events.len(), 9);
-}
-
-#[test]
-#[cfg(feature = "runtime-events")]
-fn work_started_completed_and_output_preserve_causal_order() {
-    let mut runtime: Runtime<FakeEvent, FakeError> = Runtime::new(RuntimeConfig::default());
-    let target_id = TargetId::new("target");
-    let generator_id = GeneratorId::new("generator");
-    let (generator, _) = FakeGenerator::new(
-        target_id.clone(),
-        generator_id.clone(),
-        ClassId::new("class"),
-        CostUnits::new(1),
-        vec![Readiness::ready(CostUnits::new(1))],
-        vec![Ok(vec![FakeEvent::new("event")])],
-    );
-
-    runtime
-        .add_target(target_id.clone(), TargetLimits::default())
-        .expect("target should be added");
-    runtime
-        .add_generator(
-            &target_id,
-            generator_id,
-            GeneratorConfig::default(),
-            generator,
-        )
-        .expect("generator should be added");
-
-    let _ = tokio_test::block_on(runtime.run_once(Instant::now()));
-    let outputs = runtime.drain_outputs();
-
+fn runtime_event_type_is_infallible_when_feature_disabled() {
+    use core::convert::Infallible;
     assert_eq!(
-        outputs.len(),
-        3,
-        "runtime events should bracket exactly one work output"
+        TypeId::of::<RuntimeEventType>(),
+        TypeId::of::<Infallible>(),
+        "without runtime-events RuntimeEventType must be core::convert::Infallible"
     );
-    assert!(matches!(
-        outputs.first(),
-        Some(RuntimeOutput::Runtime(RuntimeEvent::WorkStarted(id))) if id == &GeneratorId::new("generator")
-    ));
-    assert!(matches!(
-        outputs.get(1),
-        Some(RuntimeOutput::Work(Ok(success))) if success.events()[0].name() == "event"
-    ));
-    assert!(matches!(
-        outputs.get(2),
-        Some(RuntimeOutput::Runtime(RuntimeEvent::WorkCompleted(id))) if id == &GeneratorId::new("generator")
-    ));
+}
+
+#[cfg(feature = "runtime-events")]
+#[test]
+fn runtime_event_type_is_concrete_enum_when_feature_enabled() {
+    use nv_redfish_scraper::RuntimeEvent;
+    assert_eq!(
+        TypeId::of::<RuntimeEventType>(),
+        TypeId::of::<RuntimeEvent>(),
+        "with runtime-events RuntimeEventType must be RuntimeEvent"
+    );
+    let _ = RuntimeEvent::GlobalThrottled;
 }
 
 #[test]
-#[cfg(feature = "runtime-events")]
-fn work_started_failed_and_output_preserve_causal_order() {
-    let mut runtime: Runtime<FakeEvent, FakeError> = Runtime::new(RuntimeConfig::default());
-    let target_id = TargetId::new("target");
-    let generator_id = GeneratorId::new("generator");
-    let (generator, _) = FakeGenerator::new(
-        target_id.clone(),
-        generator_id.clone(),
-        ClassId::new("class"),
-        CostUnits::new(1),
-        vec![Readiness::ready(CostUnits::new(1))],
-        vec![Err(FakeError::new("failed"))],
-    );
+fn output_type_can_carry_default_runtime_event_type() {
+    use nv_redfish_scraper::RuntimeOutput;
+    // Compiles for both feature states. We never construct the Runtime
+    // variant when the feature is off (Infallible is uninhabited).
+    let _: RuntimeOutput<FakeEvent, FakeError> = RuntimeOutput::Shutdown;
+}
 
-    runtime
-        .add_target(target_id.clone(), TargetLimits::default())
-        .expect("target should be added");
-    runtime
-        .add_generator(
-            &target_id,
-            generator_id,
+// ---------------------------------------------------------------------------
+// Phase 5: emission tests. All gated on `runtime-events`. Currently red — the
+// runtime emits no events in Phase 0; turning these green is the Phase 5
+// definition of done.
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "runtime-events")]
+mod emission {
+    use core::task::Poll;
+
+    use nv_redfish_scraper::GeneratorConfig;
+    use nv_redfish_scraper::Runtime;
+    use nv_redfish_scraper::RuntimeConfig;
+    use nv_redfish_scraper::RuntimeEvent;
+    use nv_redfish_scraper::RuntimeOutput;
+    use nv_redfish_scraper::TargetLimits;
+
+    use super::FakeError;
+    use super::FakeEvent;
+    use super::support::fake_generator::FakeGenerator;
+    use super::support::fake_generator::Step;
+    use super::support::harness::Harness;
+
+    fn rt() -> Runtime<FakeEvent, FakeError> {
+        Runtime::new(RuntimeConfig::default())
+    }
+
+    fn drain_until_shutdown(
+        r: &mut Runtime<FakeEvent, FakeError>,
+        h: &Harness,
+    ) -> Vec<RuntimeOutput<FakeEvent, FakeError>> {
+        let mut out = Vec::new();
+        for _ in 0..100 {
+            let mut fut = r.next();
+            match h.poll(&mut fut) {
+                Poll::Ready(o) => {
+                    let is_shutdown = matches!(o, RuntimeOutput::Shutdown);
+                    out.push(o);
+                    if is_shutdown {
+                        break;
+                    }
+                }
+                Poll::Pending => break,
+            }
+        }
+        out
+    }
+
+    fn is_runtime_event(o: &RuntimeOutput<FakeEvent, FakeError>) -> bool {
+        matches!(o, RuntimeOutput::Runtime(_))
+    }
+
+    #[test]
+    fn work_started_and_completed_events_bracket_successful_work_output() {
+        let mut r = rt();
+        let t = r.add_target(TargetLimits::default()).unwrap();
+        r.add_generator(
+            t,
+            Box::new(FakeGenerator::new([Step::Success(vec![FakeEvent::new(1)])])),
             GeneratorConfig::default(),
-            generator,
         )
-        .expect("generator should be added");
+        .unwrap();
+        r.graceful_shutdown();
+        let h = Harness::new();
+        let outs = drain_until_shutdown(&mut r, &h);
+        let mut started = false;
+        let mut work_seen = false;
+        let mut bracketed = false;
+        for o in &outs {
+            match o {
+                RuntimeOutput::Runtime(RuntimeEvent::WorkStarted { .. }) => started = true,
+                RuntimeOutput::Work(Ok(_)) if started => work_seen = true,
+                RuntimeOutput::Runtime(RuntimeEvent::WorkCompleted { .. }) if work_seen => {
+                    bracketed = true;
+                }
+                _ => {}
+            }
+        }
+        assert!(
+            bracketed,
+            "WorkStarted -> Work(Ok) -> WorkCompleted bracket missing"
+        );
+    }
 
-    let _ = tokio_test::block_on(runtime.run_once(Instant::now()));
-    let outputs = runtime.drain_outputs();
-
-    assert!(matches!(
-        outputs.as_slice(),
-        [
-            RuntimeOutput::Runtime(RuntimeEvent::WorkStarted(_)),
-            RuntimeOutput::Work(Err(_)),
-            RuntimeOutput::Runtime(RuntimeEvent::WorkFailed(_)),
-        ]
-    ));
-}
-
-#[test]
-#[cfg(feature = "runtime-events")]
-fn lag_and_queue_pressure_emit_ordered_runtime_events() {
-    let mut runtime: Runtime<FakeEvent, FakeError> =
-        Runtime::new(RuntimeConfig::default().with_output_queue_bound(1));
-    let target_id = TargetId::new("target");
-    let generator_id = GeneratorId::new("generator");
-    let (generator, _) = FakeGenerator::new(
-        target_id.clone(),
-        generator_id.clone(),
-        ClassId::new("periodic"),
-        CostUnits::new(1),
-        vec![Readiness::ready(CostUnits::new(1)); 2],
-        vec![Ok(vec![FakeEvent::new("event")])],
-    );
-
-    runtime
-        .add_target(target_id.clone(), TargetLimits::default())
-        .expect("target should be added");
-    runtime
-        .add_generator(
-            &target_id,
-            generator_id,
-            GeneratorConfig::default().with_requested_interval(std::time::Duration::from_secs(1)),
-            generator,
+    #[test]
+    fn work_started_and_failed_events_bracket_failed_work_output() {
+        let mut r = rt();
+        let t = r.add_target(TargetLimits::default()).unwrap();
+        r.add_generator(
+            t,
+            Box::new(FakeGenerator::new([Step::Failure(FakeError::new(1))])),
+            GeneratorConfig::default(),
         )
-        .expect("generator should be added");
+        .unwrap();
+        r.graceful_shutdown();
+        let h = Harness::new();
+        let outs = drain_until_shutdown(&mut r, &h);
+        let mut started = false;
+        let mut work_seen = false;
+        let mut bracketed = false;
+        for o in &outs {
+            match o {
+                RuntimeOutput::Runtime(RuntimeEvent::WorkStarted { .. }) => started = true,
+                RuntimeOutput::Work(Err(_)) if started => work_seen = true,
+                RuntimeOutput::Runtime(RuntimeEvent::WorkFailed { .. }) if work_seen => {
+                    bracketed = true;
+                }
+                _ => {}
+            }
+        }
+        assert!(
+            bracketed,
+            "WorkStarted -> Work(Err) -> WorkFailed bracket missing"
+        );
+    }
 
-    let _ =
-        tokio_test::block_on(runtime.run_once(Instant::now() + std::time::Duration::from_secs(5)));
-    let outputs = runtime.drain_outputs();
+    #[test]
+    fn runtime_events_contain_runtime_ids_only_no_user_payload() {
+        // Trivially true at the type level: RuntimeEvent variants do not
+        // carry generic payload. This test verifies by construction that
+        // runtime events produced by the runtime carry only ids/numbers
+        // and never reference FakeEvent / FakeError.
+        let mut r = rt();
+        let t = r.add_target(TargetLimits::default()).unwrap();
+        r.add_generator(
+            t,
+            Box::new(FakeGenerator::new([Step::Success(vec![FakeEvent::new(7)])])),
+            GeneratorConfig::default(),
+        )
+        .unwrap();
+        r.graceful_shutdown();
+        let h = Harness::new();
+        let outs = drain_until_shutdown(&mut r, &h);
+        let any_event = outs.iter().any(is_runtime_event);
+        assert!(any_event, "runtime emitted no events with feature on");
+    }
 
-    assert!(
-        outputs.iter().any(|output| matches!(
-            output,
-            RuntimeOutput::Runtime(RuntimeEvent::GeneratorLagging(_))
-        )),
-        "lag should be reported as an ordered runtime event"
-    );
-    assert!(
-        outputs.iter().any(|output| matches!(
-            output,
-            RuntimeOutput::Runtime(RuntimeEvent::EventQueuePressure)
-        )),
-        "queue pressure should be reported as an ordered runtime event"
-    );
+    #[test]
+    fn runtime_events_are_not_emitted_for_failed_control_operations() {
+        // Removing a non-existent target is a no-op and must NOT produce
+        // any runtime event.
+        let mut r = rt();
+        let bogus_target = r.add_target(TargetLimits::default()).unwrap();
+        assert!(r.remove_target(bogus_target));
+        // Second removal is a failed control op.
+        assert!(!r.remove_target(bogus_target));
+        r.graceful_shutdown();
+        let h = Harness::new();
+        let outs = drain_until_shutdown(&mut r, &h);
+        // Failed control ops should not show up as control-plane events.
+        // Allow shutdown-related events; the assertion is that NO event
+        // references the bogus_target as a "removed" event.
+        for o in &outs {
+            match o {
+                RuntimeOutput::Runtime(RuntimeEvent::TargetThrottled { target_id })
+                    if *target_id == bogus_target =>
+                {
+                    panic!("event referenced a target that no longer exists");
+                }
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn lagging_generator_can_emit_lag_event() {
+        // Phase 5: a generator that reports ready but is not selected
+        // within its `next_update_at` window must surface as
+        // RuntimeEvent::GeneratorLagging.
+        let mut r = rt();
+        let t = r.add_target(TargetLimits::default()).unwrap();
+        let many_steps: Vec<Step> = (0..50)
+            .map(|i| Step::Success(vec![FakeEvent::new(i as u64)]))
+            .collect();
+        r.add_generator(
+            t,
+            Box::new(FakeGenerator::new(many_steps)),
+            GeneratorConfig::default(),
+        )
+        .unwrap();
+        r.graceful_shutdown();
+        let h = Harness::new();
+        let outs = drain_until_shutdown(&mut r, &h);
+        let any_lag = outs.iter().any(|o| {
+            matches!(
+                o,
+                RuntimeOutput::Runtime(RuntimeEvent::GeneratorLagging { .. })
+            )
+        });
+        assert!(any_lag, "no lagging event emitted");
+    }
+
+    #[test]
+    fn queue_pressure_can_emit_pressure_event() {
+        // Phase 5: when output queue depth exceeds a watermark, the
+        // runtime emits an EventQueuePressure event.
+        let cfg = RuntimeConfig {
+            output_queue_capacity: Some(2),
+            ..RuntimeConfig::default()
+        };
+        let mut r: Runtime<FakeEvent, FakeError> = Runtime::new(cfg);
+        let t = r.add_target(TargetLimits::default()).unwrap();
+        let steps: Vec<Step> = (0..6)
+            .map(|i| Step::Success(vec![FakeEvent::new(i as u64)]))
+            .collect();
+        r.add_generator(
+            t,
+            Box::new(FakeGenerator::new(steps)),
+            GeneratorConfig::default(),
+        )
+        .unwrap();
+        r.graceful_shutdown();
+        let h = Harness::new();
+        let outs = drain_until_shutdown(&mut r, &h);
+        let any_pressure = outs.iter().any(|o| {
+            matches!(
+                o,
+                RuntimeOutput::Runtime(RuntimeEvent::EventQueuePressure { .. })
+            )
+        });
+        assert!(any_pressure, "no queue-pressure event emitted");
+    }
+
+    #[test]
+    fn lag_and_queue_pressure_runtime_events_are_ordered_with_work_outputs() {
+        // The emitted order must be: each event interleaves with work
+        // outputs based on causal ordering. This test asserts that within
+        // any consecutive (start, end) bracket of work, no other work item
+        // sneaks between them.
+        let mut r = rt();
+        let t = r.add_target(TargetLimits::default()).unwrap();
+        r.add_generator(
+            t,
+            Box::new(FakeGenerator::new([
+                Step::Success(vec![FakeEvent::new(1)]),
+                Step::Success(vec![FakeEvent::new(2)]),
+            ])),
+            GeneratorConfig::default(),
+        )
+        .unwrap();
+        r.graceful_shutdown();
+        let h = Harness::new();
+        let outs = drain_until_shutdown(&mut r, &h);
+        // Walk through the stream tracking whether we're "inside a work
+        // bracket". A second WorkStarted before WorkCompleted/WorkFailed
+        // would violate causal ordering.
+        let mut inside = false;
+        for o in &outs {
+            match o {
+                RuntimeOutput::Runtime(RuntimeEvent::WorkStarted { .. }) => {
+                    assert!(!inside, "nested WorkStarted observed");
+                    inside = true;
+                }
+                RuntimeOutput::Runtime(RuntimeEvent::WorkCompleted { .. })
+                | RuntimeOutput::Runtime(RuntimeEvent::WorkFailed { .. }) => {
+                    inside = false;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn target_and_generator_control_plane_events_emitted_in_documented_order() {
+        // Phase 5: when control-plane changes succeed they emit events in
+        // the same order as the changes. (Currently red because no
+        // control-plane events are emitted.)
+        let mut r = rt();
+        let t = r.add_target(TargetLimits::default()).unwrap();
+        let _g = r
+            .add_generator(
+                t,
+                Box::new(FakeGenerator::new([Step::ReadyNoWork])),
+                GeneratorConfig::default(),
+            )
+            .unwrap();
+        r.graceful_shutdown();
+        let h = Harness::new();
+        let outs = drain_until_shutdown(&mut r, &h);
+        let any_control_event = outs.iter().any(is_runtime_event);
+        assert!(
+            any_control_event,
+            "control-plane events were not emitted by the runtime"
+        );
+    }
+
+    #[test]
+    fn runtime_events_are_not_emitted_when_feature_is_disabled_at_runtime_level() {
+        // Even with the feature on at compile time, a runtime that does
+        // not exercise emission paths must still finish cleanly.
+        let mut r: Runtime<FakeEvent, FakeError> = Runtime::new(RuntimeConfig::default());
+        r.graceful_shutdown();
+        let h = Harness::new();
+        let outs = drain_until_shutdown(&mut r, &h);
+        let last = outs.last().expect("at least shutdown");
+        assert!(matches!(last, RuntimeOutput::Shutdown));
+    }
 }

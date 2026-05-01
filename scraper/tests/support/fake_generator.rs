@@ -13,142 +13,170 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use nv_redfish_scraper::ClassId;
+//! Scriptable fake generator with call counters.
+
+use std::collections::VecDeque;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::time::Instant;
+
 use nv_redfish_scraper::CompletionOutcome;
 use nv_redfish_scraper::CostUnits;
 use nv_redfish_scraper::Generator;
-use nv_redfish_scraper::GeneratorId;
 use nv_redfish_scraper::Readiness;
 use nv_redfish_scraper::ScheduledWork;
-use nv_redfish_scraper::ScheduledWorkResult;
-use nv_redfish_scraper::TargetId;
 use nv_redfish_scraper::WorkCompletion;
 use nv_redfish_scraper::WorkMeta;
-use std::collections::VecDeque;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::time::Instant;
 
-pub struct FakeGenerator<E, Err> {
-    state: Arc<Mutex<FakeGeneratorState<E, Err>>>,
+use super::fake_error::FakeError;
+use super::fake_event::FakeEvent;
+
+/// One scripted step the [`FakeGenerator`] performs in response to scheduler
+/// queries.
+pub enum Step {
+    /// `update_ready` returns `not_ready`. `take_next` is not expected to be
+    /// called for this step.
+    NotReady,
+    /// `update_ready` returns `ready` but `take_next` returns `None`.
+    ReadyNoWork,
+    /// `update_ready` returns `ready` and `take_next` returns work that
+    /// resolves immediately to the supplied events.
+    Success(Vec<FakeEvent>),
+    /// `update_ready` returns `ready` and `take_next` returns work that
+    /// resolves immediately to the supplied error.
+    Failure(FakeError),
 }
 
-pub struct FakeGeneratorHandle<E, Err> {
-    state: Arc<Mutex<FakeGeneratorState<E, Err>>>,
+/// Counters tracking calls into a [`FakeGenerator`].
+#[derive(Clone, Default)]
+pub struct CallCounters {
+    update_ready: Arc<AtomicU64>,
+    take_next: Arc<AtomicU64>,
+    on_complete_success: Arc<AtomicU64>,
+    on_complete_failed: Arc<AtomicU64>,
 }
 
-struct FakeGeneratorState<E, Err> {
-    target_id: TargetId,
-    generator_id: GeneratorId,
-    class_id: ClassId,
+impl CallCounters {
+    /// Number of times `update_ready` was called.
+    pub fn update_ready(&self) -> u64 {
+        self.update_ready.load(Ordering::SeqCst)
+    }
+    /// Number of times `take_next` was called.
+    pub fn take_next(&self) -> u64 {
+        self.take_next.load(Ordering::SeqCst)
+    }
+    /// Number of completion callbacks observed with success outcome.
+    pub fn on_complete_success(&self) -> u64 {
+        self.on_complete_success.load(Ordering::SeqCst)
+    }
+    /// Number of completion callbacks observed with failure outcome.
+    pub fn on_complete_failed(&self) -> u64 {
+        self.on_complete_failed.load(Ordering::SeqCst)
+    }
+    /// Total completion callbacks (success + failure).
+    pub fn on_complete_total(&self) -> u64 {
+        self.on_complete_success() + self.on_complete_failed()
+    }
+    /// Increment the `update_ready` counter.
+    pub fn tick_update_ready(&self) {
+        self.update_ready.fetch_add(1, Ordering::SeqCst);
+    }
+    /// Increment the `take_next` counter.
+    pub fn tick_take_next(&self) {
+        self.take_next.fetch_add(1, Ordering::SeqCst);
+    }
+    /// Increment the success-completion counter.
+    pub fn tick_on_complete_success(&self) {
+        self.on_complete_success.fetch_add(1, Ordering::SeqCst);
+    }
+    /// Increment the failure-completion counter.
+    pub fn tick_on_complete_failed(&self) {
+        self.on_complete_failed.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+/// Scripted [`Generator`] producing `FakeEvent` / `FakeError` results.
+///
+/// The script is processed in order. Once the script is exhausted the
+/// generator reports `not_ready` forever (and `take_next` returns `None`).
+pub struct FakeGenerator {
+    steps: VecDeque<Step>,
+    /// Pending work item produced by `take_next` for the most recent ready step.
+    counters: CallCounters,
+    /// Cost reported by every produced work item.
     cost: CostUnits,
-    readiness: VecDeque<Readiness>,
-    work: VecDeque<ScheduledWorkResult<E, Err>>,
-    update_ready_count: usize,
-    take_next_count: usize,
-    completion_outcomes: Vec<CompletionOutcome>,
 }
 
-impl<E, Err> FakeGenerator<E, Err> {
-    pub fn new(
-        target_id: TargetId,
-        generator_id: GeneratorId,
-        class_id: ClassId,
-        cost: CostUnits,
-        readiness: Vec<Readiness>,
-        work: Vec<ScheduledWorkResult<E, Err>>,
-    ) -> (Self, FakeGeneratorHandle<E, Err>) {
-        let state = Arc::new(Mutex::new(FakeGeneratorState {
-            target_id,
-            generator_id,
-            class_id,
-            cost,
-            readiness: readiness.into(),
-            work: work.into(),
-            update_ready_count: 0,
-            take_next_count: 0,
-            completion_outcomes: Vec::new(),
-        }));
+impl FakeGenerator {
+    /// Build a new fake generator from a script.
+    pub fn new(steps: impl IntoIterator<Item = Step>) -> Self {
+        Self {
+            steps: steps.into_iter().collect(),
+            counters: CallCounters::default(),
+            cost: CostUnits::ZERO,
+        }
+    }
 
-        (
-            Self {
-                state: state.clone(),
-            },
-            FakeGeneratorHandle { state },
-        )
+    /// Configure the cost reported by every produced work item.
+    pub fn with_cost(mut self, cost: CostUnits) -> Self {
+        self.cost = cost;
+        self
+    }
+
+    /// Borrow the call counters; clones share the same backing counters.
+    pub fn counters(&self) -> CallCounters {
+        self.counters.clone()
     }
 }
 
-impl<E, Err> FakeGeneratorHandle<E, Err> {
-    pub fn update_ready_count(&self) -> usize {
-        self.state
-            .lock()
-            .expect("fake generator mutex must not be poisoned")
-            .update_ready_count
-    }
-
-    pub fn take_next_count(&self) -> usize {
-        self.state
-            .lock()
-            .expect("fake generator mutex must not be poisoned")
-            .take_next_count
-    }
-
-    pub fn completion_count(&self) -> usize {
-        self.state
-            .lock()
-            .expect("fake generator mutex must not be poisoned")
-            .completion_outcomes
-            .len()
-    }
-
-    pub fn completion_outcomes(&self) -> Vec<CompletionOutcome> {
-        self.state
-            .lock()
-            .expect("fake generator mutex must not be poisoned")
-            .completion_outcomes
-            .clone()
-    }
-}
-
-impl<E, Err> Generator<E, Err> for FakeGenerator<E, Err>
-where
-    E: Send + 'static,
-    Err: Send + 'static,
-{
+impl Generator<FakeEvent, FakeError> for FakeGenerator {
     fn update_ready(&mut self, _now: Instant) -> Readiness {
-        let mut state = self
-            .state
-            .lock()
-            .expect("fake generator mutex must not be poisoned");
-        state.update_ready_count += 1;
-        state
-            .readiness
-            .pop_front()
-            .unwrap_or_else(|| Readiness::ready(state.cost))
+        self.counters.update_ready.fetch_add(1, Ordering::SeqCst);
+        match self.steps.front() {
+            None => Readiness::not_ready(None),
+            Some(Step::NotReady) => Readiness::not_ready(None),
+            Some(Step::ReadyNoWork | Step::Success(_) | Step::Failure(_)) => {
+                Readiness::ready(Some(self.cost))
+            }
+        }
     }
 
-    fn take_next(&mut self) -> Option<ScheduledWork<E, Err>> {
-        let mut state = self
-            .state
-            .lock()
-            .expect("fake generator mutex must not be poisoned");
-        state.take_next_count += 1;
-        let result = state.work.pop_front()?;
-        let meta = WorkMeta::new(
-            state.target_id.clone(),
-            state.generator_id.clone(),
-            state.class_id.clone(),
-            state.cost,
-        );
-        Some(ScheduledWork::new(meta, async move { result }))
+    fn take_next(&mut self) -> Option<ScheduledWork<FakeEvent, FakeError>> {
+        self.counters.take_next.fetch_add(1, Ordering::SeqCst);
+        let step = self.steps.pop_front()?;
+        match step {
+            Step::NotReady => {
+                // putting it back and returning None preserves "not ready"
+                self.steps.push_front(Step::NotReady);
+                None
+            }
+            Step::ReadyNoWork => None,
+            Step::Success(events) => {
+                let cost = self.cost;
+                let fut = Box::pin(async move { Ok::<_, FakeError>(events) });
+                Some(ScheduledWork::new(WorkMeta::with_cost(cost), fut))
+            }
+            Step::Failure(err) => {
+                let cost = self.cost;
+                let fut = Box::pin(async move { Err::<Vec<FakeEvent>, _>(err) });
+                Some(ScheduledWork::new(WorkMeta::with_cost(cost), fut))
+            }
+        }
     }
 
     fn on_complete(&mut self, completion: &WorkCompletion) {
-        self.state
-            .lock()
-            .expect("fake generator mutex must not be poisoned")
-            .completion_outcomes
-            .push(completion.outcome().clone());
+        match completion.outcome {
+            CompletionOutcome::Succeeded => {
+                self.counters
+                    .on_complete_success
+                    .fetch_add(1, Ordering::SeqCst);
+            }
+            CompletionOutcome::Failed => {
+                self.counters
+                    .on_complete_failed
+                    .fetch_add(1, Ordering::SeqCst);
+            }
+        }
     }
 }

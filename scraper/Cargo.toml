@@ -25,18 +25,36 @@ keywords.workspace = true
 categories.workspace = true
 documentation = "https://docs.rs/nv-redfish-scraper"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [features]
 default = []
+
+# Enable concrete RuntimeEvent type and emission paths. When disabled,
+# RuntimeEventType is core::convert::Infallible and RuntimeOutput::Runtime(_)
+# cannot be constructed.
 runtime-events = []
+
+# Enable serde support on adapter resource events and reconstruction records.
+serde = ["dep:serde", "serde/rc"]
+
+# Enable the Redfish adapter module. Pulls nv-redfish.
 redfish-adapter = ["dep:nv-redfish"]
-serde = ["dep:serde"]
+
+# Per-capability adapter feature gates. Phase 0 wires a representative subset;
+# additional capabilities follow the same pattern.
+adapter-service-root = ["redfish-adapter"]
+adapter-chassis = ["redfish-adapter", "nv-redfish/chassis"]
+adapter-sensors = ["adapter-chassis", "nv-redfish/sensors"]
+adapter-computer-systems = ["redfish-adapter", "nv-redfish/computer-systems"]
 
 [dependencies]
+futures-core = { workspace = true }
+futures-util = { workspace = true }
+serde = { workspace = true, optional = true, features = ["derive"] }
 nv-redfish = { workspace = true, optional = true }
-serde = { workspace = true, features = ["derive", "std"], optional = true }
 
 [dev-dependencies]
-nv-redfish-bmc-mock = { workspace = true }
-serde_json = { workspace = true }
-tokio-test = { workspace = true }
 trybuild = { workspace = true }
+serde_json = { workspace = true, features = ["std"] }

@@ -1,7 +1,7 @@
 error[E0433]: cannot find `adapter` in `nv_redfish_scraper`
- --> tests/trybuild/default_no_redfish_adapter.rs:8:32
+ --> tests/trybuild/runtime_events_alone_does_not_enable_adapter.rs:9:32
   |
-8 |     let _: nv_redfish_scraper::adapter::redfish::RedfishEvent =
+9 |     let _: nv_redfish_scraper::adapter::redfish::BmcId = ::std::unreachable!();
   |                                ^^^^^^^ could not find `adapter` in `nv_redfish_scraper`
   |
 note: found an item that was configured out

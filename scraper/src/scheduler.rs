@@ -13,84 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Scheduler metadata contracts used by generators and runtime control.
+//! Scheduler abstractions.
+//!
+//! The scheduler operates only on abstract metadata — identity, readiness, next
+//! ready time, cost, in-flight state, and capacity/budget state. It is not
+//! parameterized by any concrete request type; concrete work is produced below
+//! the scheduler by [`crate::Generator::take_next`] for the selected generator.
 
-use std::time::Instant;
+use crate::generator::CostUnits;
 
-/// Abstract weighted cost of a scheduled work item.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CostUnits(u64);
-
-impl CostUnits {
-    /// Creates a cost value.
-    #[must_use]
-    pub const fn new(value: u64) -> Self {
-        Self(value)
-    }
-
-    /// Returns the numeric cost value.
-    #[must_use]
-    pub const fn get(self) -> u64 {
-        self.0
-    }
-}
-
-impl Default for CostUnits {
-    fn default() -> Self {
-        Self::new(1)
-    }
-}
-
-/// Generator readiness metadata observed by schedulers.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Readiness {
-    ready: bool,
-    next_update_at: Option<Instant>,
-    next_cost: Option<CostUnits>,
-}
-
-impl Readiness {
-    /// Creates readiness metadata.
-    #[must_use]
-    pub const fn new(
-        ready: bool,
-        next_update_at: Option<Instant>,
-        next_cost: Option<CostUnits>,
-    ) -> Self {
-        Self {
-            ready,
-            next_update_at,
-            next_cost,
-        }
-    }
-
-    /// Creates ready metadata with an estimated cost.
-    #[must_use]
-    pub const fn ready(next_cost: CostUnits) -> Self {
-        Self::new(true, None, Some(next_cost))
-    }
-
-    /// Creates not-ready metadata with an optional next update time.
-    #[must_use]
-    pub const fn not_ready(next_update_at: Option<Instant>) -> Self {
-        Self::new(false, next_update_at, None)
-    }
-
-    /// Returns whether the generator is ready to produce work.
-    #[must_use]
-    pub const fn is_ready(&self) -> bool {
-        self.ready
-    }
-
-    /// Returns the next time the runtime should refresh readiness.
-    #[must_use]
-    pub const fn next_update_at(&self) -> Option<Instant> {
-        self.next_update_at
-    }
-
-    /// Returns the estimated cost of the next work item.
-    #[must_use]
-    pub const fn next_cost(&self) -> Option<CostUnits> {
-        self.next_cost
-    }
+/// A request produced by a scheduling item, shaped for scheduler bookkeeping.
+///
+/// Phase 0 only requires the cost projection. Later phases may extend this
+/// trait with class identity or in-flight-budget hints, but must not break the
+/// invariant that schedulers operate without knowledge of concrete request
+/// payloads.
+pub trait ScheduledRequest {
+    /// Cost of the request, used for admission and fairness accounting.
+    fn cost(&self) -> CostUnits;
 }
