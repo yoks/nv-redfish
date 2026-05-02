@@ -44,8 +44,21 @@ redfish-adapter = ["dep:nv-redfish"]
 
 # Per-capability adapter feature gates. Phase 0 wires a representative subset;
 # additional capabilities follow the same pattern.
+#
+# `adapter-chassis` pulls in the `nv-redfish` schema features for the
+# inlinable Chassis sub-resources (Thermal, Power, Sensors) so that the
+# Phase 7 expand-aware `ChassisGenerator` can pattern-match on
+# `NavProperty::Expanded(_)` for those fields. Without those schema
+# features the generated `ChassisSchema` exposes them as `ReferenceLeaf`
+# instead of `NavProperty<T>`, which would break the auto-detect path.
 adapter-service-root = ["redfish-adapter"]
-adapter-chassis = ["redfish-adapter", "nv-redfish/chassis"]
+adapter-chassis = [
+    "redfish-adapter",
+    "nv-redfish/chassis",
+    "nv-redfish/thermal",
+    "nv-redfish/power",
+    "nv-redfish/sensors",
+]
 adapter-sensors = ["adapter-chassis", "nv-redfish/sensors"]
 adapter-computer-systems = ["redfish-adapter", "nv-redfish/computer-systems"]
 
@@ -57,4 +70,7 @@ nv-redfish = { workspace = true, optional = true }
 
 [dev-dependencies]
 trybuild = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["std"] }
+nv-redfish-bmc-mock = { workspace = true }
+

@@ -621,22 +621,28 @@ impl<Ev, Err> RuntimeState<Ev, Err> {
     }
 
     pub(crate) fn class_stats_snapshot(&self) -> Vec<ClassStats> {
-        let mut by_class: HashMap<Option<ClassId>, ClassStats> = HashMap::new();
-        for gen in self.generators.values() {
-            // Skip tombstoned generators so per-class numbers reflect only
-            // the visible runtime.
-            if gen.removed {
-                continue;
-            }
-            let key = gen.config.class.clone();
-            let entry = by_class.entry(key.clone()).or_insert_with(|| ClassStats {
-                class: key,
-                ..ClassStats::default()
-            });
-            entry.dispatched += gen.stats.dispatched;
-            entry.in_flight += gen.stats.in_flight;
-        }
-        by_class.into_values().collect()
+        // Tombstoned generators are excluded so per-class numbers reflect
+        // only the visible runtime. Each remaining generator contributes
+        // its `dispatched`/`in_flight` counts to the bucket keyed by its
+        // class id.
+        self.generators
+            .values()
+            .filter(|gen| !gen.removed)
+            .fold(
+                HashMap::<Option<ClassId>, ClassStats>::new(),
+                |mut acc, gen| {
+                    let key = gen.config.class.clone();
+                    let entry = acc.entry(key.clone()).or_insert_with(|| ClassStats {
+                        class: key,
+                        ..ClassStats::default()
+                    });
+                    entry.dispatched += gen.stats.dispatched;
+                    entry.in_flight += gen.stats.in_flight;
+                    acc
+                },
+            )
+            .into_values()
+            .collect()
     }
 }
 
@@ -718,16 +724,12 @@ fn max_weight_for_members<Ev, Err>(
     members: &[GeneratorId],
     all_generators: &HashMap<GeneratorId, GeneratorEntry<Ev, Err>>,
 ) -> u32 {
-    let mut max = 1u32;
-    for gid in members {
-        if let Some(g) = all_generators.get(gid) {
-            let w = g.config.weight.unwrap_or(1).max(1);
-            if w > max {
-                max = w;
-            }
-        }
-    }
-    max
+    members
+        .iter()
+        .filter_map(|gid| all_generators.get(gid))
+        .map(|g| g.config.weight.unwrap_or(1).max(1))
+        .max()
+        .unwrap_or(1)
 }
 
 /// In-flight work item polled inside [`Runtime::next`].
@@ -1198,66 +1200,74 @@ where
     Ev: Send + 'static,
     Err: Send + 'static,
 {
-    let chosen;
-    {
-        let mut g = runtime.shared.lock_state();
+    // The mutex guard's scope is kept to this block so the lock is dropped
+    // before the caller observes the chosen work item.
+    //
+    // Phase 5: graceful_shutdown drains existing ready work; we no longer
+    // short-circuit dispatch when shutdown_started. Control-plane mutations
+    // (add_target/add_generator/...) still reject after shutdown, and
+    // `try_emit_shutdown` waits for queue+in_flight to reach zero before
+    // emitting `Shutdown`.
+    let mut g = runtime.shared.lock_state();
 
-        // Phase 5: graceful_shutdown drains existing ready work; we no
-        // longer short-circuit dispatch when shutdown_started. Control-plane
-        // mutations (add_target/add_generator/...) still reject after
-        // shutdown, and `try_emit_shutdown` waits for queue+in_flight to
-        // reach zero before emitting `Shutdown`.
+    // Level 1: order targets by ascending `dispatched` (uniform-weight DRR
+    // across targets), ties broken by `target_order` position.
+    let mut target_candidates: Vec<(u64, usize, TargetId)> = g
+        .target_order
+        .iter()
+        .enumerate()
+        .filter_map(|(i, tid)| g.targets.get(tid).map(|t| (t.dispatched, i, *tid)))
+        .collect();
+    target_candidates.sort_by_key(|(disp, ord_idx, _)| (*disp, *ord_idx));
 
-        // Level 1: order targets by ascending `dispatched` (uniform-weight
-        // DRR across targets), ties broken by `target_order` position.
-        let mut target_candidates: Vec<(u64, usize, TargetId)> = g
-            .target_order
-            .iter()
-            .enumerate()
-            .filter_map(|(i, tid)| g.targets.get(tid).map(|t| (t.dispatched, i, *tid)))
-            .collect();
-        if target_candidates.is_empty() {
-            drop(g);
-            return None;
-        }
-        target_candidates.sort_by_key(|(disp, ord_idx, _)| (*disp, *ord_idx));
-
-        let mut found: Option<(GeneratorId, ScheduledWork<Ev, Err>)> = None;
-        'targets: for (_disp, _ord_idx, tid) in target_candidates {
-            if !target_is_eligible(&g, tid) {
-                continue;
-            }
-            let Some(t) = g.targets.get(&tid) else { continue };
-            let max_cost_per_round = t.limits.max_cost_per_round;
-            let round_cost = t.round_cost;
-            // Level 2: order classes within this target by ascending `pass`
-            // (weighted DRR across classes), ties by class_order position.
-            let mut class_candidates: Vec<(u64, usize, Option<ClassId>)> = t
-                .class_order
-                .iter()
-                .enumerate()
-                .filter_map(|(i, k)| t.class_state.get(k).map(|c| (c.pass, i, k.clone())))
-                .collect();
-            class_candidates.sort_by_key(|(pass, ord_idx, _)| (*pass, *ord_idx));
-
-            for (_pass, _cls_idx, class_key) in class_candidates {
-                if let Some(work) = dispatch_from_class(
-                    &mut g,
-                    tid,
-                    class_key.as_ref(),
-                    max_cost_per_round,
-                    round_cost,
-                    now,
-                ) {
-                    found = Some(work);
-                    break 'targets;
-                }
-            }
-        }
-        chosen = found;
-        drop(g);
-    }
+    let chosen = target_candidates
+        .into_iter()
+        .find_map(|(_disp, _ord_idx, tid)| dispatch_from_target(&mut g, tid, now));
+    drop(g);
     chosen
+}
+
+/// Try to dispatch one work item from `tid`. Eligibility is checked first;
+/// then classes within the target are visited in ascending `pass` (weighted
+/// DRR), ties broken by `class_order` position. Returns the first class
+/// that produces work, or `None` if no class on this target is dispatchable
+/// in the current round.
+fn dispatch_from_target<Ev, Err>(
+    state: &mut RuntimeState<Ev, Err>,
+    tid: TargetId,
+    now: Instant,
+) -> Option<(GeneratorId, ScheduledWork<Ev, Err>)>
+where
+    Ev: Send + 'static,
+    Err: Send + 'static,
+{
+    if !target_is_eligible(state, tid) {
+        return None;
+    }
+    let t = state.targets.get(&tid)?;
+    let max_cost_per_round = t.limits.max_cost_per_round;
+    let round_cost = t.round_cost;
+    // Level 2: order classes within this target by ascending `pass`
+    // (weighted DRR across classes), ties by class_order position.
+    let mut class_candidates: Vec<(u64, usize, Option<ClassId>)> = t
+        .class_order
+        .iter()
+        .enumerate()
+        .filter_map(|(i, k)| t.class_state.get(k).map(|c| (c.pass, i, k.clone())))
+        .collect();
+    class_candidates.sort_by_key(|(pass, ord_idx, _)| (*pass, *ord_idx));
+    class_candidates
+        .into_iter()
+        .find_map(|(_pass, _cls_idx, class_key)| {
+            dispatch_from_class(
+                state,
+                tid,
+                class_key.as_ref(),
+                max_cost_per_round,
+                round_cost,
+                now,
+            )
+        })
 }
 
 /// Return the `Readiness` to use for this generator on this scheduling pass.

@@ -26,3 +26,7 @@ pub mod fake_generator;
 pub mod fake_payload;
 pub mod harness;
 pub mod lcg;
+#[cfg(feature = "redfish-adapter")]
+pub mod mock_bmc;
+#[cfg(feature = "redfish-adapter")]
+pub mod redfish_events;

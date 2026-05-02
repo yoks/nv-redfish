@@ -74,7 +74,7 @@ runtime events benefit from Phase 4 stats.
 | `tests/completion.rs` | lag observable from completion-derived stats | Phase 4 |
 | `tests/redfish_adapter_api.rs` | real fetch (service root, chassis) | Phase 6 |
 | `tests/redfish_adapter_api.rs` | sensors, systems, expand, parent linkage | Phase 7 |
-| `tests/redfish_adapter_api.rs` | reconstruction record derivation | Phase 8 |
+| `tests/reconstruction.rs` | reconstruction record derivation and replay | Phase 8 |
 
 ## Conventions for later phases
 

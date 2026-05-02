@@ -37,8 +37,6 @@ use nv_redfish_scraper::adapter::redfish::EntityPayload;
 use nv_redfish_scraper::adapter::redfish::GeneratorEvent;
 use nv_redfish_scraper::adapter::redfish::RedfishAdapterError;
 use nv_redfish_scraper::adapter::redfish::RedfishEvent;
-use nv_redfish_scraper::adapter::redfish::RedfishResourceEvent;
-use nv_redfish_scraper::adapter::redfish::ResourceMetadata;
 use nv_redfish_scraper::adapter::redfish::ScrapeEvent;
 use nv_redfish_scraper::Generator;
 use nv_redfish_scraper::GeneratorConfig;
@@ -55,14 +53,9 @@ use support::harness::Harness;
 
 #[test]
 fn child_resource_events_carry_parent_odata_id() {
-    let event = RedfishResourceEvent {
-        bmc_id: BmcId::new("bmc-A"),
-        odata_id: ODataId::from(String::from("/redfish/v1/Chassis/1/Power")),
-        parent_odata_id: Some(ODataId::from(String::from("/redfish/v1/Chassis/1"))),
-        change: ChangeKind::Inserted,
-        payload: None,
-        metadata: ResourceMetadata::default(),
-    };
+    let event = support::redfish_events::ResourceEvent::at("bmc-A", "/redfish/v1/Chassis/1/Power")
+        .parent("/redfish/v1/Chassis/1")
+        .build();
     let parent = event
         .parent_odata_id
         .as_ref()
@@ -78,14 +71,10 @@ fn expanded_payload_preservation_is_representable_via_event_api() {
         odata_id: ODataId::from(String::from("/redfish/v1/Chassis/1")),
         etag: Some(ODataETag::from(String::from("\"v1\""))),
     };
-    let event = RedfishResourceEvent {
-        bmc_id: BmcId::new("bmc-A"),
-        odata_id: ODataId::from(String::from("/redfish/v1/Chassis/1")),
-        parent_odata_id: None,
-        change: ChangeKind::Updated,
-        payload: Some(payload.clone()),
-        metadata: ResourceMetadata::default(),
-    };
+    let event = support::redfish_events::ResourceEvent::at("bmc-A", "/redfish/v1/Chassis/1")
+        .change(ChangeKind::Updated)
+        .payload(payload.clone())
+        .build();
     let preserved = event.payload.as_ref().expect("payload preserved on event");
     assert_eq!(preserved.kind, payload.kind);
     assert_eq!(preserved.odata_id, payload.odata_id);

@@ -81,4 +81,27 @@ impl Harness {
         let mut cx = Context::from_waker(&self.waker);
         Pin::new(fut).poll(&mut cx)
     }
+
+    /// Drive a future to completion using the harness waker.
+    ///
+    /// Used by Phase 6 adapter tests to evaluate `nv-redfish` constructors
+    /// (for example, `ServiceRoot::new(mock).await`) synchronously, since
+    /// the underlying mock futures are always immediately ready.
+    ///
+    /// Polls up to 1024 times before panicking; this is a sanity bound and
+    /// not a meaningful retry budget.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the future does not resolve within 1024 polls.
+    pub fn block_on<F: Future>(&self, fut: F) -> F::Output {
+        let mut fut = Box::pin(fut);
+        let mut cx = Context::from_waker(&self.waker);
+        for _ in 0..1024 {
+            if let Poll::Ready(value) = fut.as_mut().poll(&mut cx) {
+                return value;
+            }
+        }
+        panic!("Harness::block_on: future did not resolve within 1024 polls");
+    }
 }

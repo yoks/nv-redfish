@@ -20,4 +20,5 @@
 //! compiled only when the `redfish-adapter` feature is enabled. Per-capability
 //! features further gate which builders are compiled.
 
+pub mod reconstruction;
 pub mod redfish;

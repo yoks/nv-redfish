@@ -129,3 +129,18 @@ pub use stats::RuntimeStats;
 pub use stats::TargetStats;
 #[doc(inline)]
 pub use stats::WorkStats;
+
+// Redfish adapter re-exports. Grouped at the end so the alphabetically
+// ordered runtime re-exports above stay contiguous.
+#[cfg(feature = "redfish-adapter")]
+#[doc(inline)]
+pub use adapter::reconstruction::reconstruction_iter;
+#[cfg(feature = "redfish-adapter")]
+#[doc(inline)]
+pub use adapter::reconstruction::replay_records;
+#[cfg(feature = "redfish-adapter")]
+#[doc(inline)]
+pub use adapter::reconstruction::ReplayDecision;
+#[cfg(feature = "redfish-adapter")]
+#[doc(inline)]
+pub use adapter::reconstruction::ReplayStats;

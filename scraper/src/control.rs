@@ -121,23 +121,69 @@ impl<Ev, Err> Shared<Ev, Err> {
     }
 }
 
+/// Marker trait used by [`RuntimeHandle::mutate`] to decide whether the
+/// shared waker should be woken after a mutation.
+///
+/// `bool::is_success` returns `true` when the boolean is `true`, mirroring
+/// the established `if updated { wake() }` discipline. `Option::is_success`
+/// returns `true` when the option is `Some(_)`, matching `add_target`'s
+/// "wake on successful allocation" behaviour. `Result::is_success` returns
+/// `true` when the result is `Ok(_)`, matching `add_generator`'s "wake on
+/// successful registration" behaviour.
+trait IsSuccess {
+    fn is_success(&self) -> bool;
+}
+
+impl IsSuccess for bool {
+    fn is_success(&self) -> bool {
+        *self
+    }
+}
+
+impl<T> IsSuccess for Option<T> {
+    fn is_success(&self) -> bool {
+        self.is_some()
+    }
+}
+
+impl<T, E> IsSuccess for Result<T, E> {
+    fn is_success(&self) -> bool {
+        self.is_ok()
+    }
+}
+
 // Every method below acquires `Shared::lock_state` and may panic only on
 // mutex poisoning; the panic discipline is documented on `Shared::lock_state`.
 #[allow(clippy::missing_panics_doc)]
 impl<Ev, Err> RuntimeHandle<Ev, Err> {
+    /// Run `f` against the locked runtime state and return its result.
+    ///
+    /// The lock is dropped before the result is returned. Use this for
+    /// read-only or wake-irrelevant mutations (`pause_*` on a paused entity
+    /// is a no-op as far as the parked `next()` future is concerned).
+    fn with_state<R>(&self, f: impl FnOnce(&mut RuntimeState<Ev, Err>) -> R) -> R {
+        f(&mut self.shared.lock_state())
+    }
+
+    /// Run a state mutation and wake the parked runtime when the result
+    /// reports success per [`IsSuccess`].
+    ///
+    /// This collapses the lock-mutate-maybe-wake-return pattern that every
+    /// state-changing handle method otherwise repeats verbatim.
+    fn mutate<R: IsSuccess>(&self, f: impl FnOnce(&mut RuntimeState<Ev, Err>) -> R) -> R {
+        let result = self.with_state(f);
+        if result.is_success() {
+            self.shared.waker.wake();
+        }
+        result
+    }
+
     /// Add a target to the runtime and return its newly-allocated id.
     ///
     /// If graceful shutdown has already started the call returns `None`.
     #[must_use]
     pub fn add_target(&self, limits: TargetLimits) -> Option<TargetId> {
-        let id = {
-            let mut g = self.shared.lock_state();
-            g.add_target(limits)
-        };
-        if id.is_some() {
-            self.shared.waker.wake();
-        }
-        id
+        self.mutate(|g| g.add_target(limits))
     }
 
     /// Remove the target with the given id.
@@ -146,47 +192,29 @@ impl<Ev, Err> RuntimeHandle<Ev, Err> {
     /// removed as part of this call.
     #[must_use]
     pub fn remove_target(&self, id: TargetId) -> bool {
-        let removed = {
-            let mut g = self.shared.lock_state();
-            g.remove_target(id)
-        };
-        if removed {
-            self.shared.waker.wake();
-        }
-        removed
+        self.mutate(|g| g.remove_target(id))
     }
 
     /// Update the limits of an existing target. Returns `true` on success.
     #[must_use]
     pub fn update_target_limits(&self, id: TargetId, limits: TargetLimits) -> bool {
-        let updated = {
-            let mut g = self.shared.lock_state();
-            g.update_target_limits(id, limits)
-        };
-        if updated {
-            self.shared.waker.wake();
-        }
-        updated
+        self.mutate(|g| g.update_target_limits(id, limits))
     }
 
     /// Pause an existing target. Returns `true` on success.
+    ///
+    /// Pausing never wakes the parked runtime: a paused target only excludes
+    /// itself from future selections, it does not produce any new ready
+    /// work to consume.
     #[must_use]
     pub fn pause_target(&self, id: TargetId) -> bool {
-        let mut g = self.shared.lock_state();
-        g.pause_target(id)
+        self.with_state(|g| g.pause_target(id))
     }
 
     /// Resume a paused target. Returns `true` on success.
     #[must_use]
     pub fn resume_target(&self, id: TargetId) -> bool {
-        let resumed = {
-            let mut g = self.shared.lock_state();
-            g.resume_target(id)
-        };
-        if resumed {
-            self.shared.waker.wake();
-        }
-        resumed
+        self.mutate(|g| g.resume_target(id))
     }
 
     /// Add a generator under the specified target.
@@ -203,14 +231,7 @@ impl<Ev, Err> RuntimeHandle<Ev, Err> {
         generator: Box<dyn crate::Generator<Ev, Err> + Send>,
         config: GeneratorConfig,
     ) -> Result<GeneratorId, AddGeneratorError> {
-        let result = {
-            let mut g = self.shared.lock_state();
-            g.add_generator(target, generator, config)
-        };
-        if result.is_ok() {
-            self.shared.waker.wake();
-        }
-        result
+        self.mutate(|g| g.add_generator(target, generator, config))
     }
 
     /// Remove a generator. Returns `true` if it existed.
@@ -219,47 +240,27 @@ impl<Ev, Err> RuntimeHandle<Ev, Err> {
     /// future selections are prevented.
     #[must_use]
     pub fn remove_generator(&self, id: GeneratorId) -> bool {
-        let removed = {
-            let mut g = self.shared.lock_state();
-            g.remove_generator(id)
-        };
-        if removed {
-            self.shared.waker.wake();
-        }
-        removed
+        self.mutate(|g| g.remove_generator(id))
     }
 
     /// Update generator configuration. Returns `true` on success.
     #[must_use]
     pub fn update_generator(&self, id: GeneratorId, config: GeneratorConfig) -> bool {
-        let updated = {
-            let mut g = self.shared.lock_state();
-            g.update_generator(id, config)
-        };
-        if updated {
-            self.shared.waker.wake();
-        }
-        updated
+        self.mutate(|g| g.update_generator(id, config))
     }
 
     /// Pause a generator. Returns `true` on success.
+    ///
+    /// Pausing never wakes the parked runtime; see [`Self::pause_target`].
     #[must_use]
     pub fn pause_generator(&self, id: GeneratorId) -> bool {
-        let mut g = self.shared.lock_state();
-        g.pause_generator(id)
+        self.with_state(|g| g.pause_generator(id))
     }
 
     /// Resume a paused generator. Returns `true` on success.
     #[must_use]
     pub fn resume_generator(&self, id: GeneratorId) -> bool {
-        let resumed = {
-            let mut g = self.shared.lock_state();
-            g.resume_generator(id)
-        };
-        if resumed {
-            self.shared.waker.wake();
-        }
-        resumed
+        self.mutate(|g| g.resume_generator(id))
     }
 
     /// Hint to the scheduler that a generator should be considered ready now.
@@ -267,14 +268,7 @@ impl<Ev, Err> RuntimeHandle<Ev, Err> {
     /// Returns `true` if the generator exists.
     #[must_use]
     pub fn trigger_generator(&self, id: GeneratorId) -> bool {
-        let triggered = {
-            let mut g = self.shared.lock_state();
-            g.trigger_generator(id)
-        };
-        if triggered {
-            self.shared.waker.wake();
-        }
-        triggered
+        self.mutate(|g| g.trigger_generator(id))
     }
 
     /// Begin graceful shutdown. Idempotent: subsequent calls do nothing.
@@ -284,19 +278,12 @@ impl<Ev, Err> RuntimeHandle<Ev, Err> {
     /// outputs are still delivered, and finally the sticky shutdown output is
     /// emitted by [`crate::Runtime::next`].
     pub fn graceful_shutdown(&self) {
-        let started = {
-            let mut g = self.shared.lock_state();
-            g.start_shutdown()
-        };
-        if started {
-            self.shared.waker.wake();
-        }
+        let _ = self.mutate(RuntimeState::start_shutdown);
     }
 
     /// Snapshot of runtime statistics.
     #[must_use]
     pub fn stats(&self) -> crate::RuntimeStats {
-        let g = self.shared.lock_state();
-        g.stats_snapshot()
+        self.with_state(|g| g.stats_snapshot())
     }
 }
