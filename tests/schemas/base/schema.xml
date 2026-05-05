@@ -146,7 +146,21 @@
         </NavigationProperty>
       </EntityType>
 
-      <EntityType Name="TestCollectionMember"/>
+      <EntityType Name="TestCollectionMember">
+        <Property Name="RequiredOnCreate" Type="Edm.String" Nullable="false">
+          <Annotation Term="OData.Permissions" EnumMember="OData.Permission/Read"/>
+          <Annotation Term="Redfish.RequiredOnCreate"/>
+        </Property>
+        <Property Name="OptionalWritable" Type="Edm.String" Nullable="false">
+          <Annotation Term="OData.Permissions" EnumMember="OData.Permission/ReadWrite"/>
+        </Property>
+        <Property Name="ReadOnly" Type="Edm.String" Nullable="false">
+          <Annotation Term="OData.Permissions" EnumMember="OData.Permission/Read"/>
+        </Property>
+        <Property Name="ReadOnlyComplex" Type="ServiceRoot.v1_0_0.ReadOnlyComplexType" Nullable="false">
+          <Annotation Term="OData.Permissions" EnumMember="OData.Permission/ReadWrite"/>
+        </Property>
+      </EntityType>
 
       <!-- Updatable entity with Redfish Settings support -->
       <EntityType Name="TestSettingsService">

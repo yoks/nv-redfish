@@ -498,11 +498,16 @@ async fn create_collection_member_test() -> Result<(), Error> {
     });
     bmc.expect(Expect::create(
         &collection_id,
-        json!({}),
+        json!({
+            "RequiredOnCreate": "required value",
+        }),
         collection_member_tpl,
     ));
     let member = collection
-        .create(&bmc, &TestCollectionMemberCreate {})
+        .create(
+            &bmc,
+            &TestCollectionMemberCreate::builder("required value".into()).build(),
+        )
         .await
         .map_err(Error::Bmc)?;
     let member = match member {
@@ -510,6 +515,22 @@ async fn create_collection_member_test() -> Result<(), Error> {
         _ => return Err(Error::ExpectedProperty("member")),
     };
     assert_eq!(member.odata_id().to_string(), collection_member_id);
+    Ok(())
+}
+
+#[test]
+async fn create_struct_required_on_create_and_writable_fields_test() -> Result<(), Error> {
+    let create = TestCollectionMemberCreate::builder("required value".into())
+        .with_optional_writable("optional value".into())
+        .build();
+
+    assert_eq!(
+        serde_json::to_value(create).expect("serializable"),
+        json!({
+            "RequiredOnCreate": "required value",
+            "OptionalWritable": "optional value",
+        })
+    );
     Ok(())
 }
 

@@ -439,10 +439,13 @@ impl<'a> StructDef<'a> {
             .iter()
             .filter_map(|p| {
                 let (typeinfo, v) = &p.ptype.inner();
-                if p.odata.permissions_is_write()
-                    && typeinfo.permissions.is_none_or(|p| p != Permissions::Read)
+                let required = p.redfish.is_required_on_create.into_inner();
+                if required
+                    || (p.odata.permissions_is_write()
+                        && typeinfo.permissions.is_none_or(|p| p != Permissions::Read))
                 {
-                    let full_type = FullTypeName::new(*v, config).for_update(Some(typeinfo.class));
+                    let full_type: super::full_type_name::FullTypeNameForUpdate<'_, '_> =
+                        FullTypeName::new(*v, config).for_update(Some(typeinfo.class));
                     let required = p.redfish.is_required_on_create.into_inner();
                     let prop_type = match p.ptype {
                         PropertyType::One(_) => quote! { #full_type },
