@@ -24,7 +24,6 @@ use crate::compiler::Property;
 use crate::compiler::PropertyType;
 use crate::compiler::QualifiedName;
 use crate::compiler::RigidArraySupport;
-use crate::compiler::TypeClass;
 use crate::generator::rust::doc::format_and_generate as doc_format_and_generate;
 use crate::generator::rust::ActionName;
 use crate::generator::rust::Config;
@@ -83,46 +82,11 @@ enum ImplType {
     None,
 }
 
-#[derive(Clone, Copy)]
-enum CreateFieldShape {
-    UpdatePayload,
-    CreatePayload,
-}
-
-impl CreateFieldShape {
-    const fn from_property(
-        required_on_create: bool,
-        can_reuse_update_payload: bool,
-        type_class: TypeClass,
-    ) -> Option<Self> {
-        match (required_on_create, can_reuse_update_payload, type_class) {
-            (false, false, _) => None,
-            // Some Redfish schemas mark read-only complex properties
-            // as RequiredOnCreate. Those complex types deliberately do
-            // not have update payloads, so create needs its own nested
-            // payload shape.
-            (true, false, TypeClass::ComplexType) => Some(Self::CreatePayload),
-            _ => Some(Self::UpdatePayload),
-        }
-    }
-
-    fn full_type(
-        self,
-        type_name: QualifiedName<'_>,
-        type_class: TypeClass,
-        config: &Config,
-    ) -> TokenStream {
-        match self {
-            Self::CreatePayload => {
-                let full_type = FullTypeName::new(type_name, config).for_create();
-                quote! { #full_type }
-            }
-            Self::UpdatePayload => {
-                let full_type = FullTypeName::new(type_name, config).for_update(Some(type_class));
-                quote! { #full_type }
-            }
-        }
-    }
+struct SerializableProperty<'a> {
+    rename: Literal,
+    name: StructFieldName<'a>,
+    prop_type: TokenStream,
+    required_on_create: bool,
 }
 
 impl<'a> StructDef<'a> {
@@ -385,34 +349,7 @@ impl<'a> StructDef<'a> {
             },
         );
 
-        let properties = self
-            .properties
-            .properties
-            .iter()
-            .filter_map(|p| {
-                let (typeinfo, v) = &p.ptype.inner();
-                if p.odata.permissions_is_write()
-                    && typeinfo.permissions.is_none_or(|p| p != Permissions::Read)
-                {
-                    let full_type = FullTypeName::new(*v, config).for_update(Some(typeinfo.class));
-                    let prop_type = match p.ptype {
-                        PropertyType::One(_) => quote! { #full_type },
-                        PropertyType::Collection(_) => {
-                            if p.rigid_array_support.into_inner() {
-                                quote! { Vec<Option<#full_type>> }
-                            } else {
-                                quote! { Vec<#full_type> }
-                            }
-                        }
-                    };
-                    let rename = Literal::string(p.name.inner().inner());
-                    let name = StructFieldName::new_property(p.name);
-                    Some((rename, name, prop_type))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+        let properties = self.serializable_properties(config);
 
         let additional_properties = if self.odata.additional_properties.is_some_and(|v| *v.inner())
         {
@@ -428,7 +365,10 @@ impl<'a> StructDef<'a> {
             TokenStream::new()
         };
 
-        let properties_content = properties.iter().map(|(rename, name, prop_type)| {
+        let properties_content = properties.iter().map(|p| {
+            let rename = &p.rename;
+            let name = p.name;
+            let prop_type = &p.prop_type;
             quote! {
                 #[serde(rename=#rename)]
                 #[serde(skip_serializing_if = "Option::is_none")]
@@ -445,16 +385,9 @@ impl<'a> StructDef<'a> {
             pub struct #name { #base #content #additional_properties }
         });
 
-        let properties_impl = properties.iter().map(|(_, name, prop_type)| {
-            let fn_name = Ident::new(&format!("with_{name}"), Span::call_site());
-            quote! {
-                #[must_use]
-                pub fn #fn_name(mut self, v: #prop_type) -> Self {
-                    self.#name = Some(v);
-                    self
-                }
-            }
-        });
+        let properties_impl = properties
+            .iter()
+            .map(Self::generate_optional_property_setter);
         let mut content = TokenStream::new();
         content.extend(properties_impl);
 
@@ -476,53 +409,25 @@ impl<'a> StructDef<'a> {
     }
 
     fn generate_create(&self, tokens: &mut TokenStream, config: &Config) {
-        let properties = self
-            .properties
-            .properties
-            .iter()
-            .filter_map(|p| {
-                let (typeinfo, v) = &p.ptype.inner();
-                let required_on_create = p.redfish.is_required_on_create.into_inner();
-                let can_reuse_update_payload = p.odata.permissions_is_write()
-                    && typeinfo.permissions.is_none_or(|p| p != Permissions::Read);
-                let field_shape = CreateFieldShape::from_property(
-                    required_on_create,
-                    can_reuse_update_payload,
-                    typeinfo.class,
-                )?;
-                let full_type = field_shape.full_type(*v, typeinfo.class, config);
-                let prop_type = match p.ptype {
-                    PropertyType::One(_) => quote! { #full_type },
-                    PropertyType::Collection(_) => {
-                        if p.rigid_array_support.into_inner() {
-                            quote! { Vec<Option<#full_type>> }
-                        } else {
-                            quote! { Vec<#full_type> }
-                        }
-                    }
-                };
-                let rename = Literal::string(p.name.inner().inner());
-                let name = StructFieldName::new_property(p.name);
-                Some((rename, name, prop_type, required_on_create))
-            })
-            .collect::<Vec<_>>();
+        let properties = self.serializable_properties(config);
 
-        let properties_content = properties
-            .iter()
-            .map(|(rename, name, prop_type, required)| {
-                if *required {
-                    quote! {
-                        #[serde(rename=#rename)]
-                        pub #name: #prop_type,
-                    }
-                } else {
-                    quote! {
-                        #[serde(rename=#rename)]
-                        #[serde(skip_serializing_if = "Option::is_none")]
-                        pub #name: Option<#prop_type>,
-                    }
+        let properties_content = properties.iter().map(|p| {
+            let rename = &p.rename;
+            let name = p.name;
+            let prop_type = &p.prop_type;
+            if p.required_on_create {
+                quote! {
+                    #[serde(rename=#rename)]
+                    pub #name: #prop_type,
                 }
-            });
+            } else {
+                quote! {
+                    #[serde(rename=#rename)]
+                    #[serde(skip_serializing_if = "Option::is_none")]
+                    pub #name: Option<#prop_type>,
+                }
+            }
+        });
 
         let mut content = TokenStream::new();
         content.extend(properties_content);
@@ -537,8 +442,10 @@ impl<'a> StructDef<'a> {
         // Implement builder for create struct:
         let (builder_fn_arglist, builder_fn_impl) = properties.iter().fold(
             (TokenStream::new(), TokenStream::new()),
-            |(mut arglist, mut implcontent), (_, name, prop_type, required)| {
-                if *required {
+            |(mut arglist, mut implcontent), p| {
+                let name = p.name;
+                let prop_type = &p.prop_type;
+                if p.required_on_create {
                     arglist.extend(quote! {#name: #prop_type,});
                     implcontent.extend(quote! { #name, });
                 } else {
@@ -548,22 +455,13 @@ impl<'a> StructDef<'a> {
             },
         );
 
-        let prop_fn_impl = properties
-            .iter()
-            .filter_map(|(_, name, prop_type, required)| {
-                if *required {
-                    None
-                } else {
-                    let fn_name = Ident::new(&format!("with_{name}"), Span::call_site());
-                    Some(quote! {
-                        #[must_use]
-                        pub fn #fn_name(mut self, v: #prop_type) -> Self {
-                            self.#name = Some(v);
-                            self
-                        }
-                    })
-                }
-            });
+        let prop_fn_impl = properties.iter().filter_map(|p| {
+            if p.required_on_create {
+                None
+            } else {
+                Some(Self::generate_optional_property_setter(p))
+            }
+        });
         let mut prop_fn_content = TokenStream::new();
         prop_fn_content.extend(prop_fn_impl);
 
@@ -582,6 +480,53 @@ impl<'a> StructDef<'a> {
                 #prop_fn_content
             }
         }]);
+    }
+
+    fn serializable_properties(&self, config: &Config) -> Vec<SerializableProperty<'a>> {
+        self.properties
+            .properties
+            .iter()
+            .filter_map(|p| {
+                let (typeinfo, v) = &p.ptype.inner();
+                if !(p.redfish.is_required_on_create.into_inner()
+                    || (p.odata.permissions_is_write()
+                        && typeinfo.permissions.is_none_or(|p| p != Permissions::Read)))
+                {
+                    return None;
+                }
+
+                let full_type = FullTypeName::new(*v, config).for_update(Some(typeinfo.class));
+                let prop_type = match p.ptype {
+                    OneOrCollection::One(_) => quote! { #full_type },
+                    OneOrCollection::Collection(_) => {
+                        if p.rigid_array_support.into_inner() {
+                            quote! { Vec<Option<#full_type>> }
+                        } else {
+                            quote! { Vec<#full_type> }
+                        }
+                    }
+                };
+                Some(SerializableProperty {
+                    rename: Literal::string(p.name.inner().inner()),
+                    name: StructFieldName::new_property(p.name),
+                    prop_type,
+                    required_on_create: p.redfish.is_required_on_create.into_inner(),
+                })
+            })
+            .collect()
+    }
+
+    fn generate_optional_property_setter(p: &SerializableProperty<'_>) -> TokenStream {
+        let name = p.name;
+        let prop_type = &p.prop_type;
+        let fn_name = Ident::new(&format!("with_{name}"), Span::call_site());
+        quote! {
+            #[must_use]
+            pub fn #fn_name(mut self, v: #prop_type) -> Self {
+                self.#name = Some(v);
+                self
+            }
+        }
     }
 
     fn generate_action(&self, tokens: &mut TokenStream, config: &Config) {
