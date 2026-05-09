@@ -86,7 +86,7 @@ pub trait Scheduler<T>: Send + 'static {
     /// their layer's annotations off `completion.meta`, and forward a
     /// `&mut Completion<C::Meta>` (with the unwrapped meta) to the chosen
     /// child.
-    fn on_complete(&mut self, completion: &mut Completion<Self::Meta>);
+    fn on_complete(&mut self, completion: Completion<Self::Meta>);
 }
 
 impl<T, S> Scheduler<T> for Box<S>
@@ -104,7 +104,7 @@ where
         (**self).take_next()
     }
 
-    fn on_complete(&mut self, completion: &mut Completion<S::Meta>) {
+    fn on_complete(&mut self, completion: Completion<S::Meta>) {
         (**self).on_complete(completion);
     }
 }
@@ -126,7 +126,7 @@ pub(crate) mod private {
     pub trait SchedulerObj<T, M: WorkMeta>: Send + 'static {
         fn update_ready(&mut self, now: Instant) -> Readiness;
         fn take_next(&mut self) -> Option<ScheduledWork<T, M>>;
-        fn on_complete(&mut self, completion: &mut Completion<M>);
+        fn on_complete(&mut self, completion: Completion<M>);
         fn as_any(&self) -> &dyn Any;
         fn as_any_mut(&mut self) -> &mut dyn Any;
     }
@@ -143,7 +143,7 @@ pub(crate) mod private {
         fn take_next(&mut self) -> Option<ScheduledWork<T, M>> {
             <Self as super::Scheduler<T>>::take_next(self)
         }
-        fn on_complete(&mut self, completion: &mut Completion<M>) {
+        fn on_complete(&mut self, completion: Completion<M>) {
             <Self as super::Scheduler<T>>::on_complete(self, completion);
         }
         fn as_any(&self) -> &dyn Any {

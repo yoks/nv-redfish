@@ -133,9 +133,9 @@ impl RoutingPath {
 /// impls. Policy data lives in *wrappers* that implement *projection
 /// traits* — [`WithCost`] adds [`HasCost`], [`WithPriority`] adds
 /// [`HasPriority`].
-pub trait WorkMeta: Debug + Clone + Send + 'static {}
+pub trait WorkMeta: Send + 'static {}
 
-impl<T: Debug + Clone + Send + 'static> WorkMeta for T {}
+impl<T: Send + 'static> WorkMeta for T {}
 
 /// Projection exposing a [`CostUnits`] value from a meta type.
 pub trait HasCost {

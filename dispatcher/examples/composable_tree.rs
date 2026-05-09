@@ -50,8 +50,7 @@
 
 use core::marker::PhantomData;
 use core::time::Duration;
-use std::time::Instant;
-
+use nv_redfish_dispatcher::ClockConfig;
 use nv_redfish_dispatcher::Completion;
 use nv_redfish_dispatcher::FutureWork;
 use nv_redfish_dispatcher::Readiness;
@@ -61,6 +60,8 @@ use nv_redfish_dispatcher::RuntimeOutput;
 use nv_redfish_dispatcher::ScheduledWork;
 use nv_redfish_dispatcher::Scheduler;
 use nv_redfish_dispatcher::WorkMeta;
+use std::num::NonZero;
+use std::time::Instant;
 
 // ──────────────────────────────────────────────────────────────────────
 // Application types
@@ -114,12 +115,15 @@ impl Scheduler<Work> for PollLeaf {
         self.next_due = Some(now + self.interval);
 
         let name = self.name.clone();
-        let payload: Work = Box::pin(async move { Ok(vec![Event::Polled { source: name }]) });
+        let payload: Work = Box::pin(async move {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+            Ok(vec![Event::Polled { source: name }])
+        });
 
         Some(ScheduledWork::new((), payload))
     }
 
-    fn on_complete(&mut self, _: &mut Completion<()>) {
+    fn on_complete(&mut self, _: Completion<()>) {
         // Leaves typically use this to update local stats / backoff.
     }
 }
@@ -197,7 +201,7 @@ where
         None
     }
 
-    fn on_complete(&mut self, completion: &mut Completion<Self::Meta>) {
+    fn on_complete(&mut self, mut completion: Completion<Self::Meta>) {
         // Branch contract: pop our tag and forward to the originating child.
         if let Some(idx) = completion.routing.pop() {
             if let Some(child) = self.children.get_mut(idx as usize) {
@@ -217,10 +221,20 @@ async fn main() {
     let mut root: RoundRobin<Work, ()> = RoundRobin::new();
     root.add_child(PollLeaf::new("sensor-A", Duration::from_secs(1)));
     root.add_child(PollLeaf::new("sensor-B", Duration::from_secs(2)));
+    let mut subnet: RoundRobin<Work, ()> = RoundRobin::new();
+    subnet.add_child(PollLeaf::new("static-subnet-1-a", Duration::from_secs(5)));
+    subnet.add_child(PollLeaf::new("static-subnet-1-b", Duration::from_secs(5)));
+    root.add_child(subnet);
 
     // 2. Hand the root to the runtime. The runtime takes ownership and
     //    boxes it behind an internal mutex.
-    let mut runtime: Runtime<Event, Error, ()> = Runtime::new(RuntimeConfig::default(), root);
+    let mut runtime: Runtime<Event, Error, ()> = Runtime::new(
+        RuntimeConfig {
+            global_max_in_flight: NonZero::<usize>::MIN,
+            clock: ClockConfig::Wallclock,
+        },
+        root,
+    );
     let handle = runtime.handle();
 
     // 3a. Add another leaf to the root, dynamically.
@@ -237,10 +251,19 @@ async fn main() {
     });
 
     // 4. Drive the runtime. `next()` is the single ordered output stream.
+    let start = Instant::now();
     loop {
         match runtime.next().await {
+            RuntimeOutput::SleepUntil(v) => {
+                tokio::time::sleep(v.duration_since(Instant::now())).await;
+            }
             RuntimeOutput::Work { result, latency } => match result {
-                Ok(events) => println!("got {} events in {:?}", events.len(), latency),
+                Ok(events) => println!(
+                    "{:?} got {:?} events in {:?}",
+                    Instant::now().duration_since(start),
+                    events,
+                    latency
+                ),
                 Err(Error(msg)) => eprintln!("work failed in {:?}: {}", latency, msg),
             },
             RuntimeOutput::Runtime(_) => {
