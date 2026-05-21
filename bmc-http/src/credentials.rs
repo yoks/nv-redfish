@@ -22,7 +22,7 @@ use std::fmt;
 /// Security notes:
 /// - `Debug`/`Display` redact secrets by design.
 /// - Prefer short-lived instances and avoid logging credentials.
-#[derive(Clone)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub enum BmcCredentials {
     /// Use HTTP Basic authentication with username and password.
     UsernamePassword {
