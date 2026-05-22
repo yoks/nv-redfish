@@ -114,7 +114,6 @@ pub trait HttpClient: Send + Sync {
         &self,
         url: Url,
         body: &B,
-        credentials: &BmcCredentials,
         custom_headers: &HeaderMap,
     ) -> impl Future<Output = Result<SessionCreateResponse<T>, Self::Error>> + Send
     where
@@ -526,9 +525,8 @@ where
         v: &V,
     ) -> Result<SessionCreateResponse<R>, Self::Error> {
         let endpoint_url = self.redfish_endpoint.with_path(&id.to_string());
-        let credentials = self.read_credentials();
         self.client
-            .post_session(endpoint_url, v, credentials.as_ref(), &self.custom_headers)
+            .post_session(endpoint_url, v, &self.custom_headers)
             .await
     }
 

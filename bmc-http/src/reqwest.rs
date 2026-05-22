@@ -19,15 +19,16 @@ use std::error::Error as StdErr;
 use std::fmt;
 use std::time::Duration;
 
+use crate::schema::redfish::message::Message;
+use crate::schema::redfish::redfish_error::RedfishError;
 use crate::BmcCredentials;
 use crate::CacheableError;
 use crate::HttpClient;
 use crate::MultipartUpdateRequest;
-use crate::schema::redfish::redfish_error::RedfishError;
 
 use futures_util::StreamExt as _;
-use http::HeaderMap;
 use http::header;
+use http::HeaderMap;
 use nv_redfish_core::AsyncTask;
 use nv_redfish_core::BoxTryStream;
 use nv_redfish_core::DataStream;
@@ -37,13 +38,13 @@ use nv_redfish_core::ODataId;
 use nv_redfish_core::OemMultipartPart;
 use nv_redfish_core::SessionCreateResponse;
 use nv_redfish_core::UploadReader;
-use reqwest::Client as ReqwestClient;
-use reqwest::Error as ReqwestError;
 use reqwest::multipart::Form;
 use reqwest::multipart::Part;
 use reqwest::redirect::Policy as RedirectPolicy;
-use serde::Serialize;
+use reqwest::Client as ReqwestClient;
+use reqwest::Error as ReqwestError;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use tokio_util::compat::FuturesAsyncReadCompatExt as _;
 use tokio_util::io::ReaderStream;
 use url::Url;
@@ -443,9 +444,7 @@ impl Client {
                         // Non-empty 200/201 body matched the caller-selected type.
                         Ok(entity) => Ok(ModificationResponse::Entity(entity)),
                         Err(err) => {
-                            if expects_no_response_body::<T>()
-                                && is_redfish_success_response(&value)
-                            {
+                            if is_redfish_success_response(&value) {
                                 // No-response action returned a Redfish success envelope.
                                 Ok(ModificationResponse::Empty)
                             } else {
@@ -607,6 +606,17 @@ fn inject_etag(etag: &ODataETag, body: &mut serde_json::Value) {
 /// an error-shaped success body. Only that body should become Empty.
 #[inline]
 fn is_redfish_success_response(value: &serde_json::Value) -> bool {
+    #[derive(serde::Deserialize)]
+    struct ExtendedInfoEnvelope {
+        #[serde(rename = "@Message.ExtendedInfo")]
+        _extended_info: Vec<Message>,
+    }
+
+    // If we recieved extended info, this means we got a success response
+    if <ExtendedInfoEnvelope as serde::Deserialize>::deserialize(value).is_ok() {
+        return true;
+    }
+
     let Ok(response) = <RedfishError as serde::Deserialize>::deserialize(value) else {
         return false;
     };
@@ -615,17 +625,6 @@ fn is_redfish_success_response(value: &serde_json::Value) -> bool {
     let message = code.rsplit_once('.').map_or(code, |(_, message)| message);
 
     matches!(message, "Success" | "Created" | "NoOperation")
-}
-
-/// Distinguishes no-response callers like () from typed response callers.
-/// The same endpoint can be called with different R types, so only callers
-/// whose R can represent no body may map a success envelope to Empty.
-#[inline]
-fn expects_no_response_body<T>() -> bool
-where
-    T: DeserializeOwned,
-{
-    serde_json::from_value::<T>(serde_json::Value::Null).is_ok()
 }
 
 fn auth_headers(
@@ -688,14 +687,15 @@ impl HttpClient for Client {
         &self,
         url: Url,
         body: &B,
-        credentials: &BmcCredentials,
         custom_headers: &HeaderMap,
     ) -> Result<SessionCreateResponse<T>, Self::Error>
     where
         B: Serialize + Send + Sync,
         T: DeserializeOwned + Send + Sync,
     {
-        let response = auth_headers(self.client.post(url), credentials)
+        let response = self
+            .client
+            .post(url)
             .headers(custom_headers.clone())
             .json(body)
             .send()
@@ -891,13 +891,13 @@ mod tests {
     use super::*;
 
     use futures_util::io::Cursor;
+    use wiremock::matchers::header;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
     use wiremock::Mock;
     use wiremock::MockServer;
     use wiremock::Request;
     use wiremock::ResponseTemplate;
-    use wiremock::matchers::header;
-    use wiremock::matchers::method;
-    use wiremock::matchers::path;
 
     #[derive(serde::Serialize)]
     struct MultipartParameters {
@@ -1040,10 +1040,11 @@ mod tests {
         let update_request = MultipartUpdateRequest {
             update_parameters: &params,
             update_stream,
-            oem_parts: vec![
-                OemMultipartPart::new("OemNvidia", Cursor::new(br#"{"Mode":"Rms"}"#.to_vec()))?
-                    .with_content_type("application/json"),
-            ],
+            oem_parts: vec![OemMultipartPart::new(
+                "OemNvidia",
+                Cursor::new(br#"{"Mode":"Rms"}"#.to_vec()),
+            )?
+            .with_content_type("application/json")],
             upload_timeout: Duration::from_secs(600),
         };
 

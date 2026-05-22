@@ -20,6 +20,7 @@ use std::error::Error as StdError;
 use std::path::PathBuf;
 
 const REDFISH_ERROR_SCHEMA: &str = "RedfishError_v1.xml";
+const REDFISH_MESSAGE_SCHEMA: &str = "Message_v1.xml";
 const REDFISH_SCHEMA_DIR: &str = "../redfish/schemas/redfish-csdl/csdl";
 
 fn main() -> Result<(), Box<dyn StdError>> {
@@ -31,12 +32,11 @@ fn main() -> Result<(), Box<dyn StdError>> {
     let out_dir = PathBuf::from(var("OUT_DIR")?);
     let output = out_dir.join("redfish.rs");
 
-    let root_csdls = vec![redfish_schema(REDFISH_ERROR_SCHEMA)];
+    let root_csdls = vec![redfish_schema(REDFISH_ERROR_SCHEMA), redfish_schema(REDFISH_MESSAGE_SCHEMA)];
 
     let resolve_csdls = vec![
         "Settings_v1.xml",
         "Resource_v1.xml",
-        "Message_v1.xml",
         "ResolutionStep_v1.xml",
         "ActionInfo_v1.xml",
     ]

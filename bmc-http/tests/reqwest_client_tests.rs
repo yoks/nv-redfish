@@ -228,7 +228,6 @@ mod reqwest_client_tests {
         Mock::given(method("POST"))
             .and(path(collection_path))
             .and(body_json(&create_request))
-            .and(header("authorization", "Basic cm9vdDpwYXNzd29yZA=="))
             .respond_with(
                 ResponseTemplate::new(201)
                     .insert_header("X-Auth-Token", "session-token-123")
@@ -297,7 +296,6 @@ mod reqwest_client_tests {
         Mock::given(method("POST"))
             .and(path(collection_path))
             .and(body_json(&create_request))
-            .and(header("authorization", "Basic cm9vdDpwYXNzd29yZA=="))
             .respond_with(
                 ResponseTemplate::new(201)
                     .insert_header("Location", session_path)
@@ -333,7 +331,6 @@ mod reqwest_client_tests {
         Mock::given(method("POST"))
             .and(path(collection_path))
             .and(body_json(&create_request))
-            .and(header("authorization", "Basic cm9vdDpwYXNzd29yZA=="))
             .respond_with(
                 ResponseTemplate::new(201)
                     .insert_header("X-Auth-Token", "session-token-123")
@@ -519,42 +516,6 @@ mod reqwest_client_tests {
 
         assert_eq!(action_response.result, "Reset initiated");
         assert!(action_response.success);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_action_success_message_with_response_type_is_error()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let mock_server = MockServer::start().await;
-        let action_path = "/redfish/v1/systems/1/Actions/ComputerSystem.Reset";
-
-        let action_request = ActionRequest {
-            parameter: "ForceRestart".to_string(),
-        };
-
-        let success_body = serde_json::json!({
-            "error": {
-                "code": "Base.1.8.Success",
-                "message": "Successfully Completed Request"
-            }
-        });
-
-        Mock::given(method("POST"))
-            .and(path(action_path))
-            .and(body_json(&action_request))
-            .and(header("authorization", "Basic cm9vdDpwYXNzd29yZA=="))
-            .respond_with(ResponseTemplate::new(200).set_body_json(&success_body))
-            .expect(1)
-            .mount(&mock_server)
-            .await;
-
-        let bmc = create_test_bmc(&mock_server);
-
-        let action = create_test_action(action_path);
-        let response = bmc.action(&action, &action_request).await;
-
-        assert!(matches!(response, Err(BmcError::JsonError(_))));
 
         Ok(())
     }
