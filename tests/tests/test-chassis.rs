@@ -14,7 +14,9 @@
 // limitations under the License.
 //! Integration tests for Chassis collection workaround behavior.
 
+use nv_redfish::control::ControlUpdate;
 use nv_redfish::ServiceRoot;
+use nv_redfish_core::ModificationResponse;
 use nv_redfish_core::ODataId;
 use nv_redfish_tests::ami_viking_service_root;
 use nv_redfish_tests::anonymous_1_9_service_root;
@@ -43,6 +45,96 @@ async fn ami_viking_missing_root_chassis_nav_workaround() -> Result<(), Box<dyn 
     expect_chassis_get(bmc.clone(), &ids, valid_chassis_payload(&ids));
     let members = collection.members().await?;
     assert_eq!(members.len(), 1);
+
+    Ok(())
+}
+
+#[test]
+async fn environment_power_limit_control_fetches_and_updates() -> Result<(), Box<dyn StdError>> {
+    let bmc = Arc::new(Bmc::default());
+    let ids = ids();
+    let metrics_id = format!("{}/EnvironmentMetrics", ids.chassis_id);
+    let control_id = format!("{}/Controls/PowerLimit", ids.chassis_id);
+    let root = expect_anonymous_1_9_service_root(
+        bmc.clone(),
+        &ids,
+        json!({
+            "Chassis": { ODATA_ID: &ids.chassis_collection_id }
+        }),
+    )
+    .await?;
+    expect_chassis_collection(bmc.clone(), &ids);
+    let Some(collection) = root.chassis().await? else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "missing chassis collection",
+        )
+        .into());
+    };
+
+    expect_chassis_get(
+        bmc.clone(),
+        &ids,
+        json_merge([
+            &valid_chassis_payload(&ids),
+            &json!({
+                "EnvironmentMetrics": {
+                    ODATA_ID: &metrics_id
+                }
+            }),
+        ]),
+    );
+    let mut members = collection.members().await?;
+    let Some(chassis) = members.pop() else {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "missing chassis").into());
+    };
+
+    bmc.expect(Expect::get(
+        &metrics_id,
+        json!({
+            ODATA_ID: &metrics_id,
+            ODATA_TYPE: "#EnvironmentMetrics.v1_1_0.EnvironmentMetrics",
+            "Id": "EnvironmentMetrics",
+            "Name": "Environment Metrics",
+            "PowerLimitWatts": {
+                "DataSourceUri": &control_id,
+                "SetPoint": 600.0
+            }
+        }),
+    ));
+    bmc.expect(Expect::get(
+        &control_id,
+        control_payload(&control_id, 600.0),
+    ));
+    let Some(power_limit) = chassis.environment_power_limit_control().await? else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "missing power limit control",
+        )
+        .into());
+    };
+
+    assert_eq!(power_limit.raw().set_point, Some(Some(600.0)));
+    assert_eq!(power_limit.raw().allowable_min, Some(Some(400.0)));
+    assert_eq!(power_limit.raw().allowable_max, Some(Some(900.0)));
+
+    let update = ControlUpdate::builder().with_set_point(700.0).build();
+    let update_json = serde_json::to_value(&update)?;
+    bmc.expect(Expect::update(
+        &control_id,
+        update_json,
+        control_payload(&control_id, 700.0),
+    ));
+    let ModificationResponse::Entity(updated_power_limit) = power_limit.update(&update).await?
+    else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "missing updated power limit control",
+        )
+        .into());
+    };
+
+    assert_eq!(updated_power_limit.raw().set_point, Some(Some(700.0)));
 
     Ok(())
 }
@@ -449,6 +541,21 @@ fn valid_chassis_payload(ids: &Ids) -> Value {
         "Id": "1",
         "Name": "Chassis",
         "ChassisType": "RackMount"
+    })
+}
+
+fn control_payload(control_id: &str, set_point: f64) -> Value {
+    json!({
+        ODATA_ID: control_id,
+        ODATA_TYPE: "#Control.v1_7_0.Control",
+        "Id": "PowerLimit",
+        "Name": "Power Limit",
+        "ControlType": "Power",
+        "SetPointType": "Single",
+        "SetPoint": set_point,
+        "SetPointUnits": "W",
+        "AllowableMin": 400.0,
+        "AllowableMax": 900.0
     })
 }
 

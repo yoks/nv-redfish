@@ -110,3 +110,43 @@ pub(crate) async fn extract_environment_sensors<B: Bmc>(
         })
         .map_err(Error::Bmc)
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::schema::control::ControlExcerptSingle;
+    use crate::schema::environment_metrics::EnvironmentMetrics;
+
+    #[test]
+    fn power_limit_watts_uses_control_excerpt() -> Result<(), Box<dyn std::error::Error>> {
+        let metrics: EnvironmentMetrics = serde_json::from_str(
+            r##"{
+                "@odata.id": "/redfish/v1/Chassis/1/EnvironmentMetrics",
+                "@odata.type": "#EnvironmentMetrics.v1_1_0.EnvironmentMetrics",
+                "Id": "EnvironmentMetrics",
+                "Name": "Environment Metrics",
+                "PowerLimitWatts": {
+                    "DataSourceUri": "/redfish/v1/Chassis/1/Controls/PowerLimit",
+                    "SetPoint": 700
+                }
+            }"##,
+        )?;
+        let Some(power_limit): Option<ControlExcerptSingle> = metrics.power_limit_watts else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "missing PowerLimitWatts",
+            )
+            .into());
+        };
+
+        assert_eq!(
+            power_limit
+                .data_source_uri
+                .as_ref()
+                .and_then(Option::as_deref),
+            Some("/redfish/v1/Chassis/1/Controls/PowerLimit")
+        );
+        assert_eq!(power_limit.set_point, Some(Some(700.0)));
+
+        Ok(())
+    }
+}

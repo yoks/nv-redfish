@@ -94,6 +94,9 @@ pub mod chassis;
 /// Computer System.
 #[cfg(feature = "computer-systems")]
 pub mod computer_system;
+/// Controls.
+#[cfg(feature = "controls")]
+pub mod control;
 /// Manager.
 #[cfg(feature = "managers")]
 pub mod manager;

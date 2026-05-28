@@ -45,6 +45,12 @@ use crate::chassis::Power;
 use crate::chassis::PowerSupply;
 #[cfg(feature = "thermal")]
 use crate::chassis::Thermal;
+#[cfg(feature = "controls")]
+use crate::control::extract_environment_power_limit_control;
+#[cfg(feature = "controls")]
+use crate::control::Control;
+#[cfg(feature = "controls")]
+use crate::control::ControlCollection;
 #[cfg(feature = "log-services")]
 use crate::log_service::LogService;
 #[cfg(all(feature = "oem-liteon", feature = "power-supplies"))]
@@ -243,6 +249,26 @@ impl<B: Bmc> Chassis<B> {
         }
     }
 
+    /// Get controls for this chassis.
+    ///
+    /// Returns `Ok(None)` when the controls link is absent.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if fetching controls data fails.
+    #[cfg(feature = "controls")]
+    pub async fn controls(&self) -> Result<Option<Vec<Control<B>>>, Error<B>> {
+        let Some(controls_ref) = &self.data.controls else {
+            return Ok(None);
+        };
+
+        ControlCollection::new(&self.bmc, controls_ref)
+            .await?
+            .members()
+            .await
+            .map(Some)
+    }
+
     /// Get legacy Thermal resource (for older BMCs).
     ///
     /// Returns the deprecated `Chassis/Thermal` resource if available.
@@ -327,6 +353,22 @@ impl<B: Bmc> Chassis<B> {
             .into_iter()
             .map(|r| SensorLink::new(&self.bmc, r))
             .collect())
+    }
+
+    /// Get the environment power limit control for this chassis.
+    ///
+    /// Returns `Ok(None)` when environment metrics or `PowerLimitWatts` is absent.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if fetching environment metrics or the control fails.
+    #[cfg(feature = "controls")]
+    pub async fn environment_power_limit_control(&self) -> Result<Option<Control<B>>, Error<B>> {
+        let Some(env_ref) = &self.data.environment_metrics else {
+            return Ok(None);
+        };
+
+        extract_environment_power_limit_control(&self.bmc, env_ref).await
     }
 
     /// Get the sensors collection for this chassis.
