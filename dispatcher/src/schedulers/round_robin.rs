@@ -113,7 +113,7 @@ where
         for _ in 0..n {
             let id = self.queue.pop_front()?;
             self.queue.push_back(id);
-            let idx = usize::try_from(id).expect("u32 stable index fits in usize");
+            let idx = usize::try_from(id).ok()?;
             if let Some(mut work) = self.children[idx].take_next() {
                 work.routing.push(id);
                 return Some(work);
