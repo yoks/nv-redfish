@@ -37,6 +37,8 @@ pub use token_bucket::{TokenBucket, TokenBucketConfig};
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_in_result)]
+
     use core::sync::atomic::{AtomicU32, Ordering};
     use core::time::Duration;
     use std::sync::{Arc, Mutex};

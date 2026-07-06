@@ -404,6 +404,7 @@ where
     ///
     /// Can panic if the runtime mutex is poisoned, which only happens if
     /// a closure passed to [`Self::with_root_mut`] panicked.
+    #[allow(clippy::unwrap_in_result)]
     pub fn with_root<S, R>(&self, f: impl FnOnce(&S) -> R) -> Option<R>
     where
         S: 'static,
