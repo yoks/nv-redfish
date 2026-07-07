@@ -133,7 +133,6 @@ mod unix {
         (root, removed, work)
     }
 
-
     // Measures the deferred cost of O(1) removal: the take_next sweep
     // over stale queue entries.
     #[library_benchmark]
