@@ -15,29 +15,50 @@
 
 //! Plain round-robin branch with dynamic membership.
 //!
-//! Children are stored in a map keyed by a `u32` id (the routing tag).
-//! Iteration order is a `VecDeque<u32>` of ids: `take_next` pops the
-//! front, asks that child, pushes the id back, and stops on the first
-//! `Some`. Children appended mid-scan are visited within one cycle.
+//! Children live in a slab (`Vec` indexed by the `u32` id, which is also
+//! the routing tag): readiness passes iterate contiguous memory and
+//! rotation lookups are direct indexing. Iteration order is a
+//! `VecDeque<(id, generation)>`: `take_next` pops the front, asks that
+//! child, pushes the entry back, and stops on the first `Some`. Children
+//! appended mid-scan are visited within one cycle.
 //!
-//! Children can be removed at any time. A child with nothing in flight
-//! is handed back ([`RemovedChild::Detached`]); one with items
-//! outstanding is quarantined out of rotation, keeps receiving its
-//! completions, and is dropped once drained ([`RemovedChild::Draining`]).
-//! Ids are recycled only after the drain, so id consumption is bounded
-//! by concurrent children and a late completion is never misrouted to a
-//! child that inherited the id.
+//! Children can be removed at any time, in O(1): the queue is purged
+//! lazily. A slot's generation bumps when its id is reused, so a stale
+//! queue entry — surviving either a removal or a removal-then-reuse —
+//! identifies itself and drops out of rotation on its next pop.
+//!
+//! A child removed with nothing in flight is handed back
+//! ([`RemovedChild::Detached`]); one with items outstanding is
+//! quarantined in its slot, keeps receiving its completions, and is
+//! dropped once drained ([`RemovedChild::Draining`]). The id is recycled
+//! only after the drain, so id consumption is bounded by concurrent
+//! children and a late completion is never misrouted to a child that
+//! inherited the id.
 
+use core::convert::TryFrom as _;
 use core::marker::PhantomData;
-use std::collections::{HashMap, VecDeque};
+use core::mem;
+use std::collections::VecDeque;
 use std::time::Instant;
 
 use crate::scheduler::{ScheduledWork, Scheduler};
 use crate::work::{Completion, Readiness, WorkMeta};
 
-/// A live child plus the number of its items currently in flight.
+enum Entry<T, M: WorkMeta> {
+    /// Scheduled child.
+    Live(Box<dyn Scheduler<T, Meta = M>>),
+    /// Removed child still owed completions: out of rotation, forwarded
+    /// completions until `in_flight` drains, then freed.
+    Draining(Box<dyn Scheduler<T, Meta = M>>),
+    /// Reusable slot.
+    Free,
+}
+
 struct Slot<T, M: WorkMeta> {
-    sched: Box<dyn Scheduler<T, Meta = M>>,
+    entry: Entry<T, M>,
+    /// Bumped when the slot's id is handed out again; queue entries
+    /// carry the generation they were enqueued under.
+    generation: u32,
     in_flight: u32,
 }
 
@@ -54,15 +75,11 @@ pub enum RemovedChild<T, M: WorkMeta> {
 
 /// Round robing over boxed children
 pub struct RoundRobin<T, M: WorkMeta> {
-    children: HashMap<u32, Slot<T, M>>,
-    /// Removed children still owed completions: out of rotation, but
-    /// completions are forwarded until `in_flight` drains to zero, then
-    /// the subtree is dropped and the id moves to `free`.
-    draining: HashMap<u32, Slot<T, M>>,
-    /// Ids safe to hand out again.
+    slots: Vec<Slot<T, M>>,
+    /// Slot indices safe to hand out again.
     free: Vec<u32>,
-    queue: VecDeque<u32>,
-    next_id: u32,
+    queue: VecDeque<(u32, u32)>,
+    live: usize,
     _t: PhantomData<fn() -> T>,
 }
 
@@ -75,13 +92,12 @@ impl<T, M: WorkMeta> Default for RoundRobin<T, M> {
 impl<T, M: WorkMeta> RoundRobin<T, M> {
     /// Empty round-robin branch.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
-            children: HashMap::new(),
-            draining: HashMap::new(),
+            slots: Vec::new(),
             free: Vec::new(),
             queue: VecDeque::new(),
-            next_id: 0,
+            live: 0,
             _t: PhantomData,
         }
     }
@@ -100,29 +116,32 @@ impl<T, M: WorkMeta> RoundRobin<T, M> {
     where
         S: Scheduler<T, Meta = M>,
     {
-        let id = if let Some(id) = self.free.pop() {
-            id
+        let (id, generation) = if let Some(id) = self.free.pop() {
+            let slot = self
+                .slots
+                .get_mut(id as usize)
+                .expect("free list holds valid slot indices");
+            slot.generation = slot.generation.wrapping_add(1);
+            slot.entry = Entry::Live(Box::new(child));
+            slot.in_flight = 0;
+            (id, slot.generation)
         } else {
-            let id = self.next_id;
-            self.next_id = self
-                .next_id
-                .checked_add(1)
+            let id = u32::try_from(self.slots.len())
                 .expect("RoundRobin supports up to u32::MAX concurrent children");
-            id
-        };
-        self.children.insert(
-            id,
-            Slot {
-                sched: Box::new(child),
+            self.slots.push(Slot {
+                entry: Entry::Live(Box::new(child)),
+                generation: 0,
                 in_flight: 0,
-            },
-        );
-        self.queue.push_back(id);
+            });
+            (id, 0)
+        };
+        self.queue.push_back((id, generation));
+        self.live += 1;
         id
     }
 
     /// Remove the child with the given id, or `None` if no such child
-    /// exists.
+    /// exists. O(1): the rotation queue is purged lazily.
     ///
     /// With nothing in flight the subtree is returned
     /// ([`RemovedChild::Detached`]); otherwise it stays quarantined —
@@ -130,29 +149,33 @@ impl<T, M: WorkMeta> RoundRobin<T, M> {
     /// is dropped once drained ([`RemovedChild::Draining`]). The id is
     /// reusable by [`Self::add_child`] only after the drain finishes.
     pub fn remove_child(&mut self, id: u32) -> Option<RemovedChild<T, M>> {
-        let slot = self.children.remove(&id)?;
-        // Purge eagerly: a recycled id must not still sit in the queue
-        // when add_child pushes it again.
-        self.queue.retain(|&queued| queued != id);
+        let slot = self.slots.get_mut(id as usize)?;
+        if !matches!(slot.entry, Entry::Live(_)) {
+            return None;
+        }
+        let Entry::Live(sched) = mem::replace(&mut slot.entry, Entry::Free) else {
+            return None;
+        };
+        self.live -= 1;
         if slot.in_flight > 0 {
-            self.draining.insert(id, slot);
+            slot.entry = Entry::Draining(sched);
             Some(RemovedChild::Draining)
         } else {
             self.free.push(id);
-            Some(RemovedChild::Detached(slot.sched))
+            Some(RemovedChild::Detached(sched))
         }
     }
 
     /// Number of children currently held by this branch.
     #[must_use]
-    pub fn len(&self) -> usize {
-        self.children.len()
+    pub const fn len(&self) -> usize {
+        self.live
     }
 
     /// `true` when the branch currently holds no children.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.children.is_empty()
+    pub const fn is_empty(&self) -> bool {
+        self.live == 0
     }
 }
 
@@ -166,8 +189,11 @@ where
     fn update_ready(&mut self, now: Instant) -> Readiness {
         let mut ready = false;
         let mut next_at: Option<Instant> = None;
-        for slot in self.children.values_mut() {
-            let r = slot.sched.update_ready(now);
+        for slot in &mut self.slots {
+            let Entry::Live(sched) = &mut slot.entry else {
+                continue;
+            };
+            let r = sched.update_ready(now);
             ready |= r.ready;
             next_at = match (next_at, r.next_update_at) {
                 (Some(a), Some(b)) => Some(a.min(b)),
@@ -184,13 +210,24 @@ where
     fn take_next(&mut self) -> Option<ScheduledWork<T, M>> {
         let n = self.queue.len();
         for _ in 0..n {
-            let id = self.queue.pop_front()?;
-            let Some(slot) = self.children.get_mut(&id) else {
-                // Defensive: remove_child purges the queue eagerly.
+            let (id, generation) = self.queue.pop_front()?;
+            // Lazy purge: entries whose slot was removed (not Live) or
+            // reused (generation mismatch) drop out of rotation here.
+            let current = self
+                .slots
+                .get(id as usize)
+                .is_some_and(|s| s.generation == generation && matches!(s.entry, Entry::Live(_)));
+            if !current {
+                continue;
+            }
+            self.queue.push_back((id, generation));
+            let Some(slot) = self.slots.get_mut(id as usize) else {
                 continue;
             };
-            self.queue.push_back(id);
-            if let Some(mut work) = slot.sched.take_next() {
+            let Entry::Live(sched) = &mut slot.entry else {
+                continue;
+            };
+            if let Some(mut work) = sched.take_next() {
                 slot.in_flight = slot.in_flight.saturating_add(1);
                 work.routing.push(id);
                 return Some(work);
@@ -203,18 +240,26 @@ where
         let Some(id) = completion.routing.pop() else {
             return;
         };
-        if let Some(slot) = self.children.get_mut(&id) {
-            slot.in_flight = slot.in_flight.saturating_sub(1);
-            slot.sched.on_complete(completion);
-        } else if let Some(slot) = self.draining.get_mut(&id) {
+        let Some(slot) = self.slots.get_mut(id as usize) else {
+            return;
+        };
+        slot.in_flight = slot.in_flight.saturating_sub(1);
+        let drained = match &mut slot.entry {
+            Entry::Live(sched) => {
+                sched.on_complete(completion);
+                false
+            }
             // Forward to the quarantined child; recycle the id and drop
             // the subtree once drained.
-            slot.in_flight = slot.in_flight.saturating_sub(1);
-            slot.sched.on_complete(completion);
-            if slot.in_flight == 0 {
-                self.draining.remove(&id);
-                self.free.push(id);
+            Entry::Draining(sched) => {
+                sched.on_complete(completion);
+                slot.in_flight == 0
             }
+            Entry::Free => false,
+        };
+        if drained {
+            slot.entry = Entry::Free;
+            self.free.push(id);
         }
     }
 }

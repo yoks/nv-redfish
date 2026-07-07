@@ -67,6 +67,11 @@ impl Default for TokenBucketConfig {
 pub struct TokenBucket<T, C: Scheduler<T>> {
     inner: C,
     cfg: TokenBucketConfig,
+    /// `cfg.refill_interval` in nanoseconds, cached: this sits on the
+    /// per-readiness-pass hot path.
+    interval_nanos: u64,
+    /// `scale(cfg.capacity)`, cached for the same reason.
+    scaled_capacity: i128,
     /// Balance scaled by `refill_interval` nanoseconds: one token equals
     /// `refill_interval.as_nanos()` scaled units, so accrual per elapsed
     /// nanosecond is exactly `refill_amount` scaled units.
@@ -78,6 +83,12 @@ pub struct TokenBucket<T, C: Scheduler<T>> {
     /// pass.
     admission_cost: CostUnits,
     _t: PhantomData<fn() -> T>,
+}
+
+fn cfg_cache(cfg: &TokenBucketConfig) -> (u64, i128) {
+    let interval = u64::try_from(cfg.refill_interval.as_nanos()).unwrap_or(u64::MAX);
+    let capacity = i128::from(cfg.capacity.get()).saturating_mul(i128::from(interval));
+    (interval, capacity)
 }
 
 impl<T, C> TokenBucket<T, C>
@@ -95,10 +106,13 @@ where
     /// children with [`crate::schedulers::FixedCost`].
     #[must_use]
     pub fn new(now: Instant, cfg: TokenBucketConfig, child: C) -> Self {
+        let (interval_nanos, scaled_capacity) = cfg_cache(&cfg);
         Self {
             inner: child,
-            scaled_balance: Self::scale(&cfg, cfg.capacity),
             cfg,
+            interval_nanos,
+            scaled_capacity,
+            scaled_balance: scaled_capacity,
             last_refill: now,
             last_now: now,
             admission_cost: CostUnits::new(1),
@@ -111,7 +125,7 @@ where
     /// estimate.
     #[must_use]
     pub fn available(&self) -> i64 {
-        let interval = i128::from(self.interval_nanos());
+        let interval = i128::from(self.interval_nanos);
         if interval == 0 {
             return cost_to_i64(self.cfg.capacity);
         }
@@ -122,16 +136,19 @@ where
     /// (clamped to the new capacity).
     pub fn set_config(&mut self, cfg: TokenBucketConfig) {
         // Convert the balance to the new interval scale before swapping.
-        let old_interval = i128::from(self.interval_nanos());
+        let old_interval = i128::from(self.interval_nanos);
         let tokens = if old_interval == 0 {
             i128::from(cost_to_i64(self.cfg.capacity))
         } else {
             self.scaled_balance.div_euclid(old_interval)
         };
         self.cfg = cfg;
-        let new_interval = i128::from(self.interval_nanos());
-        let cap = Self::scale(&self.cfg, self.cfg.capacity);
-        self.scaled_balance = tokens.saturating_mul(new_interval).min(cap);
+        let (interval_nanos, scaled_capacity) = cfg_cache(&self.cfg);
+        self.interval_nanos = interval_nanos;
+        self.scaled_capacity = scaled_capacity;
+        self.scaled_balance = tokens
+            .saturating_mul(i128::from(interval_nanos))
+            .min(scaled_capacity);
     }
 
     /// Current configuration.
@@ -140,21 +157,20 @@ where
         self.cfg
     }
 
-    fn interval_nanos(&self) -> u64 {
-        u64::try_from(self.cfg.refill_interval.as_nanos()).unwrap_or(u64::MAX)
-    }
-
-    fn scale(cfg: &TokenBucketConfig, cost: CostUnits) -> i128 {
-        let interval = u64::try_from(cfg.refill_interval.as_nanos()).unwrap_or(u64::MAX);
-        i128::from(cost.get()).saturating_mul(i128::from(interval))
+    fn scale(&self, cost: CostUnits) -> i128 {
+        i128::from(cost.get()).saturating_mul(i128::from(self.interval_nanos))
     }
 
     fn refill(&mut self, now: Instant) {
-        let cap = Self::scale(&self.cfg, self.cfg.capacity);
-        if self.interval_nanos() == 0 {
+        if self.interval_nanos == 0 {
             // Unlimited rate: always full.
-            self.scaled_balance = cap;
+            self.scaled_balance = self.scaled_capacity;
             self.last_refill = now;
+            return;
+        }
+        // The runtime issues one full readiness pass per admitted item,
+        // all at the same instant: make the repeats a compare-and-skip.
+        if now <= self.last_refill {
             return;
         }
         let elapsed = now.saturating_duration_since(self.last_refill);
@@ -162,28 +178,29 @@ where
         let accrued = i128::try_from(elapsed.as_nanos())
             .unwrap_or(i128::MAX)
             .saturating_mul(i128::from(self.cfg.refill_amount.get()));
-        self.scaled_balance = self.scaled_balance.saturating_add(accrued).min(cap);
+        self.scaled_balance = self
+            .scaled_balance
+            .saturating_add(accrued)
+            .min(self.scaled_capacity);
     }
 
     fn covers(&self, cost: CostUnits) -> bool {
-        self.scaled_balance >= Self::scale(&self.cfg, cost)
+        self.scaled_balance >= self.scale(cost)
     }
 
     fn spend(&mut self, cost: CostUnits) {
-        self.scaled_balance = self
-            .scaled_balance
-            .saturating_sub(Self::scale(&self.cfg, cost));
+        self.scaled_balance = self.scaled_balance.saturating_sub(self.scale(cost));
     }
 
     /// Instant at which the balance will cover `cost`, or `None` when it
     /// never will (zero refill rate, or an ETA beyond `Instant` range).
     fn covered_at(&self, cost: CostUnits) -> Option<Instant> {
-        let deficit = Self::scale(&self.cfg, cost).saturating_sub(self.scaled_balance);
+        let deficit = self.scale(cost).saturating_sub(self.scaled_balance);
         if deficit <= 0 {
             return Some(self.last_refill);
         }
         let amount = i128::from(self.cfg.refill_amount.get());
-        if amount == 0 || self.interval_nanos() == 0 {
+        if amount == 0 || self.interval_nanos == 0 {
             return None;
         }
 
@@ -205,6 +222,12 @@ where
     fn update_ready(&mut self, now: Instant) -> Readiness {
         self.last_now = now;
         self.refill(now);
+        // In debt no admission gate can be covered: skip the subtree
+        // walk and wake when the balance reaches zero (that pass then
+        // computes the real gate).
+        if self.scaled_balance < 0 {
+            return Readiness::not_ready(self.covered_at(CostUnits::ZERO));
+        }
         let child = self.inner.update_ready(now);
         if !child.ready {
             return child;
@@ -359,13 +382,20 @@ mod tests {
             meta: work.meta,
             routing: work.routing,
         });
-        // 2 - 5 = -3: in debt, and the ETA covers deficit + next cost:
-        // exactly 3 + 1 at 1 token/s.
+        // 2 - 5 = -3: in debt. The first hint is the debt pre-gate
+        // (balance reaches zero at +3s); the pass at that instant
+        // computes the real gate (+1 token: +4s), where admission
+        // resumes.
         assert_eq!(tb.available(), -3);
         let r = tb.update_ready(t0);
         assert!(!r.ready);
-        let eta = r.next_update_at.expect("refill hint");
+        let zero_at = r.next_update_at.expect("debt hint");
+        assert_eq!(zero_at, t0 + Duration::from_secs(3));
+        let r = tb.update_ready(zero_at);
+        assert!(!r.ready);
+        let eta = r.next_update_at.expect("gate hint");
         assert_eq!(eta, t0 + Duration::from_secs(4));
+        assert!(tb.update_ready(eta).ready);
     }
 
     #[test]
@@ -410,12 +440,16 @@ mod tests {
         });
         assert_eq!(tb.available(), -3, "2 - 5: overshoot became debt");
 
-        // Blocked while paying the debt back, with a *reachable* ETA
-        // (debt 3 + gate 2 at 1 token/s), then admitted again — no
-        // forever-receding ETA livelock.
+        // Blocked while paying the debt back, with *reachable* ETAs
+        // (debt pre-gate at +3s, then gate 2 at +5s), then admitted
+        // again — no forever-receding ETA livelock.
         let r = tb.update_ready(t0);
         assert!(!r.ready);
-        let eta = r.next_update_at.expect("finite refill hint");
+        let zero_at = r.next_update_at.expect("debt hint");
+        assert_eq!(zero_at, t0 + Duration::from_secs(3));
+        let r = tb.update_ready(zero_at);
+        assert!(!r.ready);
+        let eta = r.next_update_at.expect("gate hint");
         assert_eq!(eta, t0 + Duration::from_secs(5));
         assert!(tb.update_ready(eta).ready);
     }
