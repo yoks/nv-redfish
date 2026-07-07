@@ -591,7 +591,7 @@ mod tests {
     #![allow(clippy::expect_used)]
 
     use core::time::Duration;
-    use std::num::NonZeroUsize;
+    use std::{num::NonZeroUsize, time::Instant};
 
     use futures_util::future::poll_immediate;
 
@@ -610,7 +610,7 @@ mod tests {
 
     fn firing_root() -> TestRoot {
         let mut root = TestRoot::new();
-        root.add_child(PeriodicLeaf::new(Duration::ZERO, || {
+        root.add_child(PeriodicLeaf::new(Instant::now(), Duration::ZERO, || {
             Box::pin(async { Ok(vec![7_u64]) }) as TestWork
         }));
         root
@@ -689,9 +689,11 @@ mod tests {
 
         let id = handle
             .with_root_mut::<TestRoot, _>(|root| {
-                root.add_child(PeriodicLeaf::new(Duration::from_secs(9999), || {
-                    Box::pin(async { Ok(vec![9_u64]) }) as TestWork
-                }))
+                root.add_child(PeriodicLeaf::new(
+                    Instant::now(),
+                    Duration::from_secs(9999),
+                    || Box::pin(async { Ok(vec![9_u64]) }) as TestWork,
+                ))
             })
             .expect("root downcasts");
         assert_eq!(handle.with_root::<TestRoot, _>(TestRoot::len), Some(2));
