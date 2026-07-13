@@ -69,6 +69,15 @@ pub type IsCreatable = TaggedType<bool, IsCreatableTag>;
 #[capability(inner_access)]
 pub enum IsCreatableTag {}
 
+/// Whether a type must emit an `Update` struct.
+pub type ForcedUpdate = TaggedType<bool, ForcedUpdateTag>;
+#[doc(hidden)]
+#[derive(tagged_types::Tag)]
+#[implement(Clone, Copy)]
+#[transparent(Debug)]
+#[capability(inner_access)]
+pub enum ForcedUpdateTag {}
+
 /// Compiled outputs from schemas.
 /// Aggregated compilation outputs for a set of schemas.
 #[derive(Default, Debug)]
