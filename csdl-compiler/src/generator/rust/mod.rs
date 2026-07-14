@@ -23,6 +23,9 @@
 //!  - If namespace more than one ids then submodules are generated in according to namespace.
 //!
 
+/// Escaped identifier construction
+pub mod ident;
+
 /// Mod name
 pub mod mod_name;
 

@@ -17,13 +17,12 @@ use crate::compiler::Namespace;
 use crate::edmx::ActionName as EdmxActionName;
 use crate::edmx::ParameterName;
 use crate::generator::casemungler;
+use crate::generator::rust::ident;
 use crate::generator::rust::Config;
 use crate::generator::rust::ModName;
 use crate::generator::rust::TypeName;
-use proc_macro2::Ident;
 use proc_macro2::Punct;
 use proc_macro2::Spacing;
-use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::ToTokens;
@@ -49,10 +48,7 @@ impl<'a> ActionName<'a> {
 
 impl ToTokens for ActionName<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self.to_string().as_str() {
-            "type" => tokens.append(Ident::new_raw("type", Span::call_site())),
-            _ => tokens.append(Ident::new(&self.to_string(), Span::call_site())),
-        }
+        tokens.append(ident::escaped(&self.to_string()));
     }
 }
 
