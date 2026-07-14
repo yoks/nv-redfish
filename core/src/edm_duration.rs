@@ -198,10 +198,7 @@ impl FromStr for EdmDuration {
 
         let to_decimal = |val: &str, mul| {
             Decimal::from_str_exact(val)
-                .map(|d| {
-                    d.checked_mul(Decimal::from(mul))
-                        .ok_or_else(|| overflow_err())
-                })
+                .map(|d| d.checked_mul(Decimal::from(mul)).ok_or_else(&overflow_err))
                 .map_err(|_| make_err())
                 .flatten()
         };
