@@ -94,6 +94,8 @@ pub use compiled::ActionsMap;
 #[doc(inline)]
 pub use compiled::Compiled;
 #[doc(inline)]
+pub use compiled::ForcedUpdate;
+
 pub use compiled::IsCreatable;
 #[doc(inline)]
 pub use compiled::TypeActions;
