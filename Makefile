@@ -82,6 +82,9 @@ define build-and-test
 	cargo test -p nv-redfish-tests --test test-update-service --features update-service-deprecated
 	cargo build -p update-multipart --features update-service-deprecated
 	cargo clippy -p nv-redfish-dispatcher --all-targets
+	cargo clippy -p nv-redfish-dispatcher --all-targets --all-features
+	cargo test -p nv-redfish-dispatcher --all-features -- --no-capture
+	cargo test -p nv-redfish-dispatcher --features runtime-events -- --no-capture
 	cargo clippy -p nv-redfish-bmc-http --bench cache
 	cargo build  $1
 	cargo build -p nv-redfish --features computer-systems,bios,boot-options,storages,memory,processors
