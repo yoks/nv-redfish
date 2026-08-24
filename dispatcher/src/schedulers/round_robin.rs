@@ -45,7 +45,7 @@ use std::collections::VecDeque;
 use std::time::Instant;
 
 use crate::scheduler::{RuntimeChildContainer, ScheduledWork, Scheduler};
-use crate::work::{Completion, Readiness, WorkMeta};
+use crate::work::{Completion, CostUnits, Readiness, WorkMeta};
 
 enum Entry<T, M: WorkMeta> {
     /// Scheduled child.
@@ -65,6 +65,11 @@ struct Slot<T, M: WorkMeta> {
     in_flight: u32,
     /// Position in `live_ids` (valid while `entry` is `Live`).
     live_pos: usize,
+    /// Whether the child reported ready in the last `update_ready` pass;
+    /// feeds the branch's cost projection.
+    ready: bool,
+    /// The cost the child projected alongside that readiness.
+    next_cost: Option<CostUnits>,
 }
 
 /// Outcome of [`RoundRobin::remove_child`].
@@ -138,6 +143,8 @@ impl<T, M: WorkMeta> RoundRobin<T, M> {
             slot.entry = Entry::Live(Box::new(child));
             slot.in_flight = 0;
             slot.live_pos = live_pos;
+            slot.ready = false;
+            slot.next_cost = None;
             (id, slot.generation)
         } else {
             let id = u32::try_from(self.slots.len())
@@ -147,6 +154,8 @@ impl<T, M: WorkMeta> RoundRobin<T, M> {
                 generation: 0,
                 in_flight: 0,
                 live_pos,
+                ready: false,
+                next_cost: None,
             });
             (id, 0)
         };
@@ -242,15 +251,36 @@ where
             };
             let r = sched.update_ready(now);
             ready |= r.ready;
+            slot.ready = r.ready;
+            slot.next_cost = r.next_cost;
             next_at = match (next_at, r.next_update_at) {
                 (Some(a), Some(b)) => Some(a.min(b)),
                 (a, b) => a.or(b),
             };
         }
+        // Project the cost of the child rotation would dispatch first: the
+        // front-most queue entry that is live, current, and ready. A hint,
+        // not a promise — `take_next` asks children in the same order but
+        // a ready child may still yield nothing, and consumers of the
+        // projection (the token bucket) absorb mismatch as debt.
+        let next_cost = if ready {
+            self.queue
+                .iter()
+                .find_map(|&(id, generation)| {
+                    let slot = self.slots.get(id as usize)?;
+                    (slot.generation == generation
+                        && matches!(slot.entry, Entry::Live(_))
+                        && slot.ready)
+                        .then_some(slot.next_cost)
+                })
+                .flatten()
+        } else {
+            None
+        };
         Readiness {
             ready,
             next_update_at: next_at,
-            next_cost: None,
+            next_cost,
         }
     }
 
@@ -350,8 +380,8 @@ mod tests {
 
     use super::{RemovedChild, RoundRobin};
     use crate::scheduler::Scheduler as _;
-    use crate::schedulers::tests::{dispatch_and_complete, MockLeaf};
-    use crate::work::{Completion, CompletionOutcome};
+    use crate::schedulers::tests::{dispatch_and_complete, MockLeaf, TestPayload};
+    use crate::work::{Completion, CompletionOutcome, CostUnits, Readiness};
 
     #[test]
     fn empty_branch_is_not_ready_and_yields_nothing() {
@@ -611,5 +641,50 @@ mod tests {
             h1.last_completion_outcome(),
             Some(CompletionOutcome::Succeeded)
         );
+    }
+
+    #[test]
+    fn readiness_projects_the_first_ready_childs_cost() {
+        let mut rr: RoundRobin<TestPayload, ()> = RoundRobin::new();
+        rr.add_child(MockLeaf::new(
+            (),
+            Readiness::ready(Some(CostUnits::new(30))),
+            Some(1),
+        ));
+        rr.add_child(MockLeaf::new(
+            (),
+            Readiness::ready(Some(CostUnits::new(1))),
+            Some(2),
+        ));
+        let now = Instant::now();
+
+        // Rotation starts at the first child added.
+        assert_eq!(rr.update_ready(now).next_cost, Some(CostUnits::new(30)));
+
+        // Dispatching rotates the queue; the projection follows the front.
+        let work = rr.take_next().expect("the first child fires");
+        assert_eq!(rr.update_ready(now).next_cost, Some(CostUnits::new(1)));
+        rr.on_complete(Completion {
+            outcome: CompletionOutcome::Succeeded,
+            latency: Duration::ZERO,
+            meta: work.meta,
+            routing: work.routing,
+        });
+    }
+
+    #[test]
+    fn a_not_ready_front_child_is_skipped_by_the_projection() {
+        let mut rr: RoundRobin<TestPayload, ()> = RoundRobin::new();
+        rr.add_child(MockLeaf::not_ready(None));
+        rr.add_child(MockLeaf::new(
+            (),
+            Readiness::ready(Some(CostUnits::new(6))),
+            Some(2),
+        ));
+        let now = Instant::now();
+
+        let r = rr.update_ready(now);
+        assert!(r.ready);
+        assert_eq!(r.next_cost, Some(CostUnits::new(6)));
     }
 }

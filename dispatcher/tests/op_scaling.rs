@@ -19,7 +19,9 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use core::time::Duration;
 use std::sync::Arc;
 
-use nv_redfish_dispatcher::{CostUnits, FixedCost, ManualClock, PeriodicLeaf, RoundRobin};
+use nv_redfish_dispatcher::{
+    CostUnits, FixedCost, ManualClock, PeriodicLeaf, RoundRobin, WorkResult,
+};
 use nv_redfish_dispatcher_sim::{
     ample_bucket, expected_dispatches, simulate, source, Counted, OpCounts, Work,
 };
@@ -75,7 +77,7 @@ async fn measure_sparse(n: u32) -> Ops {
         let first_due = now + Duration::from_secs(u64::from(n - 1 - idx));
         let leaf =
             PeriodicLeaf::starting_at(now, first_due, Duration::from_secs(3600), move || {
-                Box::pin(async move { Ok(vec![(idx, 0_u8)]) }) as Work
+                Box::pin(async move { WorkResult::Succeeded(vec![(idx, 0_u8)]) }) as Work
             });
         root.add_child(Counted::new(
             counts.clone(),

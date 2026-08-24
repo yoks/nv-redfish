@@ -41,7 +41,7 @@ use nv_redfish_dispatcher::{
     CircuitBreaker, CircuitBreakerConfig, ClockConfig, Completion, CostUnits, FixedCost,
     FutureWork, ManualClock, PeriodicLeaf, QueueEventSink, Readiness, RoundRobin, Runtime,
     RuntimeConfig, RuntimeOutput, ScheduledWork, Scheduler, TokenBucket, TokenBucketConfig,
-    WithCost,
+    WithCost, WorkResult,
 };
 
 /// Successful work reports (source, task).
@@ -123,7 +123,6 @@ pub fn breaker() -> CircuitBreakerConfig {
         sample_window: 8,
         min_samples: 4,
         cool_down: Duration::from_secs(30),
-        half_open_max_probes: 1,
     }
 }
 
@@ -153,9 +152,9 @@ pub fn source_due_at(
             let fail = fail.clone();
             Box::pin(async move {
                 if fail.load(Ordering::Relaxed) {
-                    Err(idx)
+                    WorkResult::Failed(idx)
                 } else {
-                    Ok(vec![(idx, task.id)])
+                    WorkResult::Succeeded(vec![(idx, task.id)])
                 }
             }) as Work
         });

@@ -705,6 +705,8 @@ mod tests {
     use std::sync::Arc;
     use std::thread;
     use tokio::task::yield_now;
+
+    use crate::runtime::WorkResult;
     use tokio::time::timeout;
 
     use super::{
@@ -1039,7 +1041,7 @@ mod tests {
 
         let push = async move {
             yield_now().await;
-            let work: Work = Box::pin(async { Ok(vec![9]) });
+            let work: Work = Box::pin(async { WorkResult::Succeeded(vec![9]) });
             let _ = producer.try_push(ScheduledWork::new((), work));
         };
         let next = timeout(Duration::from_secs(1), runtime.next());
@@ -1073,7 +1075,7 @@ mod tests {
 
         let push = async move {
             yield_now().await;
-            let work: Work = Box::pin(async { Ok(vec![11]) });
+            let work: Work = Box::pin(async { WorkResult::Succeeded(vec![11]) });
             let _ = producer.try_push(ScheduledWork::new((), work));
         };
         let next = timeout(Duration::from_secs(1), runtime.next());
@@ -1109,7 +1111,7 @@ mod tests {
 
         let push = async move {
             yield_now().await;
-            let work: Work = Box::pin(async { Ok(vec![13]) });
+            let work: Work = Box::pin(async { WorkResult::Succeeded(vec![13]) });
             let _ = producer.try_push(ScheduledWork::new((), work));
         };
         let next = timeout(Duration::from_secs(1), runtime.next());
@@ -1168,7 +1170,7 @@ mod tests {
             queue,
         );
         let queue_id = producer.queue_id().expect("runtime assigns a queue ID");
-        let work: Work = Box::pin(async { Ok(vec![10]) });
+        let work: Work = Box::pin(async { WorkResult::Succeeded(vec![10]) });
         let _ = producer.try_push(ScheduledWork::new((), work));
         assert_eq!(producer.close(), QueueLifecycle::Draining);
 
@@ -1208,11 +1210,11 @@ mod tests {
         let work: Work = Box::pin(poll_fn(move |cx| {
             started_for_work.store(true, Ordering::Release);
             if released_for_work.load(Ordering::Acquire) {
-                return Poll::Ready(Ok(vec![12]));
+                return Poll::Ready(WorkResult::Succeeded(vec![12]));
             }
             gate_waker_for_work.register(cx.waker());
             if released_for_work.load(Ordering::Acquire) {
-                Poll::Ready(Ok(vec![12]))
+                Poll::Ready(WorkResult::Succeeded(vec![12]))
             } else {
                 Poll::Pending
             }

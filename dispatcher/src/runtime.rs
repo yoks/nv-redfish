@@ -83,13 +83,41 @@ impl SleepHint {
 }
 
 /// Work payload consumed by this runtime: a boxed future with terminal
-/// value `Result<Vec<Ev>, Err>`. Schedulers parameterized as
+/// value [`WorkResult<Ev, Err>`]. Schedulers parameterized as
 /// `Scheduler<FutureWork<Ev, Err>>` are compatible with [`Runtime::new`].
 ///
 /// [`crate::Scheduler`] is generic over the payload and never inspects it,
 /// so alternate runtimes can pick another shape (sync closures, batched
 /// descriptors, …) and reuse the same scheduler types.
-pub type FutureWork<Ev, Err> = Pin<Box<dyn Future<Output = Result<Vec<Ev>, Err>> + Send + 'static>>;
+pub type FutureWork<Ev, Err> = Pin<Box<dyn Future<Output = WorkResult<Ev, Err>> + Send + 'static>>;
+
+/// Terminal value of one work payload: the application-facing result and
+/// the scheduler-tree sample, one value, so the two can never disagree.
+///
+/// `Neutral` is for completions whose outcome says nothing about the
+/// health of what the tree protects — for example a failure the
+/// application scopes to the request rather than the endpoint. It is
+/// delivered to the application exactly like `Succeeded` but
+/// outcome-counting schedulers (the circuit breaker) never sample it.
+#[derive(Debug)]
+pub enum WorkResult<Ev, Err> {
+    /// Delivered as `Ok`; sampled as a success.
+    Succeeded(Vec<Ev>),
+    /// Delivered as `Err`; sampled as a failure.
+    Failed(Err),
+    /// Delivered as `Ok`; not sampled.
+    Neutral(Vec<Ev>),
+}
+
+impl<Ev, Err> From<Result<Vec<Ev>, Err>> for WorkResult<Ev, Err> {
+    /// The plain reading of a `Result`: `Ok` succeeded, `Err` failed.
+    fn from(result: Result<Vec<Ev>, Err>) -> Self {
+        match result {
+            Ok(events) => Self::Succeeded(events),
+            Err(error) => Self::Failed(error),
+        }
+    }
+}
 
 /// Generic dispatcher runtime, parameterized by event type `Ev`, error
 /// type `Err`, and root meta type `M`.
@@ -204,15 +232,16 @@ where
             } = completed;
             let latency = now.duration_since(start);
             progress = true;
+            let (outcome, result) = match result {
+                WorkResult::Succeeded(events) => (CompletionOutcome::Succeeded, Ok(events)),
+                WorkResult::Failed(error) => (CompletionOutcome::Failed, Err(error)),
+                WorkResult::Neutral(events) => (CompletionOutcome::Neutral, Ok(events)),
+            };
             self.completion.push(Completion {
+                outcome,
                 latency,
                 meta,
                 routing,
-                outcome: if result.is_ok() {
-                    CompletionOutcome::Succeeded
-                } else {
-                    CompletionOutcome::Failed
-                },
             });
             self.output
                 .push_back(RuntimeOutput::Work { result, latency });
@@ -916,7 +945,7 @@ impl<Ev, Err, M: WorkMeta> Future for InFlight<Ev, Err, M> {
 struct CompletedWork<Ev, Err, M> {
     start: Instant,
     meta: M,
-    result: Result<Vec<Ev>, Err>,
+    result: WorkResult<Ev, Err>,
     routing: RoutingPath,
 }
 
@@ -928,6 +957,8 @@ mod tests {
     use std::{num::NonZeroUsize, time::Instant};
 
     use futures_util::future::{pending, poll_immediate};
+
+    use super::WorkResult;
 
     use super::{ClockConfig, FutureWork, ManualClock, Runtime, RuntimeConfig, RuntimeOutput};
     use crate::schedulers::{PeriodicLeaf, RoundRobin};
@@ -945,9 +976,28 @@ mod tests {
     fn firing_root() -> TestRoot {
         let mut root = TestRoot::new();
         root.add_child(PeriodicLeaf::new(Instant::now(), Duration::ZERO, || {
-            Box::pin(async { Ok(vec![7_u64]) }) as TestWork
+            Box::pin(async { WorkResult::Succeeded(vec![7_u64]) }) as TestWork
         }));
         root
+    }
+
+    #[tokio::test]
+    async fn a_neutral_result_is_delivered_as_ok() {
+        // The application sees `Ok(events)` for a neutral completion; only
+        // the scheduler-tree sample differs, and that side is pinned by
+        // the circuit breaker's own tests.
+        let mut root = TestRoot::new();
+        root.add_child(PeriodicLeaf::new(Instant::now(), Duration::ZERO, || {
+            Box::pin(async { WorkResult::Neutral(vec![21_u64]) }) as TestWork
+        }));
+        let mut rt: Runtime<u64, String, ()> = Runtime::new(config(), root);
+
+        loop {
+            if let RuntimeOutput::Work { result, .. } = rt.next().await {
+                assert_eq!(result.expect("neutral delivers as Ok"), vec![21]);
+                break;
+            }
+        }
     }
 
     #[tokio::test]
@@ -1027,7 +1077,7 @@ mod tests {
         }));
 
         root.add_child(PeriodicLeaf::starting_at(now, deadline, interval, || {
-            Box::pin(async { Ok(vec![9_u64]) }) as TestWork
+            Box::pin(async { WorkResult::Succeeded(vec![9_u64]) }) as TestWork
         }));
 
         let mut rt = Runtime::new(
@@ -1072,7 +1122,7 @@ mod tests {
         let mut root = TestRoot::new();
 
         root.add_child(PeriodicLeaf::new(now, interval, || {
-            Box::pin(async { Ok(vec![9_u64]) }) as TestWork
+            Box::pin(async { WorkResult::Succeeded(vec![9_u64]) }) as TestWork
         }));
 
         root.add_child(PeriodicLeaf::new(now, interval, || {
@@ -1080,7 +1130,7 @@ mod tests {
         }));
 
         root.add_child(PeriodicLeaf::starting_at(now, deadline, interval, || {
-            Box::pin(async { Ok(vec![10_u64]) }) as TestWork
+            Box::pin(async { WorkResult::Succeeded(vec![10_u64]) }) as TestWork
         }));
 
         let mut rt = Runtime::new(
@@ -1113,7 +1163,7 @@ mod tests {
                 root.add_child(PeriodicLeaf::new(
                     Instant::now(),
                     Duration::from_secs(9999),
-                    || Box::pin(async { Ok(vec![9_u64]) }) as TestWork,
+                    || Box::pin(async { WorkResult::Succeeded(vec![9_u64]) }) as TestWork,
                 ))
             })
             .expect("root downcasts");

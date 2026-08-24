@@ -212,15 +212,18 @@ impl<M: HasCost> HasCost for WithPriority<M> {
     }
 }
 
-/// Success-or-failure outcome reported through the scheduler tree.
-/// Application events and errors flow separately through
-/// [`crate::RuntimeOutput::Work`].
+/// Outcome reported through the scheduler tree. Application events and
+/// errors flow separately through [`crate::RuntimeOutput::Work`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompletionOutcome {
-    /// `Ok(_)` from the work payload.
+    /// [`crate::WorkResult::Succeeded`] from the work payload.
     Succeeded,
-    /// `Err(_)` from the work payload.
+    /// [`crate::WorkResult::Failed`] from the work payload.
     Failed,
+    /// [`crate::WorkResult::Neutral`] from the work payload: the
+    /// completion says nothing about the health of what the tree
+    /// protects, so outcome-counting schedulers must not sample it.
+    Neutral,
 }
 
 /// Completion delivered to [`crate::Scheduler::on_complete`], exactly once
@@ -231,7 +234,8 @@ pub enum CompletionOutcome {
 /// the unwrapped meta to the chosen child.
 #[derive(Debug, Clone)]
 pub struct Completion<M: WorkMeta> {
-    /// Success or failure.
+    /// How the tree samples this completion: success, failure, or
+    /// neutral (delivered but not sampled).
     pub outcome: CompletionOutcome,
     /// Wall-clock latency between dispatch and completion.
     pub latency: Duration,

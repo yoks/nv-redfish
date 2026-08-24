@@ -16,12 +16,14 @@
 //! Circuit-breaker scheduler with Closed / Open / `HalfOpen` states.
 //!
 //! Maintains a bounded ring of recent outcomes; trips the breaker when
-//! the failure fraction exceeds the configured threshold. While open,
-//! `take_next` returns `None` and `update_ready` reports the open-until
-//! deadline. After `cool_down` elapses the breaker enters `HalfOpen`,
-//! admits up to `half_open_max_probes`, and on the first probe outcome
-//! either resets to Closed (success) or re-opens with a fresh cool-down
-//! (failure).
+//! the failure fraction exceeds the configured threshold. Neutral
+//! completions are never sampled: they neither fill the window nor move
+//! the failure fraction. While open, `take_next` returns `None` and
+//! `update_ready` reports the open-until deadline. After `cool_down`
+//! elapses the breaker enters `HalfOpen` and admits one probe; the first
+//! outcome observed while half-open decides — success resets to Closed,
+//! failure re-opens with a fresh cool-down, and a neutral outcome decides
+//! nothing, releasing the probe slot instead.
 
 use core::convert::TryFrom as _;
 use core::marker::PhantomData;
@@ -43,8 +45,6 @@ pub struct CircuitBreakerConfig {
     pub min_samples: u32,
     /// How long the breaker stays open before going `HalfOpen`.
     pub cool_down: Duration,
-    /// Concurrent probes allowed in `HalfOpen`.
-    pub half_open_max_probes: u32,
 }
 
 impl Default for CircuitBreakerConfig {
@@ -54,7 +54,6 @@ impl Default for CircuitBreakerConfig {
             sample_window: 32,
             min_samples: 5,
             cool_down: Duration::from_secs(10),
-            half_open_max_probes: 1,
         }
     }
 }
@@ -71,11 +70,10 @@ pub enum BreakerState {
         /// `HalfOpen`.
         until: Instant,
     },
-    /// `HalfOpen`: admitting up to `half_open_max_probes` outstanding
-    /// items.
+    /// `HalfOpen`: one probe decides recovery.
     HalfOpen {
-        /// Probes currently outstanding.
-        in_flight: u32,
+        /// Whether the probe is currently outstanding.
+        probing: bool,
     },
 }
 
@@ -110,6 +108,11 @@ impl<T, C: Scheduler<T>> CircuitBreaker<T, C> {
     }
 
     fn record_outcome(&mut self, outcome: CompletionOutcome) {
+        // A neutral completion says nothing about the protected resource:
+        // it neither fills the window nor dilutes the failure fraction.
+        if matches!(outcome, CompletionOutcome::Neutral) {
+            return;
+        }
         let cap = self.cfg.sample_window as usize;
         if cap == 0 {
             return;
@@ -162,7 +165,7 @@ where
         self.last_now = now;
         if let BreakerState::Open { until } = self.state {
             if now >= until {
-                self.state = BreakerState::HalfOpen { in_flight: 0 };
+                self.state = BreakerState::HalfOpen { probing: false };
             } else {
                 return Readiness::not_ready(Some(until));
             }
@@ -170,8 +173,8 @@ where
         match self.state {
             BreakerState::Closed => self.inner.update_ready(now),
             BreakerState::Open { until } => Readiness::not_ready(Some(until)),
-            BreakerState::HalfOpen { in_flight } => {
-                if in_flight >= self.cfg.half_open_max_probes {
+            BreakerState::HalfOpen { probing } => {
+                if probing {
                     Readiness::not_ready(None)
                 } else {
                     self.inner.update_ready(now)
@@ -184,12 +187,12 @@ where
         match &mut self.state {
             BreakerState::Open { .. } => None,
             BreakerState::Closed => self.inner.take_next(),
-            BreakerState::HalfOpen { in_flight } => {
-                if *in_flight >= self.cfg.half_open_max_probes {
+            BreakerState::HalfOpen { probing } => {
+                if *probing {
                     return None;
                 }
                 let work = self.inner.take_next()?;
-                *in_flight = in_flight.saturating_add(1);
+                *probing = true;
                 Some(work)
             }
         }
@@ -217,6 +220,9 @@ where
                             until: self.last_now + self.cfg.cool_down,
                         }
                     }
+                    // Deciding nothing: release the probe slot so the next
+                    // readiness pass may admit another probe.
+                    CompletionOutcome::Neutral => BreakerState::HalfOpen { probing: false },
                 };
             }
         }
@@ -246,7 +252,6 @@ mod tests {
             sample_window: 10,
             min_samples: 4,
             cool_down,
-            half_open_max_probes: 1,
         }
     }
 
@@ -347,8 +352,8 @@ mod tests {
 
     #[test]
     fn half_open_caps_concurrent_probes() {
-        // half_open_max_probes = 1: once a probe is in-flight, the
-        // breaker reports not-ready until that probe completes.
+        // One probe decides recovery: once it is in-flight, the breaker
+        // reports not-ready until that probe completes.
         let leaf = MockLeaf::ready_firing(1);
         let cool_down = Duration::from_millis(10);
         let mut cb = CircuitBreaker::new(cfg(cool_down), leaf);
@@ -372,6 +377,53 @@ mod tests {
             meta: probe.meta,
             routing: probe.routing,
         });
+        assert!(matches!(cb.state(), BreakerState::Closed));
+    }
+
+    #[test]
+    fn neutral_completions_are_never_sampled() {
+        // Interleave neutrals with failures: at min_samples 4 and
+        // threshold 0.5, three failures among many neutrals must not
+        // trip, because neutrals neither fill the window nor count.
+        let leaf = MockLeaf::ready_firing(1);
+        let mut cb = CircuitBreaker::new(cfg(Duration::from_millis(100)), leaf);
+        let t0 = Instant::now();
+
+        for _ in 0..3 {
+            drive_outcome(&mut cb, t0, CompletionOutcome::Neutral);
+            drive_outcome(&mut cb, t0, CompletionOutcome::Failed);
+        }
+        assert!(
+            matches!(cb.state(), BreakerState::Closed),
+            "neutrals must not satisfy min_samples"
+        );
+
+        // The fourth real failure reaches min_samples and trips.
+        drive_outcome(&mut cb, t0, CompletionOutcome::Failed);
+        assert!(matches!(cb.state(), BreakerState::Open { .. }));
+    }
+
+    #[test]
+    fn a_neutral_probe_decides_nothing_and_releases_the_slot() {
+        let leaf = MockLeaf::ready_firing(1);
+        let cool_down = Duration::from_millis(10);
+        let mut cb = CircuitBreaker::new(cfg(cool_down), leaf);
+        let t0 = Instant::now();
+        for _ in 0..4 {
+            drive_outcome(&mut cb, t0, CompletionOutcome::Failed);
+        }
+        let t1 = t0 + cool_down + Duration::from_millis(1);
+        cb.update_ready(t1);
+        assert!(matches!(cb.state(), BreakerState::HalfOpen { .. }));
+
+        // A neutral probe outcome leaves the breaker half-open with the
+        // slot free; the next probe's real outcome decides.
+        drive_outcome(&mut cb, t1, CompletionOutcome::Neutral);
+        assert!(matches!(
+            cb.state(),
+            BreakerState::HalfOpen { probing: false }
+        ));
+        drive_outcome(&mut cb, t1, CompletionOutcome::Succeeded);
         assert!(matches!(cb.state(), BreakerState::Closed));
     }
 }

@@ -67,6 +67,7 @@ use nv_redfish_dispatcher::RuntimeOutput;
 use nv_redfish_dispatcher::ScheduledWork;
 use nv_redfish_dispatcher::Scheduler;
 use nv_redfish_dispatcher::WorkMeta;
+use nv_redfish_dispatcher::WorkResult;
 use std::num::NonZero;
 use std::time::Instant;
 
@@ -124,7 +125,7 @@ impl Scheduler<Work> for PollLeaf {
         let name = self.name.clone();
         let payload: Work = Box::pin(async move {
             tokio::time::sleep(Duration::from_millis(1)).await;
-            Ok(vec![Event::Polled { source: name }])
+            WorkResult::Succeeded(vec![Event::Polled { source: name }])
         });
 
         Some(ScheduledWork::new((), payload))

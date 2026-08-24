@@ -24,7 +24,7 @@
 //! [`Scheduler<T>`] is parameterized only by an opaque payload `T`. The
 //! scheduler tree never inspects it; the runtime does. This crate's
 //! [`Runtime`] uses `T = FutureWork<Ev, Err>` (boxed futures returning
-//! `Result<Vec<Ev>, Err>`); other runtimes can pick another shape and
+//! [`WorkResult<Ev, Err>`]); other runtimes can pick another shape and
 //! reuse the same scheduler types.
 //!
 //! ## Layered metadata
@@ -45,7 +45,8 @@
 //! - [`Readiness`], [`CostUnits`], [`CompletionOutcome`], [`RoutingPath`],
 //! - [`Runtime`] + [`RuntimeConfig`], [`RuntimeHandle`] (with
 //!   [`RuntimeHandle::with_root`] / [`with_root_mut`][`RuntimeHandle::with_root_mut`]),
-//!   [`RuntimeOutput`], the [`FutureWork`] payload alias,
+//!   [`RuntimeOutput`], the [`FutureWork`] payload alias and its
+//!   [`WorkResult`] terminal value,
 //! - the [`schedulers`] module with the built-in policy primitives
 //!   ([`RoundRobin`], [`StrictPriority`], [`BoundedConcurrency`],
 //!   [`CircuitBreaker`], [`TokenBucket`], [`FixedCost`], [`PeriodicLeaf`]),
@@ -110,6 +111,8 @@ pub use runtime::RuntimeHandle;
 pub use runtime::RuntimeOutput;
 #[doc(inline)]
 pub use runtime::RuntimeRootMut;
+#[doc(inline)]
+pub use runtime::WorkResult;
 #[doc(inline)]
 pub use scheduler::RuntimeChildContainer;
 #[doc(inline)]
