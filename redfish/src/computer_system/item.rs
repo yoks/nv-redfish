@@ -185,7 +185,7 @@ impl<B: Bmc> ComputerSystem<B> {
     /// Power state of this system.
     #[must_use]
     pub fn power_state(&self) -> Option<PowerState> {
-        self.data.power_state.and_then(identity)
+        self.data.power_state.clone().and_then(identity)
     }
 
     /// Reset this computer system.

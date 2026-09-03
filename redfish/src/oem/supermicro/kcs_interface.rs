@@ -60,6 +60,6 @@ impl<B: Bmc> KcsInterface<B> {
     /// Privilege associated with this KCS interface.
     #[must_use]
     pub fn privilege(&self) -> Option<Privilege> {
-        self.data.privilege
+        self.data.privilege.clone()
     }
 }

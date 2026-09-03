@@ -198,7 +198,7 @@ mod tests {
     }
 
     #[test]
-    fn log_entry_serialization_normalizes_unknown_enum_values() {
+    fn log_entry_serialization_preserves_unknown_enum_values() {
         let value = serde_json::json!({
             "@odata.id": "/redfish/v1/Systems/System/LogServices/EventLog/Entries/1",
             "Id": "1",
@@ -212,7 +212,7 @@ mod tests {
 
         assert_eq!(
             serialized.get("EntryType"),
-            Some(&serde_json::json!("UnsupportedValue"))
+            Some(&serde_json::json!("FutureEntryType"))
         );
     }
 }

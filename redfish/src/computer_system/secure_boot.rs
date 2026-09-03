@@ -64,6 +64,9 @@ impl<B: Bmc> SecureBoot<B> {
     /// The UEFI Secure Boot state during the current boot cycle.
     #[must_use]
     pub fn secure_boot_current_boot(&self) -> Option<SecureBootCurrentBootType> {
-        self.data.secure_boot_current_boot.and_then(identity)
+        self.data
+            .secure_boot_current_boot
+            .clone()
+            .and_then(identity)
     }
 }

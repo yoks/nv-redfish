@@ -37,11 +37,20 @@ pub struct EnumDef<'a> {
 
 impl EnumDef<'_> {
     /// Generate rust code for types derived from enums.
+    ///
+    /// Enums are open: an unrecognized wire value decodes into
+    /// `UnsupportedValue` carrying the raw token, and serializes back as
+    /// that token verbatim. `Serialize`/`Deserialize` are hand-emitted
+    /// because derived serde has no way to capture the raw string
+    /// (`#[serde(other)]` is unit-variant-only), and the payload costs
+    /// `Copy`.
     pub fn generate(self, tokens: &mut TokenStream, config: &Config) {
         let name = self.name;
         let top = &config.top_module_alias;
         let mut members_content = TokenStream::new();
         let mut snake_case_match_arms = TokenStream::new();
+        let mut serialize_match_arms = TokenStream::new();
+        let mut deserialize_match_arms = TokenStream::new();
 
         for m in self.compiled.members {
             let rename = Literal::string(m.name.inner().inner());
@@ -53,7 +62,6 @@ impl EnumDef<'_> {
             members_content.extend([
                 doc_format_and_generate(m.name, &m.odata),
                 quote! {
-                    #[serde(rename=#rename)]
                     #member_name,
                 },
             ]);
@@ -61,27 +69,77 @@ impl EnumDef<'_> {
             snake_case_match_arms.extend(quote! {
                 Self::#member_name => #snake_case_literal,
             });
+            serialize_match_arms.extend(quote! {
+                Self::#member_name => #rename,
+            });
+            deserialize_match_arms.extend(quote! {
+                #rename => #name::#member_name,
+            });
         }
         members_content.extend(quote! {
-            #[doc = " Fallback value for values that are not supported by current version of Redfish schema."]
-            #[doc = " The original wire spelling is not retained; serialization emits `UnsupportedValue`."]
-            #[serde(other)]
-            UnsupportedValue,
+            #[doc = " Fallback for values not in the current Redfish schema; carries the raw token."]
+            #[doc = " Serialization emits that token verbatim, so unknown values round-trip."]
+            UnsupportedValue(Box<str>),
         });
         snake_case_match_arms.extend(quote! {
-            Self::UnsupportedValue => "unsupported_value",
+            Self::UnsupportedValue(_) => "unsupported_value",
         });
         tokens.extend([
             doc_format_and_generate(self.name, &self.compiled.odata),
             quote! {
-                #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+                #[derive(Debug, PartialEq, Eq, Clone)]
                 #[allow(clippy::enum_variant_names)]
                 pub enum #name
             },
         ]);
         tokens.append(Group::new(Delimiter::Brace, members_content));
 
+        let expecting = Literal::string(&format!("a `{name}` string"));
         tokens.extend(quote! {
+            impl ::serde::Serialize for #name {
+                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                where
+                    S: ::serde::Serializer,
+                {
+                    serializer.serialize_str(match self {
+                        #serialize_match_arms
+                        Self::UnsupportedValue(raw) => raw,
+                    })
+                }
+            }
+
+            impl<'de> ::serde::Deserialize<'de> for #name {
+                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+                where
+                    D: ::serde::Deserializer<'de>,
+                {
+                    struct EnumVisitor;
+
+                    impl ::serde::de::Visitor<'_> for EnumVisitor {
+                        type Value = #name;
+
+                        fn expecting(
+                            &self,
+                            formatter: &mut ::core::fmt::Formatter<'_>,
+                        ) -> ::core::fmt::Result {
+                            formatter.write_str(#expecting)
+                        }
+
+                        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+                        where
+                            E: ::serde::de::Error,
+                        {
+                            Ok(match value {
+                                #deserialize_match_arms
+                                other => #name::UnsupportedValue(other.into()),
+                            })
+                        }
+                    }
+
+                    deserializer.deserialize_str(EnumVisitor)
+                }
+            }
+
             impl #top::ToSnakeCase for #name {
                 fn to_snake_case(&self) -> &'static str {
                     match self {

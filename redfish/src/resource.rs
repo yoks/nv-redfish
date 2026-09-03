@@ -148,9 +148,9 @@ pub trait ResourceProvidesStatus {
     /// Status of the resource if it is provided.
     fn status(&self) -> Option<Status> {
         self.resource_status_ref().map(|status| Status {
-            state: status.state.and_then(identity),
-            health: status.health.and_then(identity),
-            health_rollup: status.health_rollup.and_then(identity),
+            state: status.state.clone().and_then(identity),
+            health: status.health.clone().and_then(identity),
+            health_rollup: status.health_rollup.clone().and_then(identity),
         })
     }
 }

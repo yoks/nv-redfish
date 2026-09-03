@@ -50,7 +50,7 @@ impl<B: Bmc> LenovoSecurityService<B> {
             .configurator
             .as_ref()
             .and_then(Option::as_ref)
-            .and_then(|v| v.fw_rollback)
+            .and_then(|v| v.fw_rollback.clone())
             .and_then(identity)
     }
 }

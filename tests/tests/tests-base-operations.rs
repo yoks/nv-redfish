@@ -1012,20 +1012,28 @@ async fn excerpt_views_test() -> Result<(), Error> {
     Ok(())
 }
 
-// Check that generated enums accept unknown values via fallback variant.
+// Check that generated enums accept unknown values via the fallback
+// variant, preserving the raw token through a full round-trip.
 #[test]
-async fn enum_unknown_value_falls_back_to_unsupported_value() {
+async fn enum_unknown_value_falls_back_preserving_the_raw_token() {
     let known: ActionType =
         serde_json::from_value(json!("Option1")).expect("known enum value must deserialize");
     assert_eq!(known, ActionType::Option1);
+    assert_eq!(
+        serde_json::to_value(&known).expect("known value must serialize"),
+        json!("Option1")
+    );
 
     let unknown: ActionType = serde_json::from_value(json!("FutureOption"))
         .expect("unknown enum value must deserialize to fallback");
-    assert_eq!(unknown, ActionType::UnsupportedValue);
+    assert_eq!(unknown, ActionType::UnsupportedValue("FutureOption".into()));
 
-    let serialized =
-        serde_json::to_value(ActionType::UnsupportedValue).expect("fallback must serialize");
-    assert_eq!(serialized, json!("UnsupportedValue"));
+    let serialized = serde_json::to_value(&unknown).expect("fallback must serialize");
+    assert_eq!(
+        serialized,
+        json!("FutureOption"),
+        "the raw token survives the round-trip verbatim"
+    );
 }
 
 // Check that standalone complex types matched by root set patterns are generated.

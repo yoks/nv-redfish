@@ -91,7 +91,7 @@ impl<B: Bmc> LenovoManager<B> {
                     KcsState::Disabled
                 }
             }),
-            LenovoManagerSchema::V1_0(data) => data.kcs_enabled,
+            LenovoManagerSchema::V1_0(data) => data.kcs_enabled.clone(),
         }
     }
 

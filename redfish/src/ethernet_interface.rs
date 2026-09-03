@@ -126,7 +126,7 @@ impl<B: Bmc> EthernetInterface<B> {
             .link_status
             .as_ref()
             .and_then(Option::as_ref)
-            .copied()
+            .cloned()
     }
 
     /// MAC address of the interface.

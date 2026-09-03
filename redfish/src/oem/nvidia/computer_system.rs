@@ -51,15 +51,16 @@ use tagged_types::TaggedType;
 /// Operating mode of a BlueField device.
 ///
 /// Undeclared by the NVIDIA OEM schema; see the module documentation.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Mode {
     /// This BlueField device works as a regular NIC for the host.
     NicMode,
     /// This BlueField device is a 'bump in a wire' that controls packet
     /// processing.
     DpuMode,
-    /// Fallback for modes this version of the library does not know.
-    UnsupportedValue,
+    /// Fallback for modes this version of the library does not know;
+    /// carries the raw token, matching the generated open-enum shape.
+    UnsupportedValue(Box<str>),
 }
 
 impl Mode {
@@ -67,7 +68,7 @@ impl Mode {
         match v {
             "NicMode" => Self::NicMode,
             "DpuMode" => Self::DpuMode,
-            _ => Self::UnsupportedValue,
+            other => Self::UnsupportedValue(other.into()),
         }
     }
 }
