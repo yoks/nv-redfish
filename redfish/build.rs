@@ -13,7 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use nv_redfish_csdl_compiler::commands::process_command;
+use nv_redfish_csdl_compiler::commands::process_command as process_command_default;
+use nv_redfish_csdl_compiler::commands::process_command_with_read_model_serialization;
 use nv_redfish_csdl_compiler::commands::Commands;
 use nv_redfish_csdl_compiler::commands::DEFAULT_ROOT;
 use nv_redfish_csdl_compiler::features_manifest::FeaturesManifest;
@@ -41,6 +42,15 @@ fn run() -> Result<(), Box<dyn StdError>> {
     let features_manifest = PathBuf::from("features.toml");
     let manifest = FeaturesManifest::read(&features_manifest)?;
     rerun_for([&features_manifest]);
+
+    let serialize_read_models = cargo_feature_enabled("resource-serialization");
+
+    let process_command: fn(&Commands) -> Result<Vec<String>, nv_redfish_csdl_compiler::Error> =
+        if serialize_read_models {
+            process_command_with_read_model_serialization
+        } else {
+            process_command_default
+        };
 
     let redfish_csdl: [&str; 5] = [
         "Settings_v1.xml",
@@ -127,10 +137,10 @@ fn run() -> Result<(), Box<dyn StdError>> {
             continue;
         }
 
-        let (root_csdls, resolve_csdls, swordfish_resolve_csdls, patterns) =
-            manifest.collect_vendor_features(v, &vendor_features);
+        let oem_features = manifest.collect_vendor_features(v, &vendor_features);
 
-        let root_names = root_csdls
+        let root_names = oem_features
+            .root_csdls
             .iter()
             .map(|f| f.as_str())
             .collect::<std::collections::HashSet<_>>();
@@ -144,7 +154,8 @@ fn run() -> Result<(), Box<dyn StdError>> {
             .filter(|f| !root_names.contains(file_name(f)))
             .collect::<Vec<_>>();
 
-        let root_csdls = root_csdls
+        let root_csdls = oem_features
+            .root_csdls
             .iter()
             .map(|f| oem_schema(v, f))
             .collect::<Vec<_>>();
@@ -152,8 +163,13 @@ fn run() -> Result<(), Box<dyn StdError>> {
         let resolve_csdls = standard_csdls
             .iter()
             .cloned()
-            .chain(resolve_csdls.iter().map(|f| redfish_schema(f)))
-            .chain(swordfish_resolve_csdls.iter().map(|f| swordfish_schema(f)))
+            .chain(oem_features.resolve_csdls.iter().map(|f| redfish_schema(f)))
+            .chain(
+                oem_features
+                    .swordfish_resolve_csdls
+                    .iter()
+                    .map(|f| swordfish_schema(f)),
+            )
             .chain(unselected_oem)
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
@@ -165,7 +181,8 @@ fn run() -> Result<(), Box<dyn StdError>> {
             output,
             root_csdls,
             resolve_csdls,
-            entity_type_patterns: patterns.into_iter().cloned().collect(),
+            entity_type_patterns: oem_features.patterns.into_iter().cloned().collect(),
+            action_patterns: oem_features.action_patterns.into_iter().cloned().collect(),
             rigid_array_patterns: vec![],
         })?;
     }

@@ -15,8 +15,9 @@
 
 //! Schema queries for projection compilers.
 //!
-//! [`SchemaQuery::resolve`] answers what a path *is*; [`SchemaQuery::steps`]
-//! additionally answers how generated Rust reaches it, segment by segment.
+//! [`SchemaQuery::resolve`](crate::query::SchemaQuery::resolve) answers what a path *is*;
+//! [`SchemaQuery::steps`](crate::query::SchemaQuery::steps) additionally answers how generated
+//! Rust reaches it, segment by segment.
 
 use std::collections::HashMap;
 
@@ -340,10 +341,11 @@ mod test {
             </Schema>
           </edmx:DataServices>
         </edmx:Edmx>"#;
-        SchemaBundle {
-            edmx_docs: vec![Edmx::parse(schema).expect("query test schema must be valid")],
-            root_set_threshold: None,
-        }
+
+        SchemaBundle::new(
+            vec![Edmx::parse(schema).expect("query test schema must be valid")],
+            Vec::new(),
+        )
     }
 
     #[test]

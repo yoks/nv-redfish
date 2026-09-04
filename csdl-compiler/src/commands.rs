@@ -27,6 +27,8 @@
 //! - Optimize the compiled set and run the Rust generator.
 //! - Pretty-print the resulting syntax and write it to the `output` path.
 
+use crate::compiler::ActionFilter;
+use crate::compiler::ActionFilterPattern;
 use crate::compiler::Config as CompilerConfig;
 use crate::compiler::EntityTypeFilter;
 use crate::compiler::EntityTypeFilterPattern;
@@ -116,6 +118,13 @@ pub enum Commands {
         /// `*.*.Entity1|Entity2` - `EntityType1` or `EntityType2` from any versions of any namespaces.
         #[arg(short = 'p', long = "pattern")]
         entity_type_patterns: Vec<EntityTypeFilterPattern>,
+        /// Patterns of actions to include in the OEM root set.
+        ///
+        /// Pattern is a wildcard over the action's defining namespace and name.
+        /// Example: `NvidiaChassis.*` selects every action in the
+        /// `NvidiaChassis` namespace. If empty, no actions are compiled.
+        #[arg(long = "action-pattern")]
+        action_patterns: Vec<ActionFilterPattern>,
         /// Patterns of properties that must be compiled with rigid array support
         ///
         /// Pattern is a wildcard over the qualified name.
@@ -132,6 +141,24 @@ pub enum Commands {
 ///
 /// Returns an error if command processing fails.
 pub fn process_command(command: &Commands) -> Result<Vec<String>, Error> {
+    process_command_inner(command, false)
+}
+
+/// Process a compiler command with serialization enabled for read and excerpt models.
+///
+/// # Errors
+///
+/// Returns an error if command processing fails.
+pub fn process_command_with_read_model_serialization(
+    command: &Commands,
+) -> Result<Vec<String>, Error> {
+    process_command_inner(command, true)
+}
+
+fn process_command_inner(
+    command: &Commands,
+    serialize_read_models: bool,
+) -> Result<Vec<String>, Error> {
     let mut display_output = Vec::new();
     match command {
         Commands::Compile {
@@ -146,7 +173,9 @@ pub fn process_command(command: &Commands) -> Result<Vec<String>, Error> {
             if csdls.is_empty() {
                 return Err(Error::AtLeastOneCSDLFileNeeded);
             }
-            let schema_bundle = read_csdls(&[], csdls)?;
+
+            let schema_bundle = read_csdls(csdls, &[])?;
+
             let compiled = schema_bundle
                 .compile(
                     &[root_service],
@@ -156,12 +185,19 @@ pub fn process_command(command: &Commands) -> Result<Vec<String>, Error> {
                             entity_type_patterns.clone(),
                         ),
                         rigid_array_filter: PropertyFilter::new(rigid_array_patterns.clone()),
+                        ..CompilerConfig::default()
                     },
                 )
                 .map_err(Error::compile_error)?;
             let compiled = optimize(compiled, &OptimizerConfig::default());
-            let generator = RustGenerator::new(compiled, GeneratorConfig::default())
-                .map_err(Error::generate_error)?;
+            let generator = RustGenerator::new(
+                compiled,
+                GeneratorConfig {
+                    serialize_read_models,
+                    ..GeneratorConfig::default()
+                },
+            )
+            .map_err(Error::generate_error)?;
 
             let syntax_tree =
                 syn::parse2::<syn::File>(generator.generate()).map_err(Error::ParseGenerated)?;
@@ -175,6 +211,7 @@ pub fn process_command(command: &Commands) -> Result<Vec<String>, Error> {
             resolve_csdls,
             output,
             entity_type_patterns,
+            action_patterns,
             rigid_array_patterns,
         } => {
             if root_csdls.is_empty() {
@@ -186,12 +223,19 @@ pub fn process_command(command: &Commands) -> Result<Vec<String>, Error> {
                     entity_type_filter: EntityTypeFilter::new_permissive(
                         entity_type_patterns.clone(),
                     ),
+                    action_filter: ActionFilter::new_restrictive(action_patterns.clone()),
                     rigid_array_filter: PropertyFilter::new(rigid_array_patterns.clone()),
                 })
                 .map_err(Error::compile_error)?;
             let compiled = optimize(compiled, &OptimizerConfig::default());
-            let generator = RustGenerator::new(compiled, GeneratorConfig::default())
-                .map_err(Error::generate_error)?;
+            let generator = RustGenerator::new(
+                compiled,
+                GeneratorConfig {
+                    serialize_read_models,
+                    ..GeneratorConfig::default()
+                },
+            )
+            .map_err(Error::generate_error)?;
             let syntax_tree =
                 syn::parse2::<syn::File>(generator.generate()).map_err(Error::ParseGenerated)?;
             write(output, prettyplease::unparse(&syntax_tree))
@@ -203,24 +247,27 @@ pub fn process_command(command: &Commands) -> Result<Vec<String>, Error> {
 }
 
 fn read_csdls(root_csdls: &[String], resolve_csdls: &[String]) -> Result<SchemaBundle, Error> {
-    let csdls = root_csdls
-        .iter()
-        .chain(resolve_csdls.iter())
-        .collect::<Vec<_>>();
-    let edmx_docs = csdls
-        .iter()
-        .map(|fname| {
-            let mut file = File::open(fname).map_err(|err| Error::Io((*fname).clone(), err))?;
-            let mut content = String::new();
-            file.read_to_string(&mut content)
-                .map_err(|err| Error::Io((*fname).clone(), err))?;
-            Edmx::parse(&content).map_err(|e| Error::Edmx((*fname).clone(), e))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let parse_all = |fnames: &[String]| {
+        fnames
+            .iter()
+            .map(|fname| {
+                let mut file = File::open(fname).map_err(|err| Error::Io(fname.clone(), err))?;
+                let mut content = String::new();
+                file.read_to_string(&mut content)
+                    .map_err(|err| Error::Io(fname.clone(), err))?;
 
-    csdls
+                Edmx::parse(&content).map_err(|e| Error::Edmx(fname.clone(), e))
+            })
+            .collect::<Result<Vec<_>, _>>()
+    };
+
+    let root_docs = parse_all(root_csdls)?;
+    let resolve_docs = parse_all(resolve_csdls)?;
+
+    root_csdls
         .iter()
-        .zip(&edmx_docs)
+        .zip(&root_docs)
+        .chain(resolve_csdls.iter().zip(&resolve_docs))
         .flat_map(|(fname, edmx)| {
             edmx.data_services
                 .schemas
@@ -230,7 +277,7 @@ fn read_csdls(root_csdls: &[String], resolve_csdls: &[String]) -> Result<SchemaB
         .fold(
             BTreeMap::<String, Vec<String>>::new(),
             |mut map, (namespace, fname)| {
-                map.entry(namespace).or_default().push((*fname).clone());
+                map.entry(namespace).or_default().push(fname.clone());
                 map
             },
         )
@@ -240,12 +287,5 @@ fn read_csdls(root_csdls: &[String], resolve_csdls: &[String]) -> Result<SchemaB
             Err(Error::DuplicateNamespace(namespace, files))
         })?;
 
-    Ok(SchemaBundle {
-        edmx_docs,
-        root_set_threshold: if root_csdls.is_empty() {
-            None
-        } else {
-            Some(root_csdls.len())
-        },
-    })
+    Ok(SchemaBundle::new(root_docs, resolve_docs))
 }
